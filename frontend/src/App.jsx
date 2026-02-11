@@ -10,14 +10,8 @@ import AdminUsers from './pages/AdminUsers';
 import AdminAudit from './pages/AdminAudit';
 import Insegnanti from "./pages/Insegnanti";
 import Tesserati from './pages/Tesserati';
-import "./styles/layout.css";
-import "./styles/table.css";
-import "./styles/tesserati.css";
-import "./styles/insegnanti.css";
-import "./styles/entries.css";
-import "./styles/dashboard.css";
-import "./styles/cards.css";
-import "./styles/auth.css";
+import "./styles/global.css";
+
 
 export default function App() {
   const [token, setToken] = useState(null);
