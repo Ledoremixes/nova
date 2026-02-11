@@ -1,0 +1,10 @@
+/* Tabelle generiche: lo stile base è già in layout.css.
+   Qui lasciamo solo piccole utility per compatibilità. */
+
+.table{
+  margin-top: 10px;
+}
+
+.num{
+  text-align: right;
+}

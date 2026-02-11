@@ -1,0 +1,973 @@
+/* ===========================
+   PRIMA NOTA (Entries) - CSS pulito
+   =========================== */
+
+.entries-page{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+
+/* pannelli più ariosi */
+.entries-page .panel{
+  padding:16px;
+}
+
+.entries-page .panel-title{
+  margin-bottom:12px;
+}
+
+.entries-page .muted-inline{
+  margin-left:8px;
+  font-size:12px;
+  color:var(--muted);
+  font-weight: 600;
+}
+
+/* 1) La select chiusa (già ok ma lo rinforziamo) */
+.entries-page select,
+.table select{
+  background: rgba(12,16,24,0.80);
+  color: rgba(255,255,255,0.92);
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 12px;
+}
+
+/* 2) LA PARTE IMPORTANTISSIMA: le option del menu */
+.entries-page select option,
+.table select option{
+  background: #0b1020;     /* scuro pieno */
+  color: #ffffff;         /* testo bianco */
+}
+
+/* 3) (opzionale) gruppo option */
+.entries-page select optgroup,
+.table select optgroup{
+  background: #0b1020;
+  color: rgba(255,255,255,0.75);
+}
+
+/* 4) (opzionale) focus */
+.entries-page select:focus,
+.table select:focus{
+  outline: none;
+  border-color: rgba(139,92,246,0.45);
+  box-shadow: 0 0 0 3px rgba(139,92,246,0.28);
+}
+
+
+/* ===========================
+   FILTRI (layout ordinato)
+   =========================== */
+
+/* prima riga: ricerca full width */
+.entries-page .toolbar-wrap .toolbar-row:first-of-type label{
+  width:100% !important;
+}
+
+/* seconda riga: grid stabile */
+.entries-page .toolbar-wrap .toolbar-row:nth-of-type(2){
+  display:grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap:12px;
+  align-items:end;
+}
+
+.entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) .toolbar-group:nth-child(1){ grid-column: span 3; }
+.entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) .toolbar-group:nth-child(2){ grid-column: span 3; }
+.entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) .toolbar-group:nth-child(3){ grid-column: span 2; }
+.entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) .toolbar-group:nth-child(4){ grid-column: span 2; }
+.entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) .toolbar-group:nth-child(5){ grid-column: span 2; }
+
+.entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) .toolbar-buttons{
+  grid-column: 1 / -1;
+  margin-left:0;
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.entries-page input[type="date"],
+.entries-page input[type="time"]{
+  height:40px;
+}
+
+/* ===========================
+   SWITCH (moderno)
+   =========================== */
+.switch-field-compact{ width:100%; }
+
+.switch-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top:6px;
+}
+
+.switch{
+  position:relative;
+  width:44px;
+  height:24px;
+  display:inline-block;
+}
+
+.switch input{
+  opacity:0;
+  width:0;
+  height:0;
+}
+
+.slider{
+  position:absolute;
+  inset:0;
+  border-radius:999px;
+  background: rgba(255,255,255,0.22);
+  border:1px solid var(--border);
+  transition: all .18s ease;
+  box-shadow: inset 0 1px 0 rgba(15,23,42,0.06);
+}
+
+.slider::before{
+  content:"";
+  position:absolute;
+  width:18px;
+  height:18px;
+  left:3px;
+  top:50%;
+  transform: translateY(-50%);
+  border-radius:999px;
+  background:rgba(255,255,255,0.9);
+  border:1px solid var(--border);
+  transition: all .18s ease;
+  box-shadow: 0 6px 14px rgba(15,23,42,0.12);
+}
+
+.switch input:checked + .slider{
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-color: rgba(139,92,246,0.35);
+}
+
+.switch input:checked + .slider::before{
+  transform: translate(20px, -50%);
+}
+
+.switch-label{
+  font-size:12px;
+  color:var(--muted);
+  font-weight:600;
+}
+
+/* ===========================
+   IMPORT
+   =========================== */
+.entries-page .import-section{
+  margin-top:14px;
+  padding-top:14px;
+  border-top: 1px dashed var(--border);
+}
+
+.entries-page input[type="file"]{
+  width:100%;
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px dashed rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.05);
+}
+
+.entries-page input[type="file"]::file-selector-button{
+  margin-right:12px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,0.9);
+  border-radius:12px;
+  padding:8px 12px;
+  cursor:pointer;
+  transition: box-shadow .15s ease, border-color .15s ease, transform .06s ease;
+}
+
+.entries-page input[type="file"]::file-selector-button:hover{
+  border-color: rgba(139,92,246,0.35);
+  box-shadow: var(--shadow-soft);
+}
+
+.entries-page input[type="file"]::file-selector-button:active{
+  transform: translateY(1px);
+}
+
+/* ===========================
+   NUOVO MOVIMENTO (EntryForm.jsx)
+   =========================== */
+
+.entry-form-modern{
+  width: 100%;
+  padding-top: 2px;
+}
+
+.ef-grid{
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px;
+  row-gap: 14px;
+  align-items: end;
+}
+
+.field{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  grid-column: span 3; /* default: 4 campi per riga */
+}
+
+.field-label{
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 800;
+  letter-spacing: .2px;
+}
+
+.entry-form-modern input,
+.entry-form-modern select{
+  height: 42px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.06)ed;
+}
+
+.entry-form-modern input::placeholder{
+  color: rgba(255,255,255,0.45);
+}
+
+.entry-form-modern input:focus,
+.entry-form-modern select:focus{
+  border-color: rgba(139,92,246,0.45);
+  box-shadow: 0 0 0 4px rgba(139,92,246,0.18);
+}
+
+/* span coerenti con il tuo JSX */
+.ef-span-2{ grid-column: span 4; } /* descrizione/ conto */
+.ef-span-3{ grid-column: span 6; } /* note */
+
+/* azioni */
+.ef-actions{
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ===========================
+   MATITA / ICON BUTTON
+   =========================== */
+.icon-btn{
+  width:34px;
+  height:34px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,0.06);
+  cursor:pointer;
+  transition: transform .06s ease, box-shadow .15s ease, border-color .15s ease;
+  box-shadow: 0 1px 0 rgba(15,23,42,0.03);
+}
+
+.icon-btn:hover{
+  border-color: rgba(139,92,246,0.35);
+  box-shadow: var(--shadow-soft);
+}
+
+.icon-btn:active{
+  transform: translateY(1px);
+}
+
+/* ===========================
+   TABELLA: descrizione più leggibile
+   =========================== */
+
+/* allarga colonna descrizione */
+.entries-page .table thead th:nth-child(3),
+.entries-page .table tbody td:nth-child(3){
+  width: 460px;        /* qui aumenta davvero lo spazio */
+  max-width: 520px;
+}
+
+/* evita righe altissime: max 3 righe desktop */
+.entries-page .table tbody td:nth-child(3){
+  line-height: 1.25;
+}
+
+.entries-page .table tbody td:nth-child(3) .desc,
+.entries-page .table tbody td:nth-child(3) p,
+.entries-page .table tbody td:nth-child(3) div,
+.entries-page .table tbody td:nth-child(3) span{
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ===========================
+   RESPONSIVE
+   =========================== */
+@media (max-width: 900px){
+  /* filtri: più compatti */
+  .entries-page .toolbar-wrap .toolbar-row:nth-of-type(2){
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) .toolbar-group:nth-child(1),
+  .entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) .toolbar-group:nth-child(2){
+    grid-column: span 3;
+  }
+
+  .entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) .toolbar-group:nth-child(3),
+  .entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) .toolbar-group:nth-child(4),
+  .entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) .toolbar-group:nth-child(5){
+    grid-column: span 3;
+  }
+
+  .entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) .toolbar-buttons{
+    justify-content: stretch;
+  }
+
+  .entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) .toolbar-buttons .btn{
+    width:100%;
+  }
+
+  /* form nuovo movimento: 2 campi per riga */
+  .ef-grid{ grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .field{ grid-column: span 3; }
+  .ef-span-2{ grid-column: span 6; }
+  .ef-span-3{ grid-column: span 6; }
+}
+
+@media (max-width: 520px){
+  /* form: 1 campo per riga */
+  .ef-grid{ grid-template-columns: 1fr; }
+  .field,
+  .ef-span-2,
+  .ef-span-3{ grid-column: auto; }
+
+  .ef-actions .btn{
+    width: 100%;
+  }
+
+  /* descrizione: max 2 righe su mobile */
+  .entries-page .table tbody td:nth-child(3) .desc,
+  .entries-page .table tbody td:nth-child(3) p,
+  .entries-page .table tbody td:nth-child(3) div,
+  .entries-page .table tbody td:nth-child(3) span{
+    -webkit-line-clamp: 2;
+  }
+}
+
+/* =========================================
+   Progress Modal (Bulk update / DB update)
+   ========================================= */
+
+.progress-backdrop{
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0,0,0,0.58);
+  backdrop-filter: blur(10px);
+}
+
+.progress-modal{
+  width: min(720px, 96vw);
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(12,16,24,0.88);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 30px 90px rgba(0,0,0,0.60);
+  overflow: hidden;
+  color: rgba(255,255,255,0.92);
+}
+
+.progress-modal__top{
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  background:
+    radial-gradient(700px 220px at 15% 0%, rgba(139,92,246,0.22), transparent 60%),
+    radial-gradient(700px 220px at 85% 0%, rgba(96,165,250,0.16), transparent 60%),
+    rgba(255,255,255,0.02);
+}
+
+.progress-modal__head{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progress-modal__title{
+  margin: 0;
+  font-size: 16px;
+  font-weight: 950;
+  letter-spacing: .2px;
+}
+
+.progress-modal__subtitle{
+  margin: 6px 0 0;
+  color: rgba(255,255,255,0.68);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.progress-modal__close{
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.9);
+  cursor: pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  transition: transform .08s ease, background .15s ease, border-color .15s ease;
+}
+.progress-modal__close:hover{
+  transform: scale(1.03);
+  background: rgba(255,255,255,0.10);
+  border-color: rgba(139,92,246,0.30);
+}
+.progress-modal__close:disabled{
+  opacity: .45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Body */
+.progress-modal__body{
+  padding: 16px 18px 10px;
+}
+
+.progress-status{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.progress-pill{
+  display:inline-flex;
+  align-items:center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.progress-pill__dot{
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: rgba(255,255,255,0.95);
+  animation: pmSpin .75s linear infinite;
+}
+@keyframes pmSpin{ to{ transform: rotate(360deg); } }
+
+/* States */
+.progress-pill.is-running{
+  border-color: rgba(96,165,250,0.28);
+  background: rgba(96,165,250,0.10);
+}
+.progress-pill.is-success{
+  border-color: rgba(34,197,94,0.28);
+  background: rgba(34,197,94,0.10);
+}
+.progress-pill.is-success .progress-pill__dot{
+  animation: none;
+  border: none;
+  background: rgba(34,197,94,0.85);
+  box-shadow: 0 0 0 4px rgba(34,197,94,0.12);
+}
+.progress-pill.is-error{
+  border-color: rgba(239,68,68,0.32);
+  background: rgba(239,68,68,0.12);
+}
+.progress-pill.is-error .progress-pill__dot{
+  animation: none;
+  border: none;
+  background: rgba(239,68,68,0.90);
+  box-shadow: 0 0 0 4px rgba(239,68,68,0.14);
+}
+
+.progress-meta{
+  text-align:right;
+  color: rgba(255,255,255,0.68);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.progress-meta strong{
+  color: rgba(255,255,255,0.92);
+  font-weight: 950;
+}
+
+/* Progress bar */
+.progress-card{
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  padding: 14px;
+}
+
+.progress-row{
+  display:flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.progress-label{
+  font-size: 12px;
+  font-weight: 950;
+  color: rgba(255,255,255,0.85);
+}
+
+.progress-value{
+  font-size: 12px;
+  color: rgba(255,255,255,0.68);
+}
+.progress-value strong{
+  font-weight: 950;
+  color: rgba(255,255,255,0.92);
+}
+
+.progress-bar{
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+.progress-fill{
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(139,92,246,1), rgba(96,165,250,1));
+  transition: width 260ms ease;
+}
+
+.progress-glow{
+  position:absolute;
+  top: 50%;
+  left: 0%;
+  transform: translate(-50%, -50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.32);
+  filter: blur(10px);
+  opacity: .75;
+  pointer-events:none;
+  transition: left 260ms ease;
+}
+
+/* Error block */
+.progress-error{
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(239,68,68,0.30);
+  background: rgba(239,68,68,0.10);
+  color: rgba(255,220,220,0.95);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+/* Footer actions */
+.progress-modal__footer{
+  padding: 12px 18px 16px;
+  display:flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+}
+
+/* Buttons inside */
+.progress-btn{
+  appearance:none;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.92);
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-weight: 950;
+  cursor:pointer;
+  transition: background .15s ease, border-color .15s ease, transform .06s ease, box-shadow .15s ease;
+}
+.progress-btn:hover{
+  border-color: rgba(139,92,246,0.30);
+  background: rgba(255,255,255,0.10);
+  box-shadow: 0 12px 24px rgba(0,0,0,0.35);
+}
+.progress-btn:active{ transform: translateY(1px); }
+.progress-btn:disabled{ opacity:.55; cursor:not-allowed; transform:none; box-shadow:none; }
+
+.progress-btn.primary{
+  border: 0;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff;
+  box-shadow: 0 16px 34px rgba(139,92,246,0.22);
+}
+.progress-btn.primary:hover{
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  filter: brightness(1.03);
+}
+
+.progress-btn.danger{
+  border-color: rgba(239,68,68,0.30);
+  background: rgba(239,68,68,0.10);
+  color: rgba(255,220,220,0.95);
+}
+.progress-btn.danger:hover{
+  border-color: rgba(239,68,68,0.45);
+  background: rgba(239,68,68,0.14);
+}
+
+/* Mobile */
+@media (max-width: 520px){
+  .progress-modal{ border-radius: 18px; }
+  .progress-modal__footer .progress-btn{ width: 100%; }
+}
+
+/* ======================================================
+   PRIMA NOTA - MOBILE FIX (layout + controlli piccoli)
+   Incolla IN FONDO a Entries.css
+   ====================================================== */
+
+@media (max-width: 560px){
+
+  /* Header pagina: titolo + bottone in colonna */
+  .entries-page .page-header{
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .entries-page .page-actions{
+    width: 100%;
+  }
+
+  .entries-page .page-actions .btn{
+    width: 100%;
+    justify-content: center;
+    height: 42px;
+    padding: 10px 12px;
+    border-radius: 14px;
+  }
+
+  /* Panel più compatto */
+  .entries-page .panel{
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  /* ---------- CONTROLLI: dimensioni “normali” ---------- */
+  .entries-page input[type="text"],
+  .entries-page input[type="date"],
+  .entries-page input[type="time"],
+  .entries-page input[type="number"],
+  .entries-page select,
+  .entries-page textarea{
+    height: 40px;
+    padding: 8px 10px;
+    border-radius: 14px;
+    font-size: 14px;
+    line-height: 1.2;
+  }
+
+  /* Evita select “giganti” */
+  .entries-page select{
+    min-height: 40px;
+    max-height: 40px;
+  }
+
+  /* Dropdown scuro (anche opzioni) */
+  .entries-page select{
+    background: rgba(12,16,24,0.78);
+    color: rgba(255,255,255,0.92);
+    border: 1px solid rgba(255,255,255,0.16);
+  }
+  .entries-page select option,
+  .entries-page select optgroup{
+    background: #0b1020;
+    color: #ffffff;
+  }
+
+  /* Checkbox/Radio: se qualche CSS globale li “scala”, qui li rimettiamo normali */
+  .entries-page input[type="checkbox"],
+  .entries-page input[type="radio"]{
+    transform: none !important;
+    width: 16px !important;
+    height: 16px !important;
+    accent-color: var(--accent);
+  }
+
+  /* ---------- TOOLBAR FILTRI: griglia pulita ---------- */
+  .entries-page .toolbar{
+    gap: 12px;
+  }
+
+  /* Prima riga (Ricerca) resta full */
+  .entries-page .toolbar-row:first-child{
+    display: block;
+  }
+
+  /* Seconda riga: layout a griglia */
+  .entries-page .toolbar-row:nth-child(2){
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* due colonne */
+    gap: 10px;
+    align-items: end;
+  }
+
+  /* Ogni gruppo prende una cella */
+  .entries-page .toolbar-group{
+    width: 100%;
+  }
+
+  /* Dentro ai gruppi “Da data / Ora” mettiamo due campi affiancati */
+  .entries-page .toolbar-group{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  /* MA: alcuni gruppi (Conto, IVA) devono stare singoli a tutta riga */
+  .entries-page .toolbar-group:has(select){
+    grid-template-columns: 1fr; /* select singola */
+  }
+
+  /* Il gruppo switch (Solo senza conto) in una riga ordinata */
+  .entries-page .switch-field-compact{
+    grid-template-columns: 1fr !important;
+  }
+  .entries-page .switch-row{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    margin-top: 6px;
+  }
+  .entries-page .switch-label{
+    font-size: 13px;
+    color: rgba(255,255,255,0.80);
+  }
+
+  /* Bottoni Cerca/Reset: full width */
+  .entries-page .toolbar-buttons{
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .entries-page .toolbar-buttons .btn{
+    width: 100%;
+    justify-content: center;
+    height: 44px;
+    border-radius: 14px;
+  }
+
+  /* Import file: rendi il controllo meno “sformato” */
+  .entries-page input[type="file"]{
+    height: auto;
+    padding: 10px;
+  }
+
+  /* ---------- ENTRY FORM (Nuovo movimento) ---------- */
+  /* I gruppi radio IVA spesso diventano enormi: li allineiamo */
+  .entries-page .vat-row,
+  .entries-page .iva-row,
+  .entries-page .radio-row{
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    align-items: start;
+  }
+
+  /* Se hai label vicine ai radio */
+  .entries-page label{
+    font-size: 13px;
+  }
+
+  /* Pulsante salva nel form: full width */
+  .entries-page .btn.btn-primary{
+    height: 44px;
+    border-radius: 14px;
+  }
+
+  /* ---------- Tabella (quando arrivi sotto) ---------- */
+  .entries-page .table-wrapper{
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 16px;
+  }
+}
+
+/* ======================================================
+   FIX overflow "Filtri e import" su mobile
+   ====================================================== */
+@media (max-width: 560px){
+
+  /* niente overflow orizzontale nel pannello */
+  .entries-page .panel{
+    overflow: hidden;
+  }
+
+  /* IMPORTANTISSIMO: consente agli elementi di restringersi */
+  .entries-page .toolbar,
+  .entries-page .toolbar-row,
+  .entries-page .toolbar-group,
+  .entries-page .toolbar-row label{
+    min-width: 0;
+  }
+
+  /* label + controlli devono stare dentro al 100% */
+  .entries-page .toolbar-row label{
+    width: 100%;
+    display: block;
+  }
+
+  .entries-page input,
+  .entries-page select,
+  .entries-page textarea{
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+  }
+
+  /* ====== RIGA 2 (quella con date/ora + filtro/conti/iva) ====== */
+  .entries-page .toolbar-row:nth-child(2){
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+    align-items: end;
+  }
+
+  /* Di default ogni gruppo deve essere 1 colonna (non 2!) */
+  .entries-page .toolbar-row:nth-child(2) .toolbar-group{
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* ====== SOLO per i gruppi con coppia (data+ora): li mettiamo 2 colonne ======
+     NB: nel tuo JSX i gruppi "Da data + Ora" e "A data + Ora" sono due toolbar-group consecutivi.
+  */
+  .entries-page .toolbar-row:nth-child(2) .toolbar-group:nth-child(1),
+  .entries-page .toolbar-row:nth-child(2) .toolbar-group:nth-child(2){
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* Dentro i gruppi data/ora, ogni label deve poter stringere */
+  .entries-page .toolbar-row:nth-child(2) .toolbar-group:nth-child(1) label,
+  .entries-page .toolbar-row:nth-child(2) .toolbar-group:nth-child(2) label{
+    min-width: 0 !important;
+  }
+
+  /* Inputs date/time: evita “min-width” impliciti */
+  .entries-page input[type="date"],
+  .entries-page input[type="time"]{
+    min-width: 0 !important;
+  }
+
+  /* Switch + conto + IVA devono stare bene senza “spingere” */
+  .entries-page .switch-row{
+    flex-wrap: wrap;
+  }
+
+  /* Se la scritta "Solo senza conto" va a capo male, riduciamo un pelo */
+  .entries-page .switch-label{
+    font-size: 12.5px;
+    line-height: 1.2;
+  }
+}
+
+/* ======================================================
+   FIX switch iPhone: pallino che va in diagonale (mobile)
+   ====================================================== */
+@media (max-width: 560px){
+
+  .entries-page .switch-row{
+    justify-content: flex-start;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* contenitore */
+  .entries-page .switch{
+    position: relative !important;
+    display: inline-block !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    height: 26px !important;
+    flex: 0 0 auto !important;
+  }
+
+  /* input invisibile */
+  .entries-page .switch input{
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  /* track */
+  .entries-page .switch .slider{
+    position: absolute !important;
+    inset: 0 !important;
+    cursor: pointer;
+    border-radius: 999px !important;
+    background: rgba(255,255,255,0.18) !important;
+    border: 1px solid rgba(255,255,255,0.16) !important;
+    transition: background .2s ease, border-color .2s ease;
+  }
+
+  /* thumb */
+  .entries-page .switch .slider:before{
+
+    content: "" !important;
+    position: absolute !important;
+    width: 20px !important;
+    height: 20px !important;
+    left: 3px !important;
+    top: 50% !important;
+    transform: translate(0, -50%) !important;  /* ✅ centrato verticale */
+    border-radius: 999px !important;
+    background: rgba(255,255,255,0.92) !important;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.35) !important;
+    transition: transform .2s ease;
+  }
+
+  /* ON */
+  .entries-page .switch input:checked + .slider{
+    background: linear-gradient(135deg, var(--accent), var(--accent2)) !important;
+    border-color: rgba(139,92,246,0.35) !important;
+  }
+
+  /* ✅ spostamento thumb SOLO orizzontale */
+  .entries-page .switch input:checked + .slider:before{
+    transform: translate(18px, -50%) !important;
+  }
+}
