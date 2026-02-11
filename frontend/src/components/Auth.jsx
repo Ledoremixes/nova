@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { api } from "../api";
-import "../styles/Auth.css";
+import "../styles/auth.css";
 
 
 export default function Auth({ onAuth }) {
