@@ -13,6 +13,34 @@ const teachersRouter = require("./routes/teachers");
 const storageRouter = require("./routes/storage");
 
 const app = express();
+
+const cors = require("cors");
+
+// ✅ domini consentiti (aggiungi qui tutti quelli che usi)
+const ALLOWED_ORIGINS = [
+  "https://nova-eight-lime.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
+
+// ✅ CORS robusto + preflight
+app.use(cors({
+  origin: function (origin, cb) {
+    // richieste senza origin (Postman, server-to-server) -> ok
+    if (!origin) return cb(null, true);
+
+    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+
+    return cb(new Error("Not allowed by CORS: " + origin));
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+}));
+
+app.options("*", cors());
+
+
 const PORT = process.env.PORT || 4000;
 
 app.use(cors());
