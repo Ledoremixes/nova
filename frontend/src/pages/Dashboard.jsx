@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
-import '../styles/Dashboard.css';
+import '../styles/dashboard.css';
 
 import {
   PieChart,

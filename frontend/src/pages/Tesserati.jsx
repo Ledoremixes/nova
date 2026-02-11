@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import "../styles/Tesserati.css";
+import "../styles/tesserati.css";
 import * as XLSX from "xlsx";
 import { api } from "../api";
 

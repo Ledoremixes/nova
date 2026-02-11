@@ -3,7 +3,7 @@ import { api } from '../api';
 import EntryForm from '../components/EntryForm';
 import EntriesTable from '../components/EntriesTable';
 import ImportSumup from '../components/ImportSumup';
-import "../styles/Entries.css";
+import "../styles/entries.css";
 
 const PAGE_SIZE = 100;
 

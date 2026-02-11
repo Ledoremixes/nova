@@ -12,12 +12,12 @@ import Insegnanti from "./pages/Insegnanti";
 import Tesserati from './pages/Tesserati';
 import "./styles/layout.css";
 import "./styles/table.css";
-import "./styles/Tesserati.css";
+import "./styles/tesserati.css";
 import "./styles/insegnanti.css";
-import "./styles/Entries.css";
-import "./styles/Dashboard.css";
+import "./styles/entries.css";
+import "./styles/dashboard.css";
 import "./styles/cards.css";
-import "./styles/Auth.css";
+import "./styles/auth.css";
 
 export default function App() {
   const [token, setToken] = useState(null);
