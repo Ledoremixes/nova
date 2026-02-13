@@ -971,3 +971,33 @@
     transform: translate(18px, -50%) !important;
   }
 }
+
+/* ======================================================
+   FIX overlap Conto/IVA (desktop) - riga filtri
+   ====================================================== */
+
+/* la riga a griglia deve permettere agli elementi di restringersi */
+.entries-page .toolbar-wrap .toolbar-row:nth-of-type(2),
+.entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) *{
+  min-width: 0;
+}
+
+/* ogni gruppo deve stare dentro la sua cella */
+.entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) .toolbar-group{
+  min-width: 0;
+}
+
+/* label “a colonna” + controlli al 100% */
+.entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) .toolbar-group > label{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) select,
+.entries-page .toolbar-wrap .toolbar-row:nth-of-type(2) input{
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
