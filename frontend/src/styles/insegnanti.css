@@ -266,6 +266,53 @@
   color:var(--text);
 }
 
+/* ===== Modal: altezza costante + scroll solo nel body ===== */
+.modal{
+  width: min(980px, 100%);
+  /* scegli tu l'altezza: qui è costante ma non supera la viewport */
+  height: min(90vh, 620px);
+  /* opzionale: se vuoi evitare che su contenuti piccoli sembri “troppo” grande, lascialo così com’è */
+  /* min-height: 520px; */
+
+  display: flex;
+  flex-direction: column;
+
+  /* sposta lo scroll dal contenitore al body */
+  overflow: hidden;
+
+  background: rgba(12,16,24,0.86);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 20px 70px rgba(0,0,0,0.55);
+  color:var(--text);
+}
+
+/* header e tabs restano fissi, il body riempie e scrolla */
+.modal-header{ flex: 0 0 auto; }
+.tabs{ flex: 0 0 auto; }
+
+/* il body prende tutto lo spazio rimanente */
+.modal-body{
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 14px;
+}
+
+/* footer fisso in basso (se lo usi) */
+.modal-footer{
+  flex: 0 0 auto;
+  padding: 10px 14px 14px;
+}
+
+@media (max-width: 620px) {
+  .modal{
+    height: 92vh;   /* così non cambia altezza nemmeno tra tab */
+    overflow: hidden;
+  }
+}
+
+
 /* Header */
 .modal-header{
   display:grid;

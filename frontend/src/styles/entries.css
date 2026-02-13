@@ -93,6 +93,36 @@
   height:40px;
 }
 
+/* Riga ricerca: più spazio tra "Ricerca" e input */
+.toolbar-row > label{
+  display: flex;
+  align-items: center;
+  gap: 14px;              /* aumenta/diminuisci */
+}
+
+/* opzionale: evita che "Ricerca" vada a capo e l'input riempie */
+.toolbar-row > label{
+  white-space: nowrap;
+}
+.toolbar-row > label > input{
+  flex: 1 1 auto;
+  min-width: 240px;       /* opzionale */
+}
+
+@media (max-width: 620px){
+  .toolbar-row > label{
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    white-space: normal;
+  }
+  .toolbar-row > label > input{
+    margin-left: 0;
+    min-width: 0;
+  }
+}
+
+
 /* ===========================
    SWITCH (moderno)
    =========================== */
