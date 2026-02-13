@@ -151,6 +151,16 @@ function ProgressModal({
   );
 }
 
+function normalizeCode(v) {
+  const s = (v ?? '').toString().trim();
+  return s === '' ? null : s.toUpperCase();
+}
+function normalizeNature(v) {
+  const s = (v ?? '').toString().trim().toLowerCase();
+  return s === '' ? null : s;
+}
+
+
 export default function Entries({ token }) {
   const [entries, setEntries] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -341,160 +351,214 @@ export default function Entries({ token }) {
     }
   }
 
-  async function handleUpdateMetaBulk(ids, accountCode, nature) {
-    // ✅ Ora mostra progress modal “bello”
-    const selectedCount = Array.isArray(ids) ? ids.length : 0;
+async function handleUpdateMetaBulk(ids, accountCode, nature) {
+  const selectedCount = Array.isArray(ids) ? ids.length : 0;
 
-    openProgressModal({
-      title: 'Aggiornamento in corso',
-      subtitle: 'Non chiudere questa finestra: sto applicando le modifiche nel database.',
-      selectedCount
-    });
+  // Mappa rapida id -> entry corrente (per sapere se serve davvero aggiornare)
+  const byId = new Map((entries || []).map(e => [e.id, e]));
 
-    try {
-      setError('');
-      setPmSelected(selectedCount);
+  const targetAccount = accountCode === undefined ? undefined : normalizeCode(accountCode);
+  const targetNature = nature === undefined ? undefined : normalizeNature(nature);
 
-      // loop aggiornamenti con progress
-      const total = selectedCount || 1;
-      let done = 0;
+  // Filtra solo quelli che cambiano davvero
+  const idsToUpdate = (ids || []).filter((id) => {
+    const row = byId.get(id);
+    if (!row) return true; // se non la troviamo in pagina, aggiorniamo per sicurezza
 
-      for (const id of ids) {
-        if (cancelRef.current) {
-          finishProgressError('Operazione annullata dall’utente.');
-          return;
-        }
+    // prova a leggere campi possibili (dipende dal tuo backend)
+    const currentAccount =
+      normalizeCode(row.account_code ?? row.accountCode ?? row.conto ?? row.account);
+    const currentNature =
+      normalizeNature(row.nature);
 
-        const body = {};
-        if (accountCode !== undefined) body.accountCode = accountCode || null;
-        if (nature !== undefined) body.nature = nature || null;
+    let needs = false;
 
-        await api.updateEntryMeta(token, id, body);
-
-        done += 1;
-        const pct = Math.round((done / total) * 100);
-        setProgress(pct, `Aggiornati ${done}/${total}`);
-      }
-
-      await load();
-
-      let msg = `Movimenti aggiornati: ${ids.length}.`;
-      if (accountCode && nature) {
-        const naturaLabel =
-          nature === 'commerciale'
-            ? 'Commerciale'
-            : nature === 'istituzionale'
-            ? 'Istituzionale'
-            : nature;
-        msg = `Conto "${accountCode}" e natura "${naturaLabel}" assegnati a ${ids.length} movimenti.`;
-      } else if (accountCode) {
-        msg = `Conto "${accountCode}" assegnato a ${ids.length} movimenti.`;
-      } else if (nature) {
-        const naturaLabel =
-          nature === 'commerciale'
-            ? 'Commerciale'
-            : nature === 'istituzionale'
-            ? 'Istituzionale'
-            : nature;
-        msg = `Natura "${naturaLabel}" assegnata a ${ids.length} movimenti.`;
-      }
-
-      showSuccess(msg);
-      finishProgressSuccess('Operazione completata ✅');
-    } catch (err) {
-      setError(err.message || 'Errore aggiornamento massivo');
-      finishProgressError(err.message || 'Errore aggiornamento massivo');
+    if (targetAccount !== undefined) {
+      // se targetAccount è null => voglio svuotare il conto
+      if ((targetAccount ?? null) !== (currentAccount ?? null)) needs = true;
     }
-  }
+    if (targetNature !== undefined) {
+      if ((targetNature ?? null) !== (currentNature ?? null)) needs = true;
+    }
 
-  async function handleUpdateMetaBulkAll(accountCode, nature) {
-    openProgressModal({
-      title: 'Aggiornamento su tutte le righe',
-      subtitle: 'Sto raccogliendo tutte le righe in base ai filtri e applicando le modifiche nel database.',
-      selectedCount: null
-    });
+    return needs;
+  });
 
-    try {
-      setError('');
-      const { from, to } = buildRange();
+  openProgressModal({
+    title: 'Aggiornamento in corso',
+    subtitle: 'Non chiudere questa finestra: sto applicando le modifiche nel database.',
+    selectedCount
+  });
 
-      const baseFilters = {
-        search,
-        from,
-        to,
-        withoutAccount,
-        accountCode: withoutAccount ? undefined : accountFilter || undefined,
-        vatRate: vatFilter || undefined
-      };
+  try {
+    setError('');
 
-      const BULK_PAGE_SIZE = 500;
-      let currentPage = 1;
-      let allIds = [];
+    // ✅ progress “vero”: conta solo le righe che cambiano davvero
+    const totalToUpdate = idsToUpdate.length;
 
-      // fase 1: raccolta ID
-      while (true) {
-        if (cancelRef.current) {
-          finishProgressError('Operazione annullata dall’utente.');
-          return;
-        }
+    setPmSelected(selectedCount);
 
-        const res = await api.getEntries(token, {
-          ...baseFilters,
-          page: currentPage,
-          pageSize: BULK_PAGE_SIZE
-        });
+    if (totalToUpdate === 0) {
+      setProgress(100, `Nessuna riga da modificare (0/${selectedCount})`);
+      finishProgressSuccess('Nessuna modifica necessaria ✅');
+      showSuccess(`Nessuna modifica: tutte le ${selectedCount} righe erano già coerenti.`);
+      return;
+    }
 
-        const items = res.items || [];
-        if (items.length === 0) break;
+    setProgress(0, `Da modificare: ${totalToUpdate}/${selectedCount}`);
 
-        allIds = allIds.concat(items.map(e => e.id));
+    let done = 0;
 
-        const tp = res.totalPages || 1;
-        // progress “raccolta”: max 25% della barra
-        const pctCollect = Math.min(25, Math.round((currentPage / tp) * 25));
-        setProgress(pctCollect, `Raccolta righe… pagina ${currentPage}/${tp}`);
-
-        if (currentPage >= tp) break;
-        currentPage += 1;
-      }
-
-      if (allIds.length === 0) {
-        finishProgressSuccess('Nessuna riga trovata ✅');
+    for (const id of idsToUpdate) {
+      if (cancelRef.current) {
+        finishProgressError('Operazione annullata dall’utente.');
         return;
       }
 
-      setPmSelected(allIds.length);
-      setProgress(25, `Trovate ${allIds.length} righe. Avvio aggiornamento…`);
+      const body = {};
+      if (accountCode !== undefined) body.accountCode = targetAccount ?? null;
+      if (nature !== undefined) body.nature = targetNature ?? null;
 
-      // fase 2: aggiornamento con progress (dal 25% al 100%)
-      const total = allIds.length;
-      let done = 0;
+      await api.updateEntryMeta(token, id, body);
 
-      for (const id of allIds) {
-        if (cancelRef.current) {
-          finishProgressError('Operazione annullata dall’utente.');
-          return;
-        }
+      done += 1;
+      const pct = Math.round((done / totalToUpdate) * 100);
+      setProgress(pct, `Modificate ${done}/${totalToUpdate} (selezionate: ${selectedCount})`);
+    }
 
-        const body = {};
-        if (accountCode !== undefined) body.accountCode = accountCode || null;
-        if (nature !== undefined) body.nature = nature || null;
+    await load();
 
-        await api.updateEntryMeta(token, id, body);
+    // Messaggio finale “vero”
+    const unchanged = selectedCount - totalToUpdate;
+    showSuccess(`Operazione completata: modificate ${totalToUpdate} righe (invariati ${unchanged}).`);
+    finishProgressSuccess('Operazione completata ✅');
+  } catch (err) {
+    setError(err.message || 'Errore aggiornamento massivo');
+    finishProgressError(err.message || 'Errore aggiornamento massivo');
+  }
+}
 
-        done += 1;
-        const pct = 25 + Math.round((done / total) * 75);
-        setProgress(pct, `Aggiornati ${done}/${total}`);
+
+async function handleUpdateMetaBulkAll(accountCode, nature) {
+  openProgressModal({
+    title: 'Aggiornamento su tutte le righe',
+    subtitle: 'Sto raccogliendo tutte le righe in base ai filtri e applicando le modifiche nel database.',
+    selectedCount: null
+  });
+
+  try {
+    setError('');
+
+    const targetAccount = accountCode === undefined ? undefined : normalizeCode(accountCode);
+    const targetNature = nature === undefined ? undefined : normalizeNature(nature);
+
+    const { from, to } = buildRange();
+    const baseFilters = {
+      search,
+      from,
+      to,
+      withoutAccount,
+      accountCode: withoutAccount ? undefined : accountFilter || undefined,
+      vatRate: vatFilter || undefined
+    };
+
+    const BULK_PAGE_SIZE = 500;
+    let currentPage = 1;
+
+    let selectedTotal = 0;
+    let idsToUpdate = [];
+
+    // fase 1: raccolta + filtro “serve davvero”
+    while (true) {
+      if (cancelRef.current) {
+        finishProgressError('Operazione annullata dall’utente.');
+        return;
       }
 
-      await load();
-      showSuccess(`Modifiche applicate correttamente a ${allIds.length} movimenti.`);
-      finishProgressSuccess('Operazione completata ✅');
-    } catch (err) {
-      setError(err.message || 'Errore aggiornamento su tutte le righe');
-      finishProgressError(err.message || 'Errore aggiornamento su tutte le righe');
+      const res = await api.getEntries(token, {
+        ...baseFilters,
+        page: currentPage,
+        pageSize: BULK_PAGE_SIZE
+      });
+
+      const items = res.items || [];
+      if (items.length === 0) break;
+
+      selectedTotal += items.length;
+
+      for (const row of items) {
+        const currentAccount =
+          normalizeCode(row.account_code ?? row.accountCode ?? row.conto ?? row.account);
+        const currentNature = normalizeNature(row.nature);
+
+        let needs = false;
+
+        if (targetAccount !== undefined) {
+          if ((targetAccount ?? null) !== (currentAccount ?? null)) needs = true;
+        }
+        if (targetNature !== undefined) {
+          if ((targetNature ?? null) !== (currentNature ?? null)) needs = true;
+        }
+
+        if (needs) idsToUpdate.push(row.id);
+      }
+
+      const tp = res.totalPages || 1;
+      const pctCollect = Math.min(25, Math.round((currentPage / tp) * 25));
+      setProgress(pctCollect, `Raccolta… pagina ${currentPage}/${tp} • selezionate: ${selectedTotal} • da modificare: ${idsToUpdate.length}`);
+
+      if (currentPage >= tp) break;
+      currentPage += 1;
     }
+
+    setPmSelected(selectedTotal);
+
+    if (selectedTotal === 0) {
+      finishProgressSuccess('Nessuna riga trovata ✅');
+      return;
+    }
+
+    if (idsToUpdate.length === 0) {
+      setProgress(100, `Nessuna riga da modificare (0/${selectedTotal})`);
+      finishProgressSuccess('Nessuna modifica necessaria ✅');
+      showSuccess(`Nessuna modifica: tutte le ${selectedTotal} righe erano già coerenti.`);
+      return;
+    }
+
+    setProgress(25, `Da modificare: ${idsToUpdate.length}/${selectedTotal}. Avvio aggiornamento…`);
+
+    // fase 2: update vero (25% → 100%)
+    const total = idsToUpdate.length;
+    let done = 0;
+
+    for (const id of idsToUpdate) {
+      if (cancelRef.current) {
+        finishProgressError('Operazione annullata dall’utente.');
+        return;
+      }
+
+      const body = {};
+      if (accountCode !== undefined) body.accountCode = targetAccount ?? null;
+      if (nature !== undefined) body.nature = targetNature ?? null;
+
+      await api.updateEntryMeta(token, id, body);
+
+      done += 1;
+      const pct = 25 + Math.round((done / total) * 75);
+      setProgress(pct, `Modificate ${done}/${total} (selezionate: ${selectedTotal})`);
+    }
+
+    await load();
+
+    const unchanged = selectedTotal - total;
+    showSuccess(`Operazione completata: modificate ${total} righe (invariati ${unchanged}).`);
+    finishProgressSuccess('Operazione completata ✅');
+  } catch (err) {
+    setError(err.message || 'Errore aggiornamento su tutte le righe');
+    finishProgressError(err.message || 'Errore aggiornamento su tutte le righe');
   }
+}
+
 
   // ✅ Update descrizione (usata dalla "matita" in EntriesTable)
   async function handleUpdateDescription(id, description) {

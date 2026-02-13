@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from "react";
 
 function PencilIcon({ size = 16 }) {
   return (
@@ -41,59 +41,29 @@ function XIcon({ size = 16 }) {
   );
 }
 
-const FUN_MESSAGES = [
-  'Sto aggiornando i movimenti… 💾',
-  'Sto parlando con Supabase… 🤝',
-  'Allineo i conti e le nature… ⚙️',
-  'Quasi fatto, non chiudere… ✨',
-  'Ultimi ritocchi… 🔥',
-];
-
 /* ================================
-   MODALE BULK - versione "premium"
-   Usa le classi progress-* (stesso stile del nuovo)
+   MODALE SOLO CONFERMA (NO PROGRESS)
+   Il progress “vero” lo gestisce Entries.jsx
    ================================ */
-function BulkProgressModal({
+function BulkConfirmModal({
   open,
-  phase, // confirm | running | success | error
+  selectedCount,
   title,
   subtitle,
-  selectedCount,
-  progress,
-  msgIndex,
-  error,
-  onClose,
   onCancel,
   onApplySelected,
   onApplyAll,
 }) {
   if (!open) return null;
 
-  const isRunning = phase === 'running';
-  const isSuccess = phase === 'success';
-  const isError = phase === 'error';
-  const isConfirm = phase === 'confirm';
-
-  const pct = Math.max(0, Math.min(100, Math.round(progress || 0)));
-
-  const statusLabel = isSuccess ? 'Completato' : isError ? 'Errore' : isRunning ? 'Operazione in corso' : 'Conferma';
-  const pillClass = isSuccess
-    ? 'progress-pill is-success'
-    : isError
-    ? 'progress-pill is-error'
-    : 'progress-pill is-running';
-
-  const rightText = isRunning
-    ? FUN_MESSAGES[msgIndex || 0]
-    : isSuccess
-    ? 'Fatto! ✅'
-    : isError
-    ? 'Errore ⚠️'
-    : '';
-
   return (
-    <div className="progress-backdrop" onMouseDown={isRunning ? undefined : onCancel}>
-      <div className="progress-modal" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
+    <div className="progress-backdrop" onMouseDown={onCancel}>
+      <div
+        className="progress-modal"
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="progress-modal__top">
           <div className="progress-modal__head">
             <div style={{ minWidth: 0 }}>
@@ -104,10 +74,9 @@ function BulkProgressModal({
             <button
               type="button"
               className="progress-modal__close"
-              onClick={isRunning ? undefined : onCancel}
-              disabled={isRunning}
+              onClick={onCancel}
               aria-label="Chiudi"
-              title={isRunning ? 'Attendi il completamento' : 'Chiudi'}
+              title="Chiudi"
             >
               ✕
             </button>
@@ -116,79 +85,35 @@ function BulkProgressModal({
 
         <div className="progress-modal__body">
           <div className="progress-status">
-            <div className={pillClass}>
+            <div className="progress-pill is-running">
               <span className="progress-pill__dot" />
-              <span>{statusLabel}</span>
+              <span>Conferma</span>
             </div>
 
             <div className="progress-meta">
-              {isConfirm ? (
-                <div>Selezionate: <strong>{selectedCount}</strong></div>
-              ) : (
-                <>
-                  <div>Avanzamento <strong>{pct}%</strong></div>
-                  <div>Selezionate: <strong>{selectedCount}</strong></div>
-                </>
-              )}
-              {rightText ? <div>{rightText}</div> : null}
+              <div>
+                Selezionate: <strong>{selectedCount}</strong>
+              </div>
             </div>
           </div>
 
-          {(isRunning || isSuccess || isError) && (
-            <div className="progress-card">
-              <div className="progress-row">
-                <div className="progress-label">
-                  {isSuccess ? 'Operazione completata' : isError ? 'Operazione interrotta' : 'Aggiornamento in corso…'}
-                </div>
-                <div className="progress-value">
-                  <strong>{pct}%</strong>
-                </div>
-              </div>
-
-              <div className="progress-bar" role="progressbar" aria-valuenow={pct} aria-valuemin="0" aria-valuemax="100">
-                <div className="progress-fill" style={{ width: `${pct}%` }} />
-                <div className="progress-glow" style={{ left: `${pct}%` }} />
-              </div>
-
-              {isError && error ? <div className="progress-error">{error}</div> : null}
+          <div className="progress-card">
+            <div className="progress-row">
+              <div className="progress-label">{subtitle}</div>
             </div>
-          )}
+          </div>
         </div>
 
         <div className="progress-modal__footer">
-          {isConfirm && (
-            <>
-              <button type="button" className="progress-btn primary" onClick={onApplySelected}>
-                Solo righe selezionate
-              </button>
-              <button type="button" className="progress-btn" onClick={onApplyAll}>
-                Tutte le righe della ricerca
-              </button>
-              <button type="button" className="progress-btn danger" onClick={onCancel}>
-                Annulla
-              </button>
-            </>
-          )}
-
-          {isRunning && (
-            <>
-              <button type="button" className="progress-btn" disabled>
-                Applicazione in corso…
-              </button>
-              <button type="button" className="progress-btn" disabled>
-                Attendere…
-              </button>
-              <button type="button" className="progress-btn danger" disabled>
-                Annulla
-              </button>
-            </>
-          )}
-
-          {(isSuccess || isError) && (
-            <button type="button" className="progress-btn primary" onClick={onClose}>
-              Chiudi
-            </button>
-          )}
+          <button type="button" className="progress-btn primary" onClick={onApplySelected}>
+            Solo righe selezionate
+          </button>
+          <button type="button" className="progress-btn" onClick={onApplyAll}>
+            Tutte le righe della ricerca
+          </button>
+          <button type="button" className="progress-btn danger" onClick={onCancel}>
+            Annulla
+          </button>
         </div>
       </div>
     </div>
@@ -202,59 +127,54 @@ export default function EntriesTable({
   onUpdateMeta,
   onUpdateMetaBulk,
   onUpdateMetaBulkAll,
-  onUpdateDescription
+  onUpdateDescription,
 }) {
   const [editedNature, setEditedNature] = useState({});
   const [editedAccount, setEditedAccount] = useState({});
   const [selectedIds, setSelectedIds] = useState({});
 
-  // ✅ riga attiva per mostrare la matita
   const [activeRowId, setActiveRowId] = useState(null);
 
-  // ✅ inline edit descrizione
+  // inline edit descrizione
   const [editingId, setEditingId] = useState(null);
-  const [editingValue, setEditingValue] = useState('');
+  const [editingValue, setEditingValue] = useState("");
 
-  const [modal, setModal] = useState({
+  // modal solo conferma
+  const [confirm, setConfirm] = useState({
     open: false,
-    selectedCount: 0,
     selectedIds: [],
-    accountCode: '',
-    nature: '',
-    phase: 'confirm', // confirm | running | success | error
-    progress: 0,      // 0..100 (finto ma “smooth”)
-    msgIndex: 0,
-    error: ''
+    accountCode: "",
+    nature: "",
   });
 
   function handleNatureChange(id, value) {
-    setEditedNature(prev => ({ ...prev, [id]: value }));
+    setEditedNature((prev) => ({ ...prev, [id]: value }));
   }
 
   function handleAccountChange(id, value) {
-    setEditedAccount(prev => ({ ...prev, [id]: value }));
+    setEditedAccount((prev) => ({ ...prev, [id]: value }));
   }
 
   function toggleSelect(id) {
-    setSelectedIds(prev => ({ ...prev, [id]: !prev[id] }));
+    setSelectedIds((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
   function toggleSelectAll() {
-    const allSelected = entries.length > 0 && entries.every(e => selectedIds[e.id]);
+    const allSelected = entries.length > 0 && entries.every((e) => selectedIds[e.id]);
     if (allSelected) {
       setSelectedIds({});
     } else {
       const next = {};
-      entries.forEach(e => (next[e.id] = true));
+      entries.forEach((e) => (next[e.id] = true));
       setSelectedIds(next);
     }
   }
 
   function getSelectedIdsArray() {
-    return entries.map(e => e.id).filter(id => selectedIds[id]);
+    return entries.map((e) => e.id).filter((id) => selectedIds[id]);
   }
 
-  const allSelected = entries.length > 0 && entries.every(e => selectedIds[e.id]);
+  const allSelected = entries.length > 0 && entries.every((e) => selectedIds[e.id]);
   const selectedCount = useMemo(() => getSelectedIdsArray().length, [entries, selectedIds]);
 
   function clearSelection() {
@@ -266,16 +186,12 @@ export default function EntriesTable({
     const isMulti = selected.length > 1 && selected.includes(id);
 
     if (isMulti) {
-      setModal({
+      // apri SOLO conferma, poi il progress lo farà Entries.jsx
+      setConfirm({
         open: true,
-        selectedCount: selected.length,
         selectedIds: selected,
         accountCode,
         nature,
-        phase: 'confirm',
-        progress: 0,
-        msgIndex: 0,
-        error: ''
       });
       return;
     }
@@ -283,118 +199,59 @@ export default function EntriesTable({
     onUpdateMeta(id, accountCode, nature);
   }
 
-  // ✅ progress “smooth” (fake) finché la request è in running
-  useEffect(() => {
-    if (!modal.open) return;
-    if (modal.phase !== 'running') return;
-
-    let stopped = false;
-
-    const progressId = setInterval(() => {
-      if (stopped) return;
-      setModal(prev => {
-        if (prev.phase !== 'running') return prev;
-        const bump = Math.random() * 6 + 2; // 2..8
-        const next = Math.min(92, (prev.progress || 0) + bump);
-        return { ...prev, progress: next };
-      });
-    }, 650);
-
-    const msgId = setInterval(() => {
-      if (stopped) return;
-      setModal(prev => {
-        if (!prev.open) return prev;
-        return { ...prev, msgIndex: (prev.msgIndex + 1) % FUN_MESSAGES.length };
-      });
-    }, 1700);
-
-    return () => {
-      stopped = true;
-      clearInterval(progressId);
-      clearInterval(msgId);
-    };
-  }, [modal.open, modal.phase]);
-
-  async function runBulk(action) {
-    setModal(prev => ({ ...prev, phase: 'running', progress: 6, error: '' }));
-
-    try {
-      await action();
-      setModal(prev => ({ ...prev, progress: 100, phase: 'success' }));
-    } catch (err) {
-      const msg =
-        err?.message ||
-        (typeof err === 'string' ? err : '') ||
-        'Errore durante l’aggiornamento.';
-
-      setModal(prev => ({
-        ...prev,
-        phase: 'error',
-        error: msg,
-        progress: Math.max(12, prev.progress || 0)
-      }));
+  // testo descrittivo modal conferma
+  const confirmSubtitle = useMemo(() => {
+    const parts = [];
+    if (confirm.accountCode) parts.push(`conto "${confirm.accountCode}"`);
+    if (confirm.nature) {
+      const naturaLabel =
+        confirm.nature === "commerciale"
+          ? 'natura "Commerciale"'
+          : confirm.nature === "istituzionale"
+          ? 'natura "Istituzionale"'
+          : `natura "${confirm.nature}"`;
+      parts.push(naturaLabel);
     }
+
+    if (parts.length === 0) {
+      return `Vuoi aggiornare le ${confirm.selectedIds.length} voci selezionate o tutte le voci trovate con questa ricerca?`;
+    }
+    return `Vuoi applicare ${parts.join(" e ")} alle ${confirm.selectedIds.length} voci selezionate o a tutte le voci della ricerca corrente?`;
+  }, [confirm.accountCode, confirm.nature, confirm.selectedIds.length]);
+
+  function closeConfirm() {
+    setConfirm((prev) => ({ ...prev, open: false }));
   }
 
-  async function handleModalApplySelected() {
-    const { selectedIds, accountCode, nature } = modal;
-    await runBulk(async () => {
-      await onUpdateMetaBulk(selectedIds, accountCode, nature);
-    });
+  async function applySelected() {
+    const { selectedIds, accountCode, nature } = confirm;
+    closeConfirm(); // ✅ chiudo subito (evito “doppio modale”)
+    await onUpdateMetaBulk(selectedIds, accountCode, nature); // ✅ qui si aprirà il ProgressModal di Entries.jsx
   }
 
-  async function handleModalApplyAll() {
-    const { accountCode, nature } = modal;
-    await runBulk(async () => {
-      if (onUpdateMetaBulkAll) {
-        await onUpdateMetaBulkAll(accountCode, nature);
-      } else {
-        await onUpdateMetaBulk(modal.selectedIds, accountCode, nature);
-      }
-    });
-  }
-
-  function handleModalCancel() {
-    if (modal.phase === 'running') return;
-    setModal(prev => ({ ...prev, open: false }));
-  }
-
-  function handleModalClose() {
-    setModal(prev => ({ ...prev, open: false }));
-  }
-
-  // ✅ descrizione popup
-  let modalDescr = '';
-  const parts = [];
-  if (modal.accountCode) parts.push(`conto "${modal.accountCode}"`);
-  if (modal.nature) {
-    const naturaLabel =
-      modal.nature === 'commerciale'
-        ? 'natura "Commerciale"'
-        : modal.nature === 'istituzionale'
-        ? 'natura "Istituzionale"'
-        : `natura "${modal.nature}"`;
-    parts.push(naturaLabel);
-  }
-  if (parts.length === 0) {
-    modalDescr = `Vuoi aggiornare le ${modal.selectedCount} voci selezionate o tutte le voci trovate con questa ricerca?`;
-  } else {
-    modalDescr = `Vuoi applicare ${parts.join(' e ')} alle ${modal.selectedCount} voci selezionate o a tutte le voci della ricerca corrente?`;
+  async function applyAll() {
+    const { accountCode, nature } = confirm;
+    closeConfirm();
+    if (onUpdateMetaBulkAll) {
+      await onUpdateMetaBulkAll(accountCode, nature); // ✅ ProgressModal di Entries.jsx
+    } else {
+      await onUpdateMetaBulk(confirm.selectedIds, accountCode, nature);
+    }
   }
 
   function startEditDescription(entry) {
     setEditingId(entry.id);
-    setEditingValue((entry.description ?? '').toString());
+    setEditingValue((entry.description ?? "").toString());
     setActiveRowId(entry.id);
   }
 
   function cancelEditDescription() {
     setEditingId(null);
-    setEditingValue('');
+    setEditingValue("");
   }
 
   async function saveEditDescription(entry) {
-    const next = (editingValue ?? '').trim();
+    const next = (editingValue ?? "").trim();
     if (!onUpdateDescription) {
       cancelEditDescription();
       return;
@@ -402,21 +259,6 @@ export default function EntriesTable({
     await onUpdateDescription(entry.id, next);
     cancelEditDescription();
   }
-
-  const modalTitle = useMemo(() => {
-    if (modal.phase === 'running') return 'Aggiornamento in corso';
-    if (modal.phase === 'success') return 'Aggiornamento completato';
-    if (modal.phase === 'error') return 'Ops… qualcosa è andato storto';
-    return 'Conferma aggiornamento';
-  }, [modal.phase]);
-
-  const modalSubtitle = useMemo(() => {
-    const descr = modalDescr;
-    if (modal.phase === 'running') return 'Non chiudere questa finestra: sto applicando le modifiche nel database.';
-    if (modal.phase === 'success') return 'Le modifiche sono state applicate correttamente.';
-    if (modal.phase === 'error') return 'Puoi chiudere e riprovare. Se continua, controlliamo la query.';
-    return descr;
-  }, [modal.phase, modalDescr]);
 
   return (
     <>
@@ -460,12 +302,12 @@ export default function EntriesTable({
         </thead>
 
         <tbody>
-          {entries.map(e => {
+          {entries.map((e) => {
             const currentNature =
-              editedNature[e.id] !== undefined ? editedNature[e.id] : e.nature || '';
+              editedNature[e.id] !== undefined ? editedNature[e.id] : e.nature || "";
 
             const currentAccount =
-              editedAccount[e.id] !== undefined ? editedAccount[e.id] : e.account_code || '';
+              editedAccount[e.id] !== undefined ? editedAccount[e.id] : e.account_code || "";
 
             const vatRate = e.vat_rate != null ? Number(e.vat_rate) : null;
             const vatAmount = e.vat_amount != null ? Number(e.vat_amount) : null;
@@ -477,20 +319,14 @@ export default function EntriesTable({
             return (
               <tr
                 key={e.id}
-                className={`${selected ? 'row-selected' : ''} ${active ? 'row-active' : ''}`}
+                className={`${selected ? "row-selected" : ""} ${active ? "row-active" : ""}`}
                 onClick={() => setActiveRowId(e.id)}
               >
-                <td onClick={ev => ev.stopPropagation()}>
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    onChange={() => toggleSelect(e.id)}
-                  />
+                <td onClick={(ev) => ev.stopPropagation()}>
+                  <input type="checkbox" checked={selected} onChange={() => toggleSelect(e.id)} />
                 </td>
 
-                <td className="nowrap">
-                  {new Date(e.date).toLocaleDateString('it-IT')}
-                </td>
+                <td className="nowrap">{new Date(e.date).toLocaleDateString("it-IT")}</td>
 
                 <td className="td-desc">
                   {!editing ? (
@@ -499,9 +335,9 @@ export default function EntriesTable({
 
                       <button
                         type="button"
-                        className={`icon-btn ${active ? 'show' : ''}`}
+                        className={`icon-btn ${active ? "show" : ""}`}
                         title="Modifica descrizione"
-                        onClick={ev => {
+                        onClick={(ev) => {
                           ev.stopPropagation();
                           startEditDescription(e);
                         }}
@@ -510,14 +346,14 @@ export default function EntriesTable({
                       </button>
                     </div>
                   ) : (
-                    <div className="desc-edit" onClick={ev => ev.stopPropagation()}>
+                    <div className="desc-edit" onClick={(ev) => ev.stopPropagation()}>
                       <input
                         className="input"
                         value={editingValue}
-                        onChange={ev => setEditingValue(ev.target.value)}
-                        onKeyDown={ev => {
-                          if (ev.key === 'Escape') cancelEditDescription();
-                          if (ev.key === 'Enter') saveEditDescription(e);
+                        onChange={(ev) => setEditingValue(ev.target.value)}
+                        onKeyDown={(ev) => {
+                          if (ev.key === "Escape") cancelEditDescription();
+                          if (ev.key === "Enter") saveEditDescription(e);
                         }}
                         autoFocus
                       />
@@ -546,13 +382,13 @@ export default function EntriesTable({
                 </td>
 
                 <td className="num">
-                  <span className={Number(e.amount_in || 0) > 0 ? 'amount-in' : ''}>
+                  <span className={Number(e.amount_in || 0) > 0 ? "amount-in" : ""}>
                     {Number(e.amount_in || 0).toFixed(2)}
                   </span>
                 </td>
 
                 <td className="num">
-                  <span className={Number(e.amount_out || 0) > 0 ? 'amount-out' : ''}>
+                  <span className={Number(e.amount_out || 0) > 0 ? "amount-out" : ""}>
                     {Number(e.amount_out || 0).toFixed(2)}
                   </span>
                 </td>
@@ -569,13 +405,10 @@ export default function EntriesTable({
                   {vatAmount != null ? vatAmount.toFixed(2) : <span className="muted">-</span>}
                 </td>
 
-                <td className="nowrap" onClick={ev => ev.stopPropagation()}>
-                  <select
-                    value={currentAccount}
-                    onChange={ev => handleAccountChange(e.id, ev.target.value)}
-                  >
+                <td className="nowrap" onClick={(ev) => ev.stopPropagation()}>
+                  <select value={currentAccount} onChange={(ev) => handleAccountChange(e.id, ev.target.value)}>
                     <option value="">—</option>
-                    {accounts.map(a => (
+                    {accounts.map((a) => (
                       <option key={a.id} value={a.code}>
                         {a.code} - {a.name}
                       </option>
@@ -591,18 +424,15 @@ export default function EntriesTable({
                   {e.center ? <span className="pill">{e.center}</span> : <span className="muted">-</span>}
                 </td>
 
-                <td className="nowrap" onClick={ev => ev.stopPropagation()}>
-                  <select
-                    value={currentNature}
-                    onChange={ev => handleNatureChange(e.id, ev.target.value)}
-                  >
+                <td className="nowrap" onClick={(ev) => ev.stopPropagation()}>
+                  <select value={currentNature} onChange={(ev) => handleNatureChange(e.id, ev.target.value)}>
                     <option value="">—</option>
                     <option value="istituzionale">Istituzionale</option>
                     <option value="commerciale">Commerciale</option>
                   </select>
                 </td>
 
-                <td className="nowrap" onClick={ev => ev.stopPropagation()}>
+                <td className="nowrap" onClick={(ev) => ev.stopPropagation()}>
                   <div className="row-actions">
                     <button
                       className="btn btn-primary"
@@ -617,7 +447,7 @@ export default function EntriesTable({
                       className="btn btn-danger"
                       type="button"
                       onClick={() => {
-                        if (confirm('Eliminare questo movimento?')) onDelete(e.id);
+                        if (confirm("Eliminare questo movimento?")) onDelete(e.id);
                       }}
                       title="Elimina movimento"
                     >
@@ -637,20 +467,15 @@ export default function EntriesTable({
         </tbody>
       </table>
 
-      {/* ✅ nuovo modale bulk coerente con la grafica */}
-      <BulkProgressModal
-        open={modal.open}
-        phase={modal.phase}
-        title={modalTitle}
-        subtitle={modalSubtitle}
-        selectedCount={modal.selectedCount}
-        progress={modal.progress}
-        msgIndex={modal.msgIndex}
-        error={modal.error}
-        onClose={handleModalClose}
-        onCancel={handleModalCancel}
-        onApplySelected={handleModalApplySelected}
-        onApplyAll={handleModalApplyAll}
+      {/* ✅ SOLO conferma: niente running/progress qui */}
+      <BulkConfirmModal
+        open={confirm.open}
+        selectedCount={confirm.selectedIds.length}
+        title="Conferma aggiornamento"
+        subtitle={confirmSubtitle}
+        onCancel={closeConfirm}
+        onApplySelected={applySelected}
+        onApplyAll={applyAll}
       />
     </>
   );
