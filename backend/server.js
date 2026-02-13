@@ -14,7 +14,6 @@ const storageRouter = require("./routes/storage");
 
 const app = express();
 
-const cors = require("cors");
 
 // ✅ domini consentiti (aggiungi qui tutti quelli che usi)
 const ALLOWED_ORIGINS = [
@@ -38,7 +37,7 @@ app.use(cors({
   credentials: true,
 }));
 
-app.options("*", cors());
+app.options(/.*/, cors());
 
 
 const PORT = process.env.PORT || 4000;
@@ -67,6 +66,7 @@ app.use('/api/admin', adminUsersRouter);
 app.use('/api/tesserati', require('./routes/tesserati'));
 app.use("/api/teachers", teachersRouter);
 app.use("/api/storage", storageRouter);
+app.use('/api/reportIva', require('./routes/reportIva'));
 
 // ✅ case-sensitive fix
 app.use('/api/report', require('./routes/reportIva'));

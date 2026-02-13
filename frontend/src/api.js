@@ -177,9 +177,31 @@ function saveAccountsToLS(data) {
   }
 }
 
+// Report IVA commercialista (JSON per tab "iva")
+export async function getIvaCommercialista(token, { from, to } = {}) {
+  const params = new URLSearchParams();
+  if (from) params.append('from', from);
+  if (to) params.append('to', to);
+  const q = params.toString() ? `?${params.toString()}` : '';
+
+  return apiGet(`/reportIva/data${q}`, token);
+}
+
+// Export PDF report IVA commercialista
+export async function downloadIvaCommercialistaPdf(token, { from, to } = {}) {
+  const params = new URLSearchParams();
+  if (from) params.append('from', from);
+  if (to) params.append('to', to);
+  const q = params.toString() ? `?${params.toString()}` : '';
+
+  return apiBlob(`/reportIva/pdf${q}`, token);
+}
+
+
 // ======================
 // API
 // ======================
+
 export const api = {
   // ----------------------
   // HEALTH (cold start friendly)

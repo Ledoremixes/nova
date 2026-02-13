@@ -1,33 +1,36 @@
 const express = require('express');
-const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 
 const { supabase } = require('../supabaseClient');
 const { auth } = require('../middleware/auth');
-const { requireAdmin } = require('../middleware/requireAdmin');
 
 const router = express.Router();
 router.use(auth);
 
-// ======================
-// CONFIG
-// ======================
-// se vuoi includere anche altri conti IVA (es. C per Bar, ecc.), aggiungili qui
-const IVA_ACCOUNT_CODES = ['C'];
-
 // ----------------------
 // Helpers
 // ----------------------
-function toISODateOrNull(x) {
+function toISOTsOrNull(x) {
   if (!x) return null;
   const d = new Date(x);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString().slice(0, 10);
+  return d.toISOString(); // timestamptz
 }
 
 function num(x) {
   const n = Number(x);
   return Number.isFinite(n) ? n : 0;
+}
+
+function euro(v) {
+  return num(v).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
+}
+
+function fmtDate(d) {
+  if (!d) return '';
+  const x = new Date(d);
+  if (Number.isNaN(x.getTime())) return String(d);
+  return x.toISOString().slice(0, 10);
 }
 
 async function rpc(fnName, params) {
@@ -40,234 +43,217 @@ async function rpc(fnName, params) {
   return data || [];
 }
 
-function computeTotalsFromSummary(summaryRows) {
-  const totals = { imponibile: 0, iva: 0, totale: 0, count: 0 };
-  for (const r of summaryRows || []) {
-    totals.imponibile += num(r.imponibile);
-    totals.iva += num(r.iva);
-    totals.totale += num(r.totale);
-    totals.count += Number(r.count || 0);
-  }
-  totals.imponibile = Number(totals.imponibile.toFixed(2));
-  totals.iva = Number(totals.iva.toFixed(2));
-  totals.totale = Number(totals.totale.toFixed(2));
-  return totals;
+// Tabella PDF semplice con page break
+function drawTable(doc, { x, y, columns, rows, headerHeight = 20, rowHeight = 18 }) {
+  let cursorY = y;
+  const tableW = columns.reduce((s, c) => s + c.width, 0);
+  const bottom = () => doc.page.height - doc.page.margins.bottom;
+
+  const drawHeader = () => {
+    doc.save();
+    doc.rect(x, cursorY, tableW, headerHeight).fill('#111827');
+    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(9);
+    let cx = x;
+    for (const c of columns) {
+      doc.text(c.label, cx + 6, cursorY + 6, { width: c.width - 12, align: c.align || 'left' });
+      cx += c.width;
+    }
+    doc.restore();
+    cursorY += headerHeight;
+  };
+
+  const ensure = (need) => {
+    if (cursorY + need > bottom()) {
+      doc.addPage();
+      cursorY = doc.page.margins.top;
+      drawHeader();
+    }
+  };
+
+  drawHeader();
+
+  doc.font('Helvetica').fontSize(8.7).fillColor('#000');
+  rows.forEach((r, idx) => {
+    ensure(rowHeight);
+
+    if (idx % 2 === 0) {
+      doc.save();
+      doc.rect(x, cursorY, tableW, rowHeight).fill('#F3F4F6');
+      doc.restore();
+    }
+
+    let cx = x;
+    for (const c of columns) {
+      const val = r[c.key] ?? '';
+      doc.text(String(val), cx + 6, cursorY + 5, { width: c.width - 12, align: c.align || 'left' });
+      cx += c.width;
+    }
+    cursorY += rowHeight;
+  });
+
+  return cursorY;
 }
 
-function formatEuro(v) {
-  const n = num(v);
-  return n.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
-}
-
-// ======================
-// API DATA: monthly-nature (per la pagina Contabilità)
-// ======================
-router.get('/iva/monthly-nature', requireAdmin, async (req, res) => {
+// ----------------------
+// GET /api/reportIva/data
+// JSON per Bilancio.jsx
+// ----------------------
+router.get('/data', async (req, res) => {
   try {
-    const from = toISODateOrNull(req.query.from);
-    const to = toISODateOrNull(req.query.to);
+    const from = toISOTsOrNull(req.query.from);
+    const to = toISOTsOrNull(req.query.to);
 
-    const [summaryRowsRaw, detailRowsRaw] = await Promise.all([
-      rpc('iva_monthly_nature', {
-        p_user_id: req.user.id,
-        p_from: from,
-        p_to: to,
-        p_account_codes: IVA_ACCOUNT_CODES,
-      }),
-      rpc('iva_monthly_nature_detail', {
-        p_user_id: req.user.id,
-        p_from: from,
-        p_to: to,
-        p_account_codes: IVA_ACCOUNT_CODES,
-      }),
+    const [sumRaw, byRateRaw, rowsRaw] = await Promise.all([
+      rpc('iva_commercialista_summary', { p_user_id: req.user.id, p_from: from, p_to: to }),
+      rpc('iva_commercialista_by_rate', { p_user_id: req.user.id, p_from: from, p_to: to }),
+      rpc('iva_commercialista_rows', { p_user_id: req.user.id, p_from: from, p_to: to }),
     ]);
 
-    const summaryRows = (summaryRowsRaw || []).map((r) => ({
-      month: r.month,
-      nature: r.nature,
-      vatRate: r.vat_rate === null ? null : num(r.vat_rate),
-      imponibile: Number(num(r.imponibile).toFixed(2)),
-      iva: Number(num(r.iva).toFixed(2)),
-      totale: Number(num(r.totale).toFixed(2)),
-      count: Number(r.count || 0),
-    }));
-
-    const detailRows = (detailRowsRaw || []).map((r) => ({
-      month: r.month,
-      nature: r.nature,
-      accountCode: r.account_code,
-      accountName: r.account_name,
-      vatRate: r.vat_rate === null ? null : num(r.vat_rate),
-      imponibile: Number(num(r.imponibile).toFixed(2)),
-      iva: Number(num(r.iva).toFixed(2)),
-      totale: Number(num(r.totale).toFixed(2)),
-      count: Number(r.count || 0),
-    }));
-
-    const totals = computeTotalsFromSummary(summaryRows);
-
-    return res.json({
-      summaryRows,
-      detailRows,
-      totals,
-      meta: {
-        from,
-        to,
-        accountCodes: IVA_ACCOUNT_CODES,
-      },
+    res.json({
+      summary: sumRaw?.[0] || null,
+      byRate: byRateRaw || [],
+      rows: rowsRaw || [],
+      meta: { from, to },
     });
   } catch (err) {
-    console.error('GET /report/iva/monthly-nature:', err.details || err);
-    res.status(500).json({ error: 'Errore report IVA' });
+    console.error('Errore /reportIva/data:', err.details || err);
+    res.status(500).json({ error: 'Errore report IVA data', message: err.message });
   }
 });
 
-// ======================
-// EXPORT: /api/report/iva/export/:format (xlsx | pdf)
-// ======================
-router.get('/iva/export/:format', requireAdmin, async (req, res) => {
+// ----------------------
+// GET /api/reportIva/pdf
+// PDF “bello” e leggibile
+// ----------------------
+router.get('/pdf', async (req, res) => {
   try {
-    const { format } = req.params;
-    const from = toISODateOrNull(req.query.from);
-    const to = toISODateOrNull(req.query.to);
+    const from = toISOTsOrNull(req.query.from);
+    const to = toISOTsOrNull(req.query.to);
 
-    const [summaryRowsRaw, detailRowsRaw] = await Promise.all([
-      rpc('iva_monthly_nature', {
-        p_user_id: req.user.id,
-        p_from: from,
-        p_to: to,
-        p_account_codes: IVA_ACCOUNT_CODES,
-      }),
-      rpc('iva_monthly_nature_detail', {
-        p_user_id: req.user.id,
-        p_from: from,
-        p_to: to,
-        p_account_codes: IVA_ACCOUNT_CODES,
-      }),
+    const [sumRaw, byRateRaw, rowsRaw] = await Promise.all([
+      rpc('iva_commercialista_summary', { p_user_id: req.user.id, p_from: from, p_to: to }),
+      rpc('iva_commercialista_by_rate', { p_user_id: req.user.id, p_from: from, p_to: to }),
+      rpc('iva_commercialista_rows', { p_user_id: req.user.id, p_from: from, p_to: to }),
     ]);
 
-    const summaryRows = (summaryRowsRaw || []).map((r) => ({
-      month: r.month,
-      nature: r.nature,
-      vatRate: r.vat_rate === null ? null : num(r.vat_rate),
-      imponibile: Number(num(r.imponibile).toFixed(2)),
-      iva: Number(num(r.iva).toFixed(2)),
-      totale: Number(num(r.totale).toFixed(2)),
-      count: Number(r.count || 0),
+    const summary = sumRaw?.[0] || {
+      entrate_istituzionali: 0,
+      entrate_commerciali: 0,
+      imponibile_commerciale: 0,
+      iva_commerciale: 0,
+      totale_commerciale: 0,
+    };
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="Report_IVA_Commercialista_${(from || 'all').slice(0,10)}_${(to || 'all').slice(0,10)}.pdf"`
+    );
+
+    const doc = new PDFDocument({ size: 'A4', margin: 40 });
+    doc.pipe(res);
+
+    // Header
+    doc.font('Helvetica-Bold').fontSize(16).text('Report IVA Club Orchidea asd');
+    doc.moveDown(0.2);
+    doc.font('Helvetica').fontSize(10).fillColor('#374151')
+      .text(`Periodo: ${from ? from.slice(0,10) : '—'} → ${to ? to.slice(0,10) : '—'}`);
+    doc.fillColor('#000');
+    doc.moveDown(0.8);
+
+    // Box riepilogo
+    const x = doc.page.margins.left;
+    const w = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const y = doc.y;
+    const h = 112;
+
+    doc.save();
+    doc.roundedRect(x, y, w, h, 10).fill('#0B1220');
+    doc.restore();
+
+    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(11).text('Riepilogo', x + 14, y + 12);
+    doc.font('Helvetica').fontSize(10);
+    doc.text(`Entrate istituzionali: ${euro(summary.entrate_istituzionali)}`, x + 14, y + 36);
+    doc.text(`Entrate commerciali (Bar - conto C): ${euro(summary.entrate_commerciali)}`, x + 14, y + 54);
+
+    doc.font('Helvetica-Bold').text('IVA (solo Bar - conto C)', x + 14, y + 78);
+    doc.font('Helvetica').text(
+      `Imponibile: ${euro(summary.imponibile_commerciale)}   IVA: ${euro(summary.iva_commerciale)}   Totale: ${euro(summary.totale_commerciale)}`,
+      x + 14, y + 95
+    );
+
+    doc.fillColor('#000');
+    doc.y = y + h + 16;
+
+    // Tabella aliquote
+    doc.font('Helvetica-Bold').fontSize(12).text('Dettaglio IVA per aliquota (solo Bar - C)');
+    doc.moveDown(0.4);
+
+    const rateRows = (byRateRaw || []).map(r => ({
+      vat_rate: r.vat_rate == null ? '—' : `${Number(r.vat_rate).toFixed(0)}%`,
+      imponibile: euro(r.imponibile),
+      iva: euro(r.iva),
+      totale: euro(r.totale),
+      count: r.count ?? 0,
     }));
 
-    const detailRows = (detailRowsRaw || []).map((r) => ({
-      month: r.month,
-      nature: r.nature,
-      accountCode: r.account_code,
-      accountName: r.account_name,
-      vatRate: r.vat_rate === null ? null : num(r.vat_rate),
-      imponibile: Number(num(r.imponibile).toFixed(2)),
-      iva: Number(num(r.iva).toFixed(2)),
-      totale: Number(num(r.totale).toFixed(2)),
-      count: Number(r.count || 0),
+    let yy = drawTable(doc, {
+      x: doc.page.margins.left,
+      y: doc.y,
+      columns: [
+        { key: 'vat_rate', label: 'Aliquota', width: 70 },
+        { key: 'count', label: 'N°', width: 45, align: 'right' },
+        { key: 'imponibile', label: 'Imponibile', width: 140, align: 'right' },
+        { key: 'iva', label: 'IVA', width: 110, align: 'right' },
+        { key: 'totale', label: 'Totale', width: 140, align: 'right' },
+      ],
+      rows: rateRows,
+    });
+
+    doc.y = yy + 14;
+
+    // Tabella righe
+    doc.font('Helvetica-Bold').fontSize(12).text('Righe IVA (solo Bar - C)');
+    doc.moveDown(0.4);
+
+    const detailRows = (rowsRaw || []).map((r) => ({
+      date: fmtDate(r.date),
+      // ✅ stringo descrizione per stare in A4
+      description: (r.description || '').replace(/\s+/g, ' ').trim().slice(0, 42),
+      vat_rate: r.vat_rate == null ? '—' : `${Number(r.vat_rate).toFixed(0)}%`,
+      imponibile: euro(r.imponibile),
+      iva: euro(r.iva),
+      totale: euro(r.totale),
     }));
 
-    const totals = computeTotalsFromSummary(summaryRows);
+    drawTable(doc, {
+      x: doc.page.margins.left,
+      y: doc.y,
+      // ✅ colonne ricalibrate per A4 (somma = 515)
+      columns: [
+        { key: 'date', label: 'Data', width: 60 },
+        { key: 'description', label: 'Descrizione', width: 185 },
+        { key: 'vat_rate', label: 'Aliq.', width: 45, align: 'right' },
+        { key: 'imponibile', label: 'Imponibile', width: 75, align: 'right' },
+        { key: 'iva', label: 'IVA', width: 65, align: 'right' },
+        { key: 'totale', label: 'Totale', width: 85, align: 'right' },
+      ],
+      rows: detailRows,
+      // ✅ leggermente più compatto
+      rowHeight: 17,
+      headerHeight: 20,
+    });
 
-    if (format === 'xlsx') {
-      const wb = new ExcelJS.Workbook();
-      wb.creator = 'Gest ASD';
-      wb.created = new Date();
 
-      const sh1 = wb.addWorksheet('IVA - Summary');
-      sh1.columns = [
-        { header: 'Mese', key: 'month', width: 10 },
-        { header: 'Natura', key: 'nature', width: 18 },
-        { header: 'Aliquota', key: 'vatRate', width: 10 },
-        { header: 'Imponibile', key: 'imponibile', width: 14 },
-        { header: 'IVA', key: 'iva', width: 14 },
-        { header: 'Totale', key: 'totale', width: 14 },
-        { header: 'N. righe', key: 'count', width: 10 },
-      ];
-      sh1.getRow(1).font = { bold: true };
-      summaryRows.forEach((r) => sh1.addRow(r));
-      sh1.addRow({});
-      sh1.addRow({
-        month: 'TOTALE',
-        imponibile: totals.imponibile,
-        iva: totals.iva,
-        totale: totals.totale,
-        count: totals.count,
-      });
+    doc.moveDown(1);
+    doc.font('Helvetica').fontSize(9).fillColor('#374151')
+      .text('Nota: la divisione istituzionale/commerciale segue la regola: commerciale = conto C (Bar). L’IVA è calcolata e mostrata solo sulle righe del conto C.');
+    doc.fillColor('#000');
 
-      const sh2 = wb.addWorksheet('IVA - Dettaglio');
-      sh2.columns = [
-        { header: 'Mese', key: 'month', width: 10 },
-        { header: 'Natura', key: 'nature', width: 18 },
-        { header: 'Conto', key: 'accountCode', width: 10 },
-        { header: 'Nome conto', key: 'accountName', width: 28 },
-        { header: 'Aliquota', key: 'vatRate', width: 10 },
-        { header: 'Imponibile', key: 'imponibile', width: 14 },
-        { header: 'IVA', key: 'iva', width: 14 },
-        { header: 'Totale', key: 'totale', width: 14 },
-        { header: 'N. righe', key: 'count', width: 10 },
-      ];
-      sh2.getRow(1).font = { bold: true };
-      detailRows.forEach((r) => sh2.addRow(r));
-
-      res.setHeader(
-        'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      );
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="iva_${from || 'all'}_${to || 'all'}.xlsx"`
-      );
-
-      await wb.xlsx.write(res);
-      return res.end();
-    }
-
-    if (format === 'pdf') {
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="iva_${from || 'all'}_${to || 'all'}.pdf"`
-      );
-
-      const doc = new PDFDocument({ size: 'A4', margin: 40 });
-      doc.pipe(res);
-
-      doc.fontSize(16).text('Report IVA', { align: 'center' });
-      doc.moveDown(0.5);
-      doc.fontSize(10).text(`Periodo: ${from || '—'} → ${to || '—'}`, { align: 'center' });
-      doc.moveDown(1);
-
-      doc.fontSize(12).text('Totali', { underline: true });
-      doc.moveDown(0.5);
-      doc.fontSize(10).text(`Imponibile: ${formatEuro(totals.imponibile)}`);
-      doc.text(`IVA:        ${formatEuro(totals.iva)}`);
-      doc.text(`Totale:     ${formatEuro(totals.totale)}`);
-      doc.text(`Righe:      ${totals.count}`);
-      doc.moveDown(1);
-
-      doc.fontSize(12).text('Riepilogo per mese/natura/aliquota', { underline: true });
-      doc.moveDown(0.5);
-      doc.fontSize(9);
-
-      for (const r of summaryRows) {
-        const line =
-          `${r.month} | ${String(r.nature || '').padEnd(14)} | ` +
-          `Aliq: ${(r.vatRate ?? '—')} | ` +
-          `Imp: ${formatEuro(r.imponibile)} | IVA: ${formatEuro(r.iva)} | Tot: ${formatEuro(r.totale)}`;
-        doc.text(line);
-        if (doc.y > 760) doc.addPage();
-      }
-
-      doc.end();
-      return;
-    }
-
-    return res.status(400).json({ error: 'Formato non supportato (usa xlsx o pdf)' });
+    doc.end();
   } catch (err) {
-    console.error('GET /report/iva/export:', err.details || err);
-    res.status(500).json({ error: 'Errore export IVA' });
+    console.error('Errore /reportIva/pdf:', err.details || err);
+    res.status(500).json({ error: 'Errore PDF report IVA', message: err.message });
   }
 });
 
