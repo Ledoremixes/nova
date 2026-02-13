@@ -11,69 +11,64 @@ const statsRoutes = require('./routes/stats');
 const adminUsersRouter = require('./routes/adminUsers');
 const teachersRouter = require("./routes/teachers");
 const storageRouter = require("./routes/storage");
-const tesseratiRouter = require('./routes/tesserati');
-const reportIvaRouter = require('./routes/reportIva');
 
 const app = express();
 
+
+// ✅ domini consentiti (aggiungi qui tutti quelli che usi)
 const ALLOWED_ORIGINS = [
   "https://nova-gest.vercel.app",
   "http://localhost:5173",
   "http://localhost:3000",
 ];
 
-// se vuoi permettere anche preview Vercel:
-// const isAllowed = (origin) =>
-//   !origin ||
-//   origin === "http://localhost:5173" ||
-//   origin === "http://localhost:3000" ||
-//   origin === "https://nova-gest.vercel.app" ||
-//   /^https:\/\/nova-gest-.*\.vercel\.app$/.test(origin);
-
-const corsOptions = {
+// ✅ CORS robusto + preflight
+app.use(cors({
   origin: function (origin, cb) {
+    // richieste senza origin (Postman, server-to-server) -> ok
     if (!origin) return cb(null, true);
+
     if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+
     return cb(new Error("Not allowed by CORS: " + origin));
   },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
-};
+}));
 
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // ✅ preflight
+app.options(/.*/, cors());
+
+
+const PORT = process.env.PORT || 4000;
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-
-const PORT = process.env.PORT || 4000;
 
 app.get('/api/health', (req, res) => {
   res.status(200).json({ ok: true, ts: new Date().toISOString() });
 });
 
+
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'Backend gestionale ASD' });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/entries', entriesRoutes);
-app.use('/api/accounts', accountsRoutes);
+// API protette / pubbliche
+app.use('/api/auth', authRoutes);         // register / login
+app.use('/api/entries', entriesRoutes);   // prima nota
+app.use('/api/accounts', accountsRoutes); // conti
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/report', reportRoutes);
-app.use('/api/report', reportIvaRouter);
 app.use('/api/stats', statsRoutes);
 app.use('/api/admin', adminUsersRouter);
-app.use('/api/tesserati', tesseratiRouter);
-app.use('/api/teachers', teachersRouter);
-app.use('/api/storage', storageRouter);
+app.use('/api/tesserati', require('./routes/tesserati'));
+app.use("/api/teachers", teachersRouter);
+app.use("/api/storage", storageRouter);
+app.use('/api/reportIva', require('./routes/reportIva'));
 
-// ✅ error handler (utile per vedere errori CORS)
-app.use((err, req, res, next) => {
-  console.error('SERVER ERROR:', err);
-  res.status(500).json({ error: err.message || 'Server error' });
-});
+// ✅ case-sensitive fix
+app.use('/api/report', require('./routes/reportIva'));
 
 app.listen(PORT, () => {
   console.log(`Backend in ascolto su http://localhost:${PORT}`);
