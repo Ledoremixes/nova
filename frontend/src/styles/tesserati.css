@@ -133,7 +133,7 @@ html, body { height: 100%; }
   padding: 11px 12px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(243, 8, 8, 0.04);
   color: var(--text);
   outline: none;
   transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
@@ -142,7 +142,7 @@ html, body { height: 100%; }
 .tess-search input:focus {
   border-color: rgba(139, 92, 246, 0.55);
   box-shadow: var(--focus);
-  background: rgba(255, 255, 255, 0.055);
+  background: rgba(228, 8, 8, 0.055);
 }
 
 .tess-filters {
@@ -157,8 +157,8 @@ html, body { height: 100%; }
   padding: 10px 10px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text);
+   background: linear-gradient(135deg, rgba(139, 92, 246, 0.95), rgba(167, 139, 250, 0.85));
+  color: black;
   outline: none;
   transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
   cursor: pointer;
@@ -166,7 +166,7 @@ html, body { height: 100%; }
 .tess-filters select:focus {
   border-color: rgba(139, 92, 246, 0.55);
   box-shadow: var(--focus);
-  background: rgba(255, 255, 255, 0.055);
+   background: linear-gradient(135deg, rgba(104, 44, 243, 0.95), rgba(167, 139, 250, 0.85));
 }
 
 /* ================================
