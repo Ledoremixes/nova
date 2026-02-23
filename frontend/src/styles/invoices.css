@@ -1,0 +1,413 @@
+/* =========================
+   FATTURE (Bilancio)
+   Modern modal + form layout
+   ========================= */
+
+:root{
+  --inv-bg: rgba(10,12,16,.78);
+  --inv-card: rgba(255,255,255,.05);
+  --inv-card2: rgba(255,255,255,.04);
+  --inv-border: rgba(255,255,255,.10);
+  --inv-border2: rgba(255,255,255,.14);
+  --inv-muted: rgba(255,255,255,.62);
+}
+
+/* ---- topbar / filters ---- */
+.invoice-topbar{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+.invoice-topbar .filters{
+  display:flex;
+  align-items:flex-end;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.invoice-topbar label{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  font-size:13px;
+  color: var(--muted);
+}
+
+.invoice-topbar input,
+.invoice-topbar select{
+  width: 180px;
+  min-height: 40px;
+}
+
+/* ---- modal container ---- */
+.invoice-modal{
+  width: min(1320px, 96vw);
+  max-height: 95vh;
+  overflow: auto;
+
+  padding: 18px;
+  border-radius: 22px;
+
+  background: var(--inv-bg);
+  border: 1px solid var(--inv-border);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 20px 60px rgba(0,0,0,.55);
+}
+
+/* sticky header dentro al modal */
+.invoice-modal .modal-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+
+  position: sticky;
+  top: 0;
+  z-index: 2;
+
+  padding: 10px 6px 12px;
+  margin: -10px -6px 14px;
+
+  background: linear-gradient(to bottom, rgba(10,12,16,.98), rgba(10,12,16,.72));
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  backdrop-filter: blur(16px);
+}
+
+.invoice-modal .modal-header h3{
+  margin:0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+
+.invoice-modal .modal-header button{
+  white-space: nowrap;
+}
+
+/* ---- section layout ---- */
+/* più spazio ai dati fattura/cedente (sinistra) */
+.invoice-grid{
+  display:grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 14px;
+  align-items: start;
+}
+
+/* card sections */
+.invoice-card{
+  border: 1px solid var(--inv-border);
+  background: var(--inv-card);
+  border-radius: 18px;
+  padding: 14px;
+}
+
+.invoice-card h4{
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  color: rgba(255,255,255,.92);
+}
+
+.invoice-card .hint{
+  margin-top: -6px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--inv-muted);
+}
+
+/* ---- form rows ---- */
+.invoice-form .row{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.invoice-form .row-3{
+  display:grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.invoice-form .full{ grid-column: 1 / -1; }
+
+.invoice-form label{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  font-size: 12px;
+  color: var(--inv-muted);
+}
+
+.invoice-form input,
+.invoice-form select,
+.invoice-form textarea{
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+
+  border-radius: 14px;
+  border: 1px solid var(--inv-border2);
+  background: rgba(0,0,0,.22);
+  color: rgba(255,255,255,.92);
+  outline: none;
+}
+
+.invoice-form input::placeholder,
+.invoice-form textarea::placeholder{
+  color: rgba(255,255,255,.40);
+}
+
+.invoice-form input:focus,
+.invoice-form select:focus,
+.invoice-form textarea:focus{
+  border-color: rgba(255,255,255,.22);
+  box-shadow: 0 0 0 3px rgba(255,255,255,.06);
+}
+
+.invoice-form textarea{
+  min-height: 96px;
+  resize: vertical;
+}
+
+/* ---- clienti salvati tools ---- */
+.inv-customer-tools{
+  display:grid;
+  grid-template-columns: 1.2fr 1fr auto;
+  gap:10px;
+  align-items:end;
+  margin-bottom: 10px;
+}
+
+.inv-customer-tools label{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  font-size: 12px;
+  color: rgba(255,255,255,.62);
+}
+
+.inv-customer-actions{
+  display:flex;
+  gap:10px;
+  justify-content:flex-end;
+}
+
+/* ---- items table ---- */
+.invoice-items{
+  margin-top: 14px;
+  border: 1px solid var(--inv-border);
+  background: var(--inv-card2);
+  border-radius: 18px;
+  padding: 12px;
+}
+
+.invoice-items .items-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom: 10px;
+}
+
+.invoice-items .items-header .muted.small{
+  margin-top: 2px;
+  color: rgba(255,255,255,.55);
+  font-size: 12px;
+}
+
+/* evita modale “sottile” con tabella che esplode */
+.invoice-items .table-wrapper{
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 14px;
+}
+
+.invoice-items table{
+  width: 100%;
+  min-width: 760px; /* così non si schiaccia tutto su schermi medi */
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.invoice-items th,
+.invoice-items td{
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding: 10px 8px;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.invoice-items th{
+  color: rgba(255,255,255,.66);
+  font-weight: 700;
+  text-align:left;
+}
+
+.invoice-items td.num,
+.invoice-items th.num{
+  text-align:right;
+}
+
+.invoice-items .small-input{
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+
+/* description col più comoda */
+.invoice-items td:first-child{
+  width: 44%;
+}
+.invoice-items td:first-child .small-input{
+  min-width: 260px;
+}
+
+/* ---- totals ---- */
+.invoice-totals{
+  display:flex;
+  justify-content:flex-end;
+  margin-top: 12px;
+}
+
+.invoice-totals .box{
+  width: min(460px, 100%);
+  border: 1px solid var(--inv-border);
+  background: rgba(0,0,0,.25);
+  border-radius: 18px;
+  padding: 14px;
+}
+
+.invoice-totals .line{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding: 7px 2px;
+  color: rgba(255,255,255,.90);
+}
+
+.invoice-totals .line strong{
+  font-size: 16px;
+}
+
+.invoice-totals .divider{
+  height: 1px;
+  background: rgba(255,255,255,.10);
+  margin: 6px 0;
+}
+
+/* ---- modal actions footer ---- */
+.invoice-actions,
+.modal-buttons{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,.08);
+}
+
+/* ---- responsive ---- */
+@media (max-width: 1100px){
+  .invoice-modal{
+    width: min(1100px, 96vw);
+    max-height: 94vh;
+  }
+}
+
+@media (max-width: 980px){
+  .invoice-grid{
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 860px){
+  .inv-customer-tools{
+    grid-template-columns: 1fr;
+  }
+  .inv-customer-actions{
+    justify-content:stretch;
+  }
+  .inv-customer-actions .btn{
+    width:100%;
+  }
+}
+
+@media (max-width: 560px){
+  .invoice-modal{
+    width: 98vw;
+    max-height: 96vh;
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .invoice-form .row,
+  .invoice-form .row-3{
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-topbar input,
+  .invoice-topbar select{
+    width: 100%;
+  }
+
+  .invoice-items td:first-child .small-input{
+    min-width: 0;
+  }
+
+  .invoice-items table{
+    min-width: 720px;
+  }
+}
+
+/* =========================
+   OVERRIDE .modal globale
+   (su desktop ti limita la larghezza)
+   ========================= */
+
+.modal.invoice-modal{
+  width: min(1320px, 96vw) !important;
+  max-width: none !important;
+}
+
+@media (min-width: 1200px){
+  .modal.invoice-modal{
+    width: min(1400px, 94vw) !important;
+    max-width: none !important;
+  }
+}
+
+/* Layout senza buchi: colonne con aree */
+.modal.invoice-modal .invoice-grid{
+  display:grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 14px;
+  align-items: start;
+
+  grid-template-areas:
+    "fattura cliente"
+    "cedente cliente"
+    "cedente note";
+}
+
+.modal.invoice-modal .inv-card-fattura{ grid-area: fattura; }
+.modal.invoice-modal .inv-card-cliente{ grid-area: cliente; }
+.modal.invoice-modal .inv-card-cedente{ grid-area: cedente; }
+.modal.invoice-modal .inv-card-note{ grid-area: note; }
+
+@media (max-width: 980px){
+  .modal.invoice-modal .invoice-grid{
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "fattura"
+      "cliente"
+      "cedente"
+      "note";
+  }
+}

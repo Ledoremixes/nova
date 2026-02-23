@@ -11,6 +11,7 @@ const statsRoutes = require('./routes/stats');
 const adminUsersRouter = require('./routes/adminUsers');
 const teachersRouter = require("./routes/teachers");
 const storageRouter = require("./routes/storage");
+const invoicesRouter = require('./routes/invoices');
 
 const app = express();
 
@@ -66,6 +67,9 @@ app.use('/api/tesserati', require('./routes/tesserati'));
 app.use("/api/teachers", teachersRouter);
 app.use("/api/storage", storageRouter);
 app.use('/api/reportIva', require('./routes/reportIva'));
+
+// ✅ Fatture (creazione + PDF)
+app.use('/api/invoices', invoicesRouter);
 
 // ✅ case-sensitive fix
 app.use('/api/report', require('./routes/reportIva'));

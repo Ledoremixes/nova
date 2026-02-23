@@ -1,9 +1,158 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { api } from '../api';
+import React, { useEffect, useMemo, useState } from "react";
+import { api } from "../api";
+
+function safeArray(x) {
+  if (Array.isArray(x)) return x;
+  if (x && typeof x === "object") return Object.values(x);
+  return [];
+}
+
+function toNum(x) {
+  const n = Number(x);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function clampYear(y) {
+  const n = parseInt(String(y || ""), 10);
+  if (!Number.isFinite(n) || n < 2000 || n > 2200) return new Date().getFullYear();
+  return n;
+}
+
+function buildDefaultSeller() {
+  return { name: "", address: "", city: "", vat: "", cf: "", iban: "" };
+}
+
+function buildDefaultCustomer() {
+  return { name: "", address: "", city: "", vat: "", cf: "", sdi: "", pec: "", email: "" };
+}
+
+function computeInvoiceTotals(items) {
+  const rows = Array.isArray(items) ? items : [];
+  let subtotal = 0;
+  let vat = 0;
+  for (const it of rows) {
+    const qty = Math.max(0, toNum(it.qty ?? 1));
+    const unit = toNum(it.unit_price ?? 0);
+    const vatRate = Math.max(0, toNum(it.vat_rate ?? 0));
+    const lineSubtotal = qty * unit;
+    const lineVat = lineSubtotal * (vatRate / 100);
+    subtotal += lineSubtotal;
+    vat += lineVat;
+  }
+  subtotal = Number(subtotal.toFixed(2));
+  vat = Number(vat.toFixed(2));
+  const total = Number((subtotal + vat).toFixed(2));
+  return { subtotal, vat, total };
+}
+
+/* ===============================
+   Cedente / prestatore (localStorage)
+   =============================== */
+const SELLER_LS_KEY = "gest:invoices:seller_v1";
+
+function loadSellerFromLS() {
+  try {
+    const raw = localStorage.getItem(SELLER_LS_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== "object") return null;
+    return { ...buildDefaultSeller(), ...obj };
+  } catch {
+    return null;
+  }
+}
+
+function saveSellerToLS(seller) {
+  try {
+    localStorage.setItem(SELLER_LS_KEY, JSON.stringify(seller || {}));
+  } catch {
+    // ignore
+  }
+}
+
+/* ===============================
+   Clienti fatture (localStorage)
+   =============================== */
+const INVOICE_CUSTOMERS_KEY = "gest:invoiceCustomers";
+
+function readInvoiceCustomers() {
+  try {
+    const raw = localStorage.getItem(INVOICE_CUSTOMERS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeInvoiceCustomers(list) {
+  try {
+    localStorage.setItem(INVOICE_CUSTOMERS_KEY, JSON.stringify(list || []));
+  } catch {
+    // ignore
+  }
+}
+
+function normalizeVat(v) {
+  return String(v || "").trim().replace(/\s+/g, "").toUpperCase();
+}
+function normalizeName(v) {
+  return String(v || "").trim().replace(/\s+/g, " ");
+}
+
+// Chiave cliente: P.IVA > CF > Ragione sociale
+function customerKey(c) {
+  const vat = normalizeVat(c?.vat);
+  const cf = normalizeVat(c?.cf);
+  const name = normalizeName(c?.name);
+  return vat || cf || name || "";
+}
+
+function upsertCustomer(list, customer) {
+  const c = customer || {};
+  const key = customerKey(c);
+  if (!key) return Array.isArray(list) ? list : [];
+
+  const next = Array.isArray(list) ? [...list] : [];
+  const idx = next.findIndex((x) => customerKey(x) === key);
+
+  const id = idx >= 0 ? next[idx].id : (globalThis.crypto?.randomUUID?.() || String(Date.now()));
+
+  const payload = {
+    id,
+    name: normalizeName(c.name),
+    address: String(c.address || "").trim(),
+    city: String(c.city || "").trim(),
+    vat: String(c.vat || "").trim(),
+    cf: String(c.cf || "").trim(),
+    sdi: String(c.sdi || "").trim(),
+    pec: String(c.pec || "").trim(),
+    email: String(c.email || "").trim(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (idx >= 0) next[idx] = { ...next[idx], ...payload };
+  else next.unshift(payload);
+
+  return next.slice(0, 200);
+}
+
+function removeCustomerById(list, id) {
+  return (Array.isArray(list) ? list : []).filter((c) => c.id !== id);
+}
+
+function findCustomerIdByObject(customers, obj) {
+  const key = customerKey(obj);
+  if (!key) return "";
+  const hit = (customers || []).find((c) => customerKey(c) === key);
+  return hit?.id || "";
+}
+
+/* =============================== */
 
 export default function Bilancio({ token }) {
-  // tab: "rendiconto" | "iva"
-  const [tab, setTab] = useState('rendiconto');
+  const [tab, setTab] = useState("rendiconto");
 
   // RENDICONTO
   const [summary, setSummary] = useState({
@@ -16,9 +165,7 @@ export default function Bilancio({ token }) {
     totalVat: 0,
   });
 
-  // REPORT IVA (commercialista)
-  // - mostra entrate istituzionali vs commerciali
-  // - IVA calcolata solo su commerciale (conto C)
+  // REPORT IVA
   const [iva, setIva] = useState({
     summary: {
       entrateIstituzionali: 0,
@@ -27,45 +174,87 @@ export default function Bilancio({ token }) {
       ivaCommerciale: 0,
       totaleCommerciale: 0,
     },
-    byRate: [], // righe per aliquota (solo C)
-    rows: [], // righe dettagliate (solo C)
+    byRate: [],
+    rows: [],
   });
 
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [error, setError] = useState('');
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const fmt = useMemo(() => {
-    return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
-  }, []);
+  // FATTURE
+  const [invYear, setInvYear] = useState(String(new Date().getFullYear()));
+  const [invSearch, setInvSearch] = useState("");
+  const [invRows, setInvRows] = useState([]);
+  const [invLoading, setInvLoading] = useState(false);
+  const [invError, setInvError] = useState("");
 
-  function safeArray(x) {
-    if (Array.isArray(x)) return x;
-    if (x && typeof x === 'object') return Object.values(x);
-    return [];
-  }
+  const [invModalOpen, setInvModalOpen] = useState(false);
+  const [invSaving, setInvSaving] = useState(false);
+  const [invDeleteId, setInvDeleteId] = useState(null);
 
+  const [invEditId, setInvEditId] = useState(null);
+
+  // Cedente HOME
+  const [sellerDraft, setSellerDraft] = useState(() => loadSellerFromLS() || buildDefaultSeller());
+
+  // Clienti HOME
+  const [invCustomers, setInvCustomers] = useState(() => readInvoiceCustomers());
+  const [custDraft, setCustDraft] = useState(() => ({ ...buildDefaultCustomer(), name: "Balla e Snella" }));
+  const [custEditId, setCustEditId] = useState(null);
+  const [custQuery, setCustQuery] = useState("");
+
+  // Cliente MODALE (solo select)
+  const [invCustomerPick, setInvCustomerPick] = useState("");
+  const [invCustomerQuery, setInvCustomerQuery] = useState("");
+
+  useEffect(() => {
+    writeInvoiceCustomers(invCustomers);
+  }, [invCustomers]);
+
+  const filteredInvCustomers = useMemo(() => {
+    const q = String(invCustomerQuery || "").toLowerCase().trim();
+    if (!q) return invCustomers;
+    return invCustomers.filter((c) => {
+      const hay = [c.name, c.vat, c.cf, c.sdi, c.pec, c.email, c.city, c.address].join(" ").toLowerCase();
+      return hay.includes(q);
+    });
+  }, [invCustomers, invCustomerQuery]);
+
+  const filteredCustomersList = useMemo(() => {
+    const q = String(custQuery || "").toLowerCase().trim();
+    if (!q) return invCustomers;
+    return invCustomers.filter((c) => {
+      const hay = [c.name, c.vat, c.cf, c.sdi, c.pec, c.email, c.city, c.address].join(" ").toLowerCase();
+      return hay.includes(q);
+    });
+  }, [invCustomers, custQuery]);
+
+  const fmt = useMemo(() => new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }), []);
+
+  const [invoiceForm, setInvoiceForm] = useState({
+    year: new Date().getFullYear(),
+    number: "",
+    issue_date: new Date().toISOString().slice(0, 10),
+    due_date: "",
+    notes: "",
+    items: [{ description: "Affitto sala / affitto ore", qty: 1, unit_price: 0, vat_rate: 0 }],
+  });
+
+  const invTotals = useMemo(() => computeInvoiceTotals(invoiceForm.items), [invoiceForm.items]);
+
+  // ---------------------- LOADERS
   async function loadRendiconto() {
     try {
-      setError('');
+      setError("");
       setLoading(true);
 
-      const data = await api.getReportSummary(token, {
-        from: fromDate || undefined,
-        to: toDate || undefined,
-      });
-
+      const data = await api.getReportSummary(token, { from: fromDate || undefined, to: toDate || undefined });
       const root = data?.data ?? data;
 
       let detailRows =
-        root?.rows ??
-        root?.perAccount ??
-        root?.perAccountRows ??
-        root?.detailRows ??
-        root?.accounts ??
-        [];
-
+        root?.rows ?? root?.perAccount ?? root?.perAccountRows ?? root?.detailRows ?? root?.accounts ?? [];
       detailRows = safeArray(detailRows);
 
       setSummary({
@@ -78,17 +267,8 @@ export default function Bilancio({ token }) {
         totalVat: Number(root?.totalVat || 0),
       });
     } catch (err) {
-      setError(err?.message || 'Errore nel caricamento del rendiconto');
-      setSummary((s) => ({
-        ...s,
-        rows: [],
-        totalEntrate: 0,
-        totalUscite: 0,
-        saldo: 0,
-        totalEntrateIstituzionali: 0,
-        totalEntrateCommerciali: 0,
-        totalVat: 0,
-      }));
+      setError(err?.message || "Errore nel caricamento del rendiconto");
+      setSummary((s) => ({ ...s, rows: [] }));
     } finally {
       setLoading(false);
     }
@@ -96,252 +276,630 @@ export default function Bilancio({ token }) {
 
   async function loadIva() {
     try {
-      setError('');
+      setError("");
       setLoading(true);
 
-      // ✅ Nuovo flusso "commercialista":
-      // - summary (entrate ist/comm + imponibile/iva/totale su C)
-      // - byRate (aliquota)
-      // - rows (dettaglio)
-      // Se non hai ancora aggiunto questi metodi in api.js, puoi usare fetch diretto (vedi sotto).
       let payload;
-
       if (api.getIvaCommercialista) {
-        payload = await api.getIvaCommercialista(token, {
-          from: fromDate || undefined,
-          to: toDate || undefined,
-        });
+        payload = await api.getIvaCommercialista(token, { from: fromDate || undefined, to: toDate || undefined });
       } else {
-        // fallback fetch diretto
-        const base = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+        const base = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
         const params = new URLSearchParams();
-        if (fromDate) params.append('from', fromDate);
-        if (toDate) params.append('to', toDate);
-        const q = params.toString() ? `?${params.toString()}` : '';
+        if (fromDate) params.append("from", fromDate);
+        if (toDate) params.append("to", toDate);
+        const q = params.toString() ? `?${params.toString()}` : "";
 
-        const res = await fetch(`${base}/reportIva/data${q}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (!res.ok) {
-          const txt = await res.text();
-          throw new Error(txt || 'Errore nel caricamento del report IVA');
-        }
+        const res = await fetch(`${base}/reportIva/data${q}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) throw new Error((await res.text()) || "Errore report IVA");
         payload = await res.json();
       }
 
       const root = payload?.data ?? payload;
-
       setIva({
         summary: {
-          entrateIstituzionali: Number(
-            root?.summary?.entrate_istituzionali ??
-              root?.summary?.entrateIstituzionali ??
-              0
-          ),
-          entrateCommerciali: Number(
-            root?.summary?.entrate_commerciali ??
-              root?.summary?.entrateCommerciali ??
-              0
-          ),
+          entrateIstituzionali: Number(root?.summary?.entrate_istituzionali ?? root?.summary?.entrateIstituzionali ?? 0),
+          entrateCommerciali: Number(root?.summary?.entrate_commerciali ?? root?.summary?.entrateCommerciali ?? 0),
           imponibileCommerciale: Number(
-            root?.summary?.imponibile_commerciale ??
-              root?.summary?.imponibileCommerciale ??
-              0
+            root?.summary?.imponibile_commerciale ?? root?.summary?.imponibileCommerciale ?? 0
           ),
-          ivaCommerciale: Number(
-            root?.summary?.iva_commerciale ?? root?.summary?.ivaCommerciale ?? 0
-          ),
-          totaleCommerciale: Number(
-            root?.summary?.totale_commerciale ??
-              root?.summary?.totaleCommerciale ??
-              0
-          ),
+          ivaCommerciale: Number(root?.summary?.iva_commerciale ?? root?.summary?.ivaCommerciale ?? 0),
+          totaleCommerciale: Number(root?.summary?.totale_commerciale ?? root?.summary?.totaleCommerciale ?? 0),
         },
         byRate: safeArray(root?.byRate ?? root?.by_rate ?? []),
         rows: safeArray(root?.rows ?? []),
       });
     } catch (err) {
-      setError(err?.message || 'Errore nel caricamento del report IVA');
-      setIva({
-        summary: {
-          entrateIstituzionali: 0,
-          entrateCommerciali: 0,
-          imponibileCommerciale: 0,
-          ivaCommerciale: 0,
-          totaleCommerciale: 0,
-        },
-        byRate: [],
-        rows: [],
-      });
+      setError(err?.message || "Errore nel caricamento del report IVA");
     } finally {
       setLoading(false);
     }
   }
 
+  async function loadInvoices() {
+    try {
+      setInvError("");
+      setInvLoading(true);
+
+      const year = clampYear(invYear);
+      const resp = await api.getInvoices(token, { year });
+      const root = resp?.data ?? resp;
+      const rows = safeArray(root?.data ?? root);
+      setInvRows(rows);
+    } catch (err) {
+      setInvError(err?.message || "Errore nel caricamento fatture");
+      setInvRows([]);
+    } finally {
+      setInvLoading(false);
+    }
+  }
+
   useEffect(() => {
     if (!token) return;
-    if (tab === 'rendiconto') loadRendiconto();
-    else loadIva();
+    if (tab === "rendiconto") loadRendiconto();
+    else if (tab === "iva") loadIva();
+    else loadInvoices();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, tab]);
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (tab === 'rendiconto') loadRendiconto();
-    else loadIva();
+    if (tab === "rendiconto") loadRendiconto();
+    else if (tab === "iva") loadIva();
+    else loadInvoices();
   }
 
   function handleReset() {
-    setFromDate('');
-    setToDate('');
+    setFromDate("");
+    setToDate("");
     setTimeout(() => {
-      if (tab === 'rendiconto') loadRendiconto();
-      else loadIva();
+      if (tab === "rendiconto") loadRendiconto();
+      else if (tab === "iva") loadIva();
+      else loadInvoices();
     }, 0);
   }
 
   async function handleExport(format) {
     try {
       const params = new URLSearchParams();
-      if (fromDate) params.append('from', fromDate);
-      if (toDate) params.append('to', toDate);
+      if (fromDate) params.append("from", fromDate);
+      if (toDate) params.append("to", toDate);
+      const q = params.toString() ? `?${params.toString()}` : "";
+      const base = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 
-      const q = params.toString() ? `?${params.toString()}` : '';
-      const base = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+      let url = "";
+      if (tab === "rendiconto") url = `${base}/report/export/${format}${q}`;
+      else url = format === "pdf" ? `${base}/reportIva/pdf${q}` : `${base}/reportIva/export/${format}${q}`;
 
-      // ✅ Export:
-      // - rendiconto -> /report/export/{xlsx|pdf}
-      // - iva commercialista -> /reportIva/pdf (solo pdf) oppure /reportIva/export/pdf
-      let url = '';
-
-      if (tab === 'rendiconto') {
-        url = `${base}/report/export/${format}${q}`;
-      } else {
-        // preferisci PDF “bello” per commercialista
-        if (format === 'pdf') url = `${base}/reportIva/pdf${q}`;
-        else url = `${base}/reportIva/export/${format}${q}`; // se farai anche xlsx
-      }
-
-      const res = await fetch(url, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        alert("Errore durante l'export: " + text);
-        return;
-      }
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return alert("Errore export: " + (await res.text()));
 
       const blob = await res.blob();
       const blobUrl = window.URL.createObjectURL(blob);
-
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = blobUrl;
-
-      if (tab === 'rendiconto') {
-        a.download = format === 'xlsx' ? 'rendiconto_orchidea.xlsx' : 'rendiconto_orchidea.pdf';
-      } else {
-        a.download = format === 'xlsx' ? 'report_iva_commercialista.xlsx' : 'report_iva_commercialista.pdf';
-      }
-
+      a.download =
+        tab === "rendiconto"
+          ? format === "xlsx"
+            ? "rendiconto_orchidea.xlsx"
+            : "rendiconto_orchidea.pdf"
+          : format === "xlsx"
+          ? "report_iva_commercialista.xlsx"
+          : "report_iva_commercialista.pdf";
       document.body.appendChild(a);
       a.click();
       a.remove();
-
       window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
-      alert("Errore durante l'export: " + (err?.message || ''));
+      alert("Errore export: " + (err?.message || ""));
     }
   }
 
-  const {
-    rows,
-    totalEntrate,
-    totalUscite,
-    saldo,
-    totalEntrateIstituzionali,
-    totalEntrateCommerciali,
-    totalVat,
-  } = summary;
+  // ---------------------- HOME: Cedente
+  function saveSellerHome() {
+    saveSellerToLS(sellerDraft);
+    alert("Cedente salvato ✅");
+  }
+
+  // ---------------------- HOME: Clienti
+  function resetCustomerDraft() {
+    setCustDraft({ ...buildDefaultCustomer(), name: "Balla e Snella" });
+    setCustEditId(null);
+  }
+
+  function saveCustomerHome() {
+    const key = customerKey(custDraft);
+    if (!key) return alert("Inserisci almeno Ragione sociale o P.IVA/CF per salvare il cliente.");
+    setInvCustomers((prev) => upsertCustomer(prev, custDraft));
+    resetCustomerDraft();
+  }
+
+  function editCustomerHome(c) {
+    setCustEditId(c.id);
+    setCustDraft({
+      name: c.name || "",
+      address: c.address || "",
+      city: c.city || "",
+      vat: c.vat || "",
+      cf: c.cf || "",
+      sdi: c.sdi || "",
+      pec: c.pec || "",
+      email: c.email || "",
+    });
+  }
+
+  function deleteCustomerHome(id) {
+    if (!confirm("Eliminare questo cliente salvato?")) return;
+    setInvCustomers((prev) => removeCustomerById(prev, id));
+    if (custEditId === id) resetCustomerDraft();
+  }
+
+  // ---------------------- MODALE: nuove/modifica
+  async function openNewInvoice() {
+    try {
+      const year = clampYear(invYear);
+      const next = await api.getInvoiceNextNumber(token, { year });
+      const data = next?.data?.data ?? next?.data ?? next;
+      const nextNumber = data?.nextNumber ?? data?.data?.nextNumber;
+
+      setInvoiceForm({
+        year,
+        number: nextNumber || "",
+        issue_date: new Date().toISOString().slice(0, 10),
+        due_date: "",
+        notes: "",
+        items: [{ description: "Affitto sala / affitto ore", qty: 1, unit_price: 0, vat_rate: 0 }],
+      });
+
+      setInvEditId(null);
+      const defaultId =
+        findCustomerIdByObject(invCustomers, { name: "Balla e Snella" }) || (invCustomers[0]?.id || "");
+      setInvCustomerPick(defaultId);
+      setInvCustomerQuery("");
+      setInvModalOpen(true);
+    } catch (err) {
+      alert(err?.message || "Errore calcolo progressivo");
+    }
+  }
+
+  function openEditInvoice(row) {
+    const year = clampYear(row.year || invYear);
+    setInvEditId(row.id);
+
+    // match cliente con quelli salvati; se non esiste lo aggiungo (così la select lo vede)
+    const cid = findCustomerIdByObject(invCustomers, row.customer) || "";
+    if (!cid && row.customer) setInvCustomers((prev) => upsertCustomer(prev, row.customer));
+    const cid2 = cid || findCustomerIdByObject(invCustomers, row.customer) || "";
+    setInvCustomerPick(cid2);
+    setInvCustomerQuery("");
+
+    setInvoiceForm({
+      year,
+      number: row.number || "",
+      issue_date: row.issue_date || new Date().toISOString().slice(0, 10),
+      due_date: row.due_date || "",
+      notes: row.notes || "",
+      items:
+        Array.isArray(row.items) && row.items.length
+          ? row.items.map((it) => ({
+              description: it.description ?? "",
+              qty: it.qty ?? 1,
+              unit_price: it.unit_price ?? 0,
+              vat_rate: it.vat_rate ?? 0,
+            }))
+          : [{ description: "Affitto sala / affitto ore", qty: 1, unit_price: 0, vat_rate: 0 }],
+    });
+
+    setInvModalOpen(true);
+  }
+
+  function closeInvoiceModal() {
+    setInvModalOpen(false);
+    setInvSaving(false);
+  }
+
+  function updateItem(idx, patch) {
+    setInvoiceForm((s) => {
+      const items = [...(s.items || [])];
+      items[idx] = { ...items[idx], ...patch };
+      return { ...s, items };
+    });
+  }
+
+  function addItem() {
+    setInvoiceForm((s) => ({
+      ...s,
+      items: [...(s.items || []), { description: "", qty: 1, unit_price: 0, vat_rate: 0 }],
+    }));
+  }
+
+  function removeItem(idx) {
+    setInvoiceForm((s) => {
+      const items = [...(s.items || [])];
+      items.splice(idx, 1);
+      return { ...s, items: items.length ? items : [{ description: "", qty: 1, unit_price: 0, vat_rate: 0 }] };
+    });
+  }
+
+  function getSelectedCustomerObject() {
+    return invCustomers.find((x) => x.id === invCustomerPick) || null;
+  }
+
+  async function updateInvoiceRequest(id, payload) {
+    // se esiste api.updateInvoice la uso, altrimenti fetch PATCH
+    if (api.updateInvoice) return api.updateInvoice(token, id, payload);
+
+    const base = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
+    const res = await fetch(`${base}/invoices/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      if (res.status === 404 || res.status === 405) {
+        throw new Error("Manca la route backend PATCH /api/invoices/:id (te la preparo io).");
+      }
+      throw new Error(txt || "Errore modifica fattura");
+    }
+    return res.json();
+  }
+
+  async function saveInvoice() {
+    try {
+      setInvSaving(true);
+
+      const seller = loadSellerFromLS() || buildDefaultSeller();
+      const customer = getSelectedCustomerObject();
+
+      if (!customer || !customerKey(customer)) {
+        alert("Seleziona un cliente dalla lista (crealo prima nella sezione Clienti).");
+        return;
+      }
+
+      const payload = {
+        year: clampYear(invoiceForm.year),
+        number: invoiceForm.number ? parseInt(String(invoiceForm.number), 10) : undefined,
+        issue_date: invoiceForm.issue_date,
+        due_date: invoiceForm.due_date || null,
+        seller,
+        customer,
+        items: (invoiceForm.items || []).map((it) => ({
+          description: it.description,
+          qty: Number(it.qty || 0),
+          unit_price: Number(it.unit_price || 0),
+          vat_rate: Number(it.vat_rate || 0),
+        })),
+        notes: invoiceForm.notes,
+      };
+
+      if (invEditId) await updateInvoiceRequest(invEditId, payload);
+      else await api.createInvoice(token, payload);
+
+      setInvModalOpen(false);
+      setInvEditId(null);
+      await loadInvoices();
+    } catch (err) {
+      alert(err?.message || "Errore salvataggio fattura");
+    } finally {
+      setInvSaving(false);
+    }
+  }
+
+  async function downloadInvoicePdf(row) {
+    try {
+      const blob = await api.downloadInvoicePdf(token, row.id);
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `Fattura_${row.year}_${String(row.number || "").padStart(4, "0")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      alert(err?.message || "Errore download PDF");
+    }
+  }
+
+  async function confirmDeleteInvoice() {
+    if (!invDeleteId) return;
+    try {
+      await api.deleteInvoice(token, invDeleteId);
+      setInvDeleteId(null);
+      await loadInvoices();
+    } catch (err) {
+      alert(err?.message || "Errore eliminazione fattura");
+    }
+  }
+
+  const invFiltered = useMemo(() => {
+    const q = String(invSearch || "").trim().toLowerCase();
+    if (!q) return invRows;
+    return (invRows || []).filter((r) => {
+      const numStr = `${r.year}/${String(r.number || "").padStart(4, "0")}`;
+      const custName = r?.customer?.name || "";
+      return (
+        numStr.toLowerCase().includes(q) ||
+        String(r.issue_date || "").includes(q) ||
+        String(custName).toLowerCase().includes(q) ||
+        String(r.total || "").includes(q)
+      );
+    });
+  }, [invRows, invSearch]);
+
+  const selectedCustomerPreview = useMemo(() => getSelectedCustomerObject(), [invCustomerPick, invCustomers]);
+
+  const { rows, totalEntrate, totalUscite, saldo, totalEntrateIstituzionali, totalEntrateCommerciali, totalVat } = summary;
 
   return (
     <div>
       <div className="page-header">
         <div className="page-title">
           <h2>Contabilità</h2>
-          <p>Rendiconto finanziario + Report IVA per commercialista.</p>
+          <p>Rendiconto finanziario + Report IVA per commercialista + Fatture.</p>
         </div>
 
         <div className="page-actions">
-          <button className="btn" type="button" onClick={() => handleExport('xlsx')}>
-            Esporta Excel
-          </button>
-          <button className="btn btn-primary" type="button" onClick={() => handleExport('pdf')}>
-            Esporta PDF
-          </button>
+          {tab !== "fatture" ? (
+            <>
+              <button className="btn" type="button" onClick={() => handleExport("xlsx")}>
+                Esporta Excel
+              </button>
+              <button className="btn btn-primary" type="button" onClick={() => handleExport("pdf")}>
+                Esporta PDF
+              </button>
+            </>
+          ) : (
+            <button className="btn btn-primary" type="button" onClick={openNewInvoice}>
+              + Nuova fattura
+            </button>
+          )}
         </div>
       </div>
 
       <div className="panel">
         <div className="panel-title">Sezione</div>
-
         <div className="toolbar toolbar-wrap">
           <div className="tabs">
-            <button
-              className={`tab-btn ${tab === 'rendiconto' ? 'active' : ''}`}
-              type="button"
-              onClick={() => setTab('rendiconto')}
-            >
+            <button className={`tab-btn ${tab === "rendiconto" ? "active" : ""}`} type="button" onClick={() => setTab("rendiconto")}>
               Rendiconto
             </button>
-
-            <button
-              className={`tab-btn ${tab === 'iva' ? 'active' : ''}`}
-              type="button"
-              onClick={() => setTab('iva')}
-            >
+            <button className={`tab-btn ${tab === "iva" ? "active" : ""}`} type="button" onClick={() => setTab("iva")}>
               Report IVA (commercialista)
+            </button>
+            <button className={`tab-btn ${tab === "fatture" ? "active" : ""}`} type="button" onClick={() => setTab("fatture")}>
+              Fatture
             </button>
           </div>
         </div>
       </div>
 
-      <div className="panel">
-        <div className="panel-title">Filtri periodo</div>
+      {/* Filtri */}
+      {tab !== "fatture" ? (
+        <div className="panel">
+          <div className="panel-title">Filtri periodo</div>
 
-        <form className="toolbar toolbar-wrap" onSubmit={handleSubmit}>
-          <div className="toolbar-row">
-            <div className="toolbar-group">
-              <label>
-                Da data
-                <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-              </label>
+          <form className="toolbar toolbar-wrap" onSubmit={handleSubmit}>
+            <div className="toolbar-row">
+              <div className="toolbar-group">
+                <label>
+                  Da data
+                  <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+                </label>
+              </div>
+
+              <div className="toolbar-group">
+                <label>
+                  A data
+                  <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+                </label>
+              </div>
+
+              <div className="toolbar-buttons">
+                <button className="btn btn-primary" type="submit" disabled={loading}>
+                  {loading ? "Caricamento…" : "Filtra"}
+                </button>
+                <button className="btn" type="button" onClick={handleReset} disabled={loading}>
+                  Reset
+                </button>
+              </div>
             </div>
+          </form>
 
-            <div className="toolbar-group">
-              <label>
-                A data
-                <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-              </label>
-            </div>
+          {error && <div className="error">{error}</div>}
+        </div>
+      ) : (
+        <>
+          {/* HOME: Cedente + Clienti sopra ai filtri Fatture */}
+          <div className="panel">
+            <div className="panel-title">Impostazioni fatture</div>
 
-            <div className="toolbar-buttons">
-              <button className="btn btn-primary" type="submit" disabled={loading}>
-                {loading ? 'Caricamento…' : 'Filtra'}
-              </button>
-              <button className="btn" type="button" onClick={handleReset} disabled={loading}>
-                Reset
-              </button>
+            <div className="invoice-grid" style={{ marginTop: 10 }}>
+              <div className="invoice-card">
+                <h4>Cedente / Prestatore (tu)</h4>
+                <div className="invoice-form">
+                  <div className="row">
+                    <label className="full">
+                      Ragione sociale
+                      <input type="text" value={sellerDraft.name} onChange={(e) => setSellerDraft((s) => ({ ...s, name: e.target.value }))} />
+                    </label>
+                  </div>
+                  <div className="row">
+                    <label>
+                      Indirizzo
+                      <input type="text" value={sellerDraft.address} onChange={(e) => setSellerDraft((s) => ({ ...s, address: e.target.value }))} />
+                    </label>
+                    <label>
+                      Città
+                      <input type="text" value={sellerDraft.city} onChange={(e) => setSellerDraft((s) => ({ ...s, city: e.target.value }))} />
+                    </label>
+                  </div>
+                  <div className="row-3">
+                    <label>
+                      P.IVA
+                      <input type="text" value={sellerDraft.vat} onChange={(e) => setSellerDraft((s) => ({ ...s, vat: e.target.value }))} />
+                    </label>
+                    <label>
+                      CF
+                      <input type="text" value={sellerDraft.cf} onChange={(e) => setSellerDraft((s) => ({ ...s, cf: e.target.value }))} />
+                    </label>
+                    <label>
+                      IBAN
+                      <input type="text" value={sellerDraft.iban} onChange={(e) => setSellerDraft((s) => ({ ...s, iban: e.target.value }))} />
+                    </label>
+                  </div>
+
+                  <div className="modal-buttons" style={{ marginTop: 10, borderTop: "none", paddingTop: 0 }}>
+                    <button className="btn btn-primary" type="button" onClick={saveSellerHome}>
+                      Salva cedente
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="invoice-card">
+                <h4>Clienti salvati</h4>
+
+                <div className="invoice-form">
+                  <div className="row">
+                    <label className="full">
+                      Ragione sociale
+                      <input type="text" value={custDraft.name} onChange={(e) => setCustDraft((s) => ({ ...s, name: e.target.value }))} placeholder="es. Balla e Snella" />
+                    </label>
+                  </div>
+
+                  <div className="row">
+                    <label>
+                      Indirizzo
+                      <input type="text" value={custDraft.address} onChange={(e) => setCustDraft((s) => ({ ...s, address: e.target.value }))} />
+                    </label>
+                    <label>
+                      Città
+                      <input type="text" value={custDraft.city} onChange={(e) => setCustDraft((s) => ({ ...s, city: e.target.value }))} />
+                    </label>
+                  </div>
+
+                  <div className="row-3">
+                    <label>
+                      P.IVA
+                      <input type="text" value={custDraft.vat} onChange={(e) => setCustDraft((s) => ({ ...s, vat: e.target.value }))} />
+                    </label>
+                    <label>
+                      CF
+                      <input type="text" value={custDraft.cf} onChange={(e) => setCustDraft((s) => ({ ...s, cf: e.target.value }))} />
+                    </label>
+                    <label>
+                      SDI
+                      <input type="text" value={custDraft.sdi} onChange={(e) => setCustDraft((s) => ({ ...s, sdi: e.target.value }))} />
+                    </label>
+                  </div>
+
+                  <div className="row">
+                    <label>
+                      PEC
+                      <input type="text" value={custDraft.pec} onChange={(e) => setCustDraft((s) => ({ ...s, pec: e.target.value }))} />
+                    </label>
+                    <label>
+                      Email
+                      <input type="text" value={custDraft.email} onChange={(e) => setCustDraft((s) => ({ ...s, email: e.target.value }))} />
+                    </label>
+                  </div>
+
+                  <div className="modal-buttons" style={{ marginTop: 10, borderTop: "none", paddingTop: 0 }}>
+                    <button className="btn btn-primary" type="button" onClick={saveCustomerHome}>
+                      {custEditId ? "Aggiorna cliente" : "Salva cliente"}
+                    </button>
+                    <button className="btn" type="button" onClick={resetCustomerDraft}>
+                      Pulisci
+                    </button>
+                  </div>
+
+                  <div style={{ marginTop: 12 }}>
+                    <label style={{ display: "block", marginBottom: 6, color: "rgba(255,255,255,.62)", fontSize: 12 }}>
+                      Cerca cliente
+                    </label>
+                    <input style={{ width: "100%" }} type="text" value={custQuery} onChange={(e) => setCustQuery(e.target.value)} placeholder="Cerca per nome, P.IVA, CF, email…" />
+                  </div>
+
+                  <div className="table-wrapper" style={{ marginTop: 10, maxHeight: 220, overflow: "auto" }}>
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Cliente</th>
+                          <th className="num">P.IVA / CF</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredCustomersList.map((c) => (
+                          <tr key={c.id}>
+                            <td>
+                              <div style={{ fontWeight: 600 }}>{c.name || "—"}</div>
+                              <div className="muted small">{[c.city, c.email].filter(Boolean).join(" • ") || "—"}</div>
+                            </td>
+                            <td className="num">{c.vat || c.cf || "—"}</td>
+                            <td>
+                              <div className="row-actions">
+                                <button className="btn" type="button" onClick={() => editCustomerHome(c)}>
+                                  Modifica
+                                </button>
+                                <button className="btn" type="button" onClick={() => deleteCustomerHome(c.id)}>
+                                  Elimina
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+
+                        {filteredCustomersList.length === 0 && (
+                          <tr>
+                            <td colSpan={3} className="muted">
+                              Nessun cliente salvato.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </form>
 
-        {error && <div className="error">{error}</div>}
-      </div>
+          {/* Filtri Fatture */}
+          <div className="panel">
+            <div className="panel-title">Fatture</div>
 
-      {tab === 'rendiconto' ? (
+            <div className="invoice-topbar">
+              <div className="filters">
+                <label>
+                  Anno
+                  <input type="number" value={invYear} onChange={(e) => setInvYear(e.target.value)} onBlur={() => setInvYear(String(clampYear(invYear)))} />
+                </label>
+
+                <label>
+                  Cerca
+                  <input type="text" placeholder="es. 2026/0001, Balla e Snella, 2026-02-10" value={invSearch} onChange={(e) => setInvSearch(e.target.value)} />
+                </label>
+
+                <div className="toolbar-buttons">
+                  <button className="btn" type="button" onClick={loadInvoices} disabled={invLoading}>
+                    {invLoading ? "Caricamento…" : "Aggiorna"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="muted small">Numerazione automatica per anno (modificabile).</div>
+            </div>
+
+            {invError && <div className="error">{invError}</div>}
+          </div>
+        </>
+      )}
+
+      {/* RENDICONTO (invariato) */}
+      {tab === "rendiconto" ? (
         <>
           <div className="panel">
             <div className="panel-title">Riepilogo</div>
@@ -351,27 +909,22 @@ export default function Bilancio({ token }) {
                 <div className="label">Entrate totali</div>
                 <div className="value green">{fmt.format(totalEntrate)}</div>
               </div>
-
               <div className="card">
                 <div className="label">Uscite totali</div>
                 <div className="value red">{fmt.format(totalUscite)}</div>
               </div>
-
               <div className="card">
                 <div className="label">Saldo</div>
                 <div className="value">{fmt.format(saldo)}</div>
               </div>
-
               <div className="card">
                 <div className="label">Entrate istituzionali</div>
                 <div className="value">{fmt.format(totalEntrateIstituzionali)}</div>
               </div>
-
               <div className="card">
                 <div className="label">Entrate commerciali</div>
                 <div className="value">{fmt.format(totalEntrateCommerciali)}</div>
               </div>
-
               <div className="card">
                 <div className="label">IVA (solo Bar - C)</div>
                 <div className="value">{fmt.format(totalVat)}</div>
@@ -381,7 +934,6 @@ export default function Bilancio({ token }) {
 
           <div className="panel">
             <div className="panel-title">Dettaglio per conto</div>
-
             <div className="table-wrapper">
               <table className="table">
                 <thead>
@@ -397,25 +949,26 @@ export default function Bilancio({ token }) {
                     <th className="num">IVA</th>
                   </tr>
                 </thead>
-
                 <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.code}>
-                      <td className="nowrap">{r.code}</td>
-                      <td>{r.name}</td>
-                      <td className="nowrap">{r.type || '-'}</td>
-                      <td className="num">{fmt.format(Number(r.entrate || 0))}</td>
-                      <td className="num">{fmt.format(Number(r.uscite || 0))}</td>
+                  {(rows || []).map((r, idx) => (
+                    <tr key={idx}>
+                      <td>{r.account_code ?? r.code ?? r.accountCode ?? ""}</td>
+                      <td>{r.account_name ?? r.name ?? r.accountName ?? ""}</td>
+                      <td>{r.type ?? r.kind ?? ""}</td>
+                      <td className="num">{fmt.format(Number(r.entrate || r.in || 0))}</td>
+                      <td className="num">{fmt.format(Number(r.uscite || r.out || 0))}</td>
                       <td className="num">{fmt.format(Number(r.saldo || 0))}</td>
-                      <td className="num">{fmt.format(Number(r.entrateIstituzionali || 0))}</td>
-                      <td className="num">{fmt.format(Number(r.entrateCommerciali || 0))}</td>
-                      <td className="num">{fmt.format(Number(r.vatAmount || 0))}</td>
+                      <td className="num">{fmt.format(Number(r.entrate_istituzionali ?? r.entrateIstituzionali ?? 0))}</td>
+                      <td className="num">{fmt.format(Number(r.entrate_commerciali ?? r.entrateCommerciali ?? 0))}</td>
+                      <td className="num">{fmt.format(Number(r.vat ?? r.iva ?? 0))}</td>
                     </tr>
                   ))}
 
-                  {rows.length === 0 && (
+                  {(!rows || rows.length === 0) && (
                     <tr>
-                      <td colSpan="9">Nessun movimento nel periodo selezionato</td>
+                      <td colSpan={9} className="muted">
+                        Nessun dato.
+                      </td>
                     </tr>
                   )}
                 </tbody>
@@ -423,115 +976,381 @@ export default function Bilancio({ token }) {
             </div>
           </div>
         </>
-      ) : (
-        <>
-          <div className="panel">
-            <div className="panel-title">Riepilogo (commercialista)</div>
+      ) : null}
 
-            <div className="cards">
-              <div className="card">
-                <div className="label">Entrate istituzionali</div>
-                <div className="value">{fmt.format(Number(iva.summary.entrateIstituzionali || 0))}</div>
-              </div>
-              <div className="card">
-                <div className="label">Entrate commerciali (Bar - C)</div>
-                <div className="value">{fmt.format(Number(iva.summary.entrateCommerciali || 0))}</div>
-              </div>
-              <div className="card">
-                <div className="label">Imponibile commerciale</div>
-                <div className="value">{fmt.format(Number(iva.summary.imponibileCommerciale || 0))}</div>
-              </div>
-              <div className="card">
-                <div className="label">IVA commerciale</div>
-                <div className="value">{fmt.format(Number(iva.summary.ivaCommerciale || 0))}</div>
-              </div>
-              <div className="card">
-                <div className="label">Totale commerciale</div>
-                <div className="value">{fmt.format(Number(iva.summary.totaleCommerciale || 0))}</div>
-              </div>
-            </div>
-          </div>
+      {/* IVA (invariato a livello logico; UI dipende dal tuo file originale) */}
+{/* IVA */}
+{tab === "iva" ? (
+  <>
+    <div className="panel">
+      <div className="panel-title">Riepilogo IVA (commercialista)</div>
 
-          <div className="panel">
-            <div className="panel-title">Dettaglio per aliquota (solo Bar - C)</div>
+      <div className="cards">
+        <div className="card">
+          <div className="label">Entrate istituzionali</div>
+          <div className="value">{fmt.format(iva.summary.entrateIstituzionali)}</div>
+        </div>
 
-            <div className="table-wrapper">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Aliquota</th>
-                    <th className="num">Imponibile</th>
-                    <th className="num">IVA</th>
-                    <th className="num">Totale</th>
-                    <th className="num">N. righe</th>
+        <div className="card">
+          <div className="label">Entrate commerciali</div>
+          <div className="value">{fmt.format(iva.summary.entrateCommerciali)}</div>
+        </div>
+
+        <div className="card">
+          <div className="label">Imponibile (solo C)</div>
+          <div className="value">{fmt.format(iva.summary.imponibileCommerciale)}</div>
+        </div>
+
+        <div className="card">
+          <div className="label">IVA (solo C)</div>
+          <div className="value">{fmt.format(iva.summary.ivaCommerciale)}</div>
+        </div>
+
+        <div className="card">
+          <div className="label">Totale (solo C)</div>
+          <div className="value">{fmt.format(iva.summary.totaleCommerciale)}</div>
+        </div>
+      </div>
+    </div>
+
+    <div className="panel">
+      <div className="panel-title">Dettaglio per aliquota (solo C)</div>
+
+      <div className="table-wrapper">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Aliquota</th>
+              <th className="num">Imponibile</th>
+              <th className="num">IVA</th>
+              <th className="num">Totale</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(iva.byRate || []).map((r, idx) => (
+              <tr key={idx}>
+                <td>{r.vat_rate ?? r.vatRate ?? r.rate ?? ""}%</td>
+                <td className="num">{fmt.format(Number(r.imponibile ?? r.taxable ?? 0))}</td>
+                <td className="num">{fmt.format(Number(r.iva ?? r.vat ?? 0))}</td>
+                <td className="num">{fmt.format(Number(r.totale ?? r.total ?? 0))}</td>
+              </tr>
+            ))}
+
+            {(!iva.byRate || iva.byRate.length === 0) && (
+              <tr>
+                <td colSpan={4} className="muted">
+                  Nessun dato.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div className="panel">
+      <div className="panel-title">Righe dettaglio (solo C)</div>
+
+      <div className="table-wrapper">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Descrizione</th>
+              <th className="num">Imponibile</th>
+              <th className="num">IVA</th>
+              <th className="num">Totale</th>
+              <th>Aliquota</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(iva.rows || []).map((r, idx) => (
+              <tr key={idx}>
+                <td>{r.date ?? r.data ?? ""}</td>
+                <td>{r.description ?? r.descrizione ?? ""}</td>
+                <td className="num">{fmt.format(Number(r.imponibile ?? r.taxable ?? 0))}</td>
+                <td className="num">{fmt.format(Number(r.iva ?? r.vat ?? 0))}</td>
+                <td className="num">{fmt.format(Number(r.totale ?? r.total ?? 0))}</td>
+                <td>{r.vat_rate ?? r.vatRate ?? ""}%</td>
+              </tr>
+            ))}
+
+            {(!iva.rows || iva.rows.length === 0) && (
+              <tr>
+                <td colSpan={6} className="muted">
+                  Nessun dato.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </>
+) : null}
+
+      {/* ELENCO FATTURE */}
+      {tab === "fatture" ? (
+        <div className="panel">
+          <div className="panel-title">Elenco fatture</div>
+
+          <div className="table-wrapper">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Numero</th>
+                  <th>Data</th>
+                  <th>Cliente</th>
+                  <th className="num">Totale</th>
+                  <th className="num">IVA</th>
+                  <th className="num">Imponibile</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {(invFiltered || []).map((r) => (
+                  <tr key={r.id}>
+                    <td>{`${r.year}/${String(r.number || "").padStart(4, "0")}`}</td>
+                    <td>{r.issue_date || ""}</td>
+                    <td>{r?.customer?.name || "—"}</td>
+                    <td className="num">{fmt.format(Number(r.total || 0))}</td>
+                    <td className="num">{fmt.format(Number(r.vat || 0))}</td>
+                    <td className="num">{fmt.format(Number(r.subtotal || 0))}</td>
+                    <td>
+                      <div className="row-actions">
+                        <button className="btn" type="button" onClick={() => openEditInvoice(r)}>
+                          Modifica
+                        </button>
+                        <button className="btn" type="button" onClick={() => downloadInvoicePdf(r)}>
+                          PDF
+                        </button>
+                        <button className="btn" type="button" onClick={() => setInvDeleteId(r.id)}>
+                          Elimina
+                        </button>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
+                ))}
 
-                <tbody>
-                  {iva.byRate.map((r, idx) => (
-                    <tr key={`${r.vat_rate ?? 'x'}-${idx}`}>
-                      <td className="nowrap">{r.vat_rate != null ? `${Number(r.vat_rate).toFixed(0)}%` : '—'}</td>
-                      <td className="num">{fmt.format(Number(r.imponibile || 0))}</td>
-                      <td className="num">{fmt.format(Number(r.iva || 0))}</td>
-                      <td className="num">{fmt.format(Number(r.totale || 0))}</td>
-                      <td className="num">{Number(r.count || 0)}</td>
-                    </tr>
-                  ))}
-
-                  {iva.byRate.length === 0 && (
-                    <tr>
-                      <td colSpan="5">Nessuna riga IVA nel periodo selezionato</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="panel">
-            <div className="panel-title">Righe (solo Bar - C)</div>
-
-            <div className="table-wrapper">
-              <table className="table">
-                <thead>
+                {(!invFiltered || invFiltered.length === 0) && (
                   <tr>
-                    <th>Data</th>
-                    <th>Descrizione</th>
-                    <th className="num">Aliquota</th>
-                    <th className="num">Imponibile</th>
-                    <th className="num">IVA</th>
-                    <th className="num">Totale</th>
+                    <td colSpan={7} className="muted">
+                      {invLoading ? "Caricamento…" : "Nessuna fattura per i filtri selezionati."}
+                    </td>
                   </tr>
-                </thead>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
 
-                <tbody>
-                  {iva.rows.map((r, idx) => (
-                    <tr key={`${r.date}-${idx}`}>
-                      <td className="nowrap">{r.date}</td>
-                      <td>{r.description}</td>
-                      <td className="num">{r.vat_rate != null ? `${Number(r.vat_rate).toFixed(0)}%` : '—'}</td>
-                      <td className="num">{fmt.format(Number(r.imponibile || 0))}</td>
-                      <td className="num">{fmt.format(Number(r.iva || 0))}</td>
-                      <td className="num">{fmt.format(Number(r.totale || 0))}</td>
-                    </tr>
-                  ))}
-
-                  {iva.rows.length === 0 && (
-                    <tr>
-                      <td colSpan="6">Nessuna riga IVA nel periodo selezionato</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+      {/* MODALE FATTURA */}
+      {invModalOpen && (
+        <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && closeInvoiceModal()}>
+          <div className="modal invoice-modal">
+            <div className="modal-header">
+              <h3>{invEditId ? "Modifica fattura" : "Nuova fattura"}</h3>
+              <button className="btn" type="button" onClick={closeInvoiceModal}>
+                Chiudi
+              </button>
             </div>
 
-            <div style={{ marginTop: 10, color: 'var(--muted)', fontSize: 12 }}>
-              Nota: il report IVA del commercialista mostra la divisione tra <b>entrate istituzionali</b> e{' '}
-              <b>entrate commerciali</b>. L’IVA è calcolata e mostrata solo sulle entrate commerciali del Bar (conto{' '}
-              <b>C</b>).
+            <div className="invoice-form">
+              <div className="invoice-grid">
+                <div className="invoice-card">
+                  <h4>Dati fattura</h4>
+                  <div className="row-3">
+                    <label>
+                      Anno
+                      <input
+                        type="number"
+                        value={invoiceForm.year}
+                        onChange={(e) => setInvoiceForm((s) => ({ ...s, year: e.target.value }))}
+                        onBlur={() => setInvoiceForm((s) => ({ ...s, year: clampYear(s.year) }))}
+                        disabled={!!invEditId}
+                      />
+                    </label>
+                    <label>
+                      Numero
+                      <input type="number" value={invoiceForm.number} readOnly />
+                    </label>
+                    <label>
+                      Data
+                      <input type="date" value={invoiceForm.issue_date} onChange={(e) => setInvoiceForm((s) => ({ ...s, issue_date: e.target.value }))} />
+                    </label>
+                  </div>
+                  <div className="row">
+                    <label>
+                      Scadenza (opzionale)
+                      <input type="date" value={invoiceForm.due_date} onChange={(e) => setInvoiceForm((s) => ({ ...s, due_date: e.target.value }))} />
+                    </label>
+                    <label>
+                      Valuta
+                      <input type="text" value="EUR" readOnly />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="invoice-card">
+                  <h4>Cliente</h4>
+
+                  <div className="inv-customer-tools" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                    <label className="inv-customer-search">
+                      Cerca
+                      <input type="text" value={invCustomerQuery} onChange={(e) => setInvCustomerQuery(e.target.value)} placeholder="Cerca cliente…" />
+                    </label>
+
+                    <label className="inv-customer-pick">
+                      Seleziona
+                      <select value={invCustomerPick} onChange={(e) => setInvCustomerPick(e.target.value)}>
+                        <option value="">—</option>
+                        {filteredInvCustomers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name || "Senza nome"}
+                            {c.vat ? ` • P.IVA ${c.vat}` : c.cf ? ` • CF ${c.cf}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="muted small" style={{ marginTop: 6 }}>
+                    L’anagrafica cliente si gestisce nella pagina “Fatture” (sopra).
+                  </div>
+
+                  {selectedCustomerPreview && (
+                    <div style={{ marginTop: 10, fontSize: 13, color: "rgba(255,255,255,.86)" }}>
+                      <div style={{ fontWeight: 700 }}>{selectedCustomerPreview.name || "—"}</div>
+                      <div className="muted small">
+                        {[selectedCustomerPreview.address, selectedCustomerPreview.city].filter(Boolean).join(" • ") || "—"}
+                      </div>
+                      <div className="muted small">
+                        {[
+                          selectedCustomerPreview.vat ? `P.IVA ${selectedCustomerPreview.vat}` : null,
+                          selectedCustomerPreview.cf ? `CF ${selectedCustomerPreview.cf}` : null,
+                          selectedCustomerPreview.sdi ? `SDI ${selectedCustomerPreview.sdi}` : null,
+                        ].filter(Boolean).join(" • ") || "—"}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="invoice-card">
+                  <h4>Note</h4>
+                  <label className="full">
+                    Note (opzionale)
+                    <textarea value={invoiceForm.notes} onChange={(e) => setInvoiceForm((s) => ({ ...s, notes: e.target.value }))} placeholder="es. riferimento pagamento, periodo affitto, ecc." />
+                  </label>
+                </div>
+              </div>
+
+              <div className="invoice-items">
+                <div className="items-header">
+                  <div>
+                    <strong>Righe</strong>
+                    <div className="muted small">Descrizione + quantità + prezzo + aliquota IVA.</div>
+                  </div>
+                  <button className="btn" type="button" onClick={addItem}>
+                    + Riga
+                  </button>
+                </div>
+
+                <div className="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Descrizione</th>
+                        <th className="num">Q.tà</th>
+                        <th className="num">Prezzo</th>
+                        <th className="num">IVA</th>
+                        <th className="num">Totale</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(invoiceForm.items || []).map((it, idx) => {
+                        const qty = Math.max(0, toNum(it.qty ?? 1));
+                        const unit = toNum(it.unit_price ?? 0);
+                        const vatRate = Math.max(0, toNum(it.vat_rate ?? 0));
+                        const lineTotal = Number((qty * unit + (qty * unit * vatRate) / 100).toFixed(2));
+                        return (
+                          <tr key={idx}>
+                            <td>
+                              <input className="small-input" type="text" value={it.description} onChange={(e) => updateItem(idx, { description: e.target.value })} placeholder="Descrizione" />
+                            </td>
+                            <td className="num">
+                              <input className="small-input" type="number" step="0.01" value={it.qty} onChange={(e) => updateItem(idx, { qty: e.target.value })} />
+                            </td>
+                            <td className="num">
+                              <input className="small-input" type="number" step="0.01" value={it.unit_price} onChange={(e) => updateItem(idx, { unit_price: e.target.value })} />
+                            </td>
+                            <td className="num">
+                              <select className="small-input" value={it.vat_rate} onChange={(e) => updateItem(idx, { vat_rate: e.target.value })}>
+                                <option value={0}>0%</option>
+                                <option value={10}>10%</option>
+                                <option value={22}>22%</option>
+                              </select>
+                            </td>
+                            <td className="num">{fmt.format(lineTotal)}</td>
+                            <td>
+                              <button className="btn" type="button" onClick={() => removeItem(idx)}>
+                                Rimuovi
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="invoice-totals">
+                  <div className="box">
+                    <div className="line">
+                      <span>Imponibile</span>
+                      <span>{fmt.format(invTotals.subtotal)}</span>
+                    </div>
+                    <div className="line">
+                      <span>IVA</span>
+                      <span>{fmt.format(invTotals.vat)}</span>
+                    </div>
+                    <div className="line">
+                      <strong>Totale</strong>
+                      <strong>{fmt.format(invTotals.total)}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-buttons" style={{ marginTop: 14 }}>
+                <button className="btn" type="button" onClick={closeInvoiceModal} disabled={invSaving}>
+                  Annulla
+                </button>
+                <button className="btn btn-primary" type="button" onClick={saveInvoice} disabled={invSaving}>
+                  {invSaving ? "Salvataggio…" : invEditId ? "Salva modifiche" : "Crea fattura"}
+                </button>
+              </div>
             </div>
           </div>
-        </>
+        </div>
+      )}
+
+      {/* MODAL: conferma delete */}
+      {invDeleteId && (
+        <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setInvDeleteId(null)}>
+          <div className="modal">
+            <p>Vuoi eliminare questa fattura? (azione irreversibile)</p>
+            <div className="modal-buttons">
+              <button className="btn" onClick={() => setInvDeleteId(null)}>
+                Annulla
+              </button>
+              <button className="btn btn-primary" onClick={confirmDeleteInvoice}>
+                Elimina
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -197,6 +197,43 @@ export async function downloadIvaCommercialistaPdf(token, { from, to } = {}) {
   return apiBlob(`/reportIva/pdf${q}`, token);
 }
 
+// Richieste che ritornano un Blob (es. PDF)
+async function requestBlob(
+  path,
+  { method = 'GET', token, timeoutMs, retryCount, backoffMs } = {}
+) {
+  const url = `${BASE_URL}${path}`;
+
+  let res;
+  try {
+    res = await fetchWithRetry(
+      url,
+      {
+        method,
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
+      },
+      {
+        timeoutMs: timeoutMs ?? 30000,
+        retryCount: retryCount ?? 1,
+        backoffMs: backoffMs ?? 1200,
+        retryOnStatuses: [502, 503, 504]
+      }
+    );
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw new Error('Il server si sta avviando (Render free). Riprova tra qualche secondo.');
+    }
+    throw err;
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(text || 'Errore API');
+  }
+
+  return res.blob();
+}
+
 
 // ======================
 // API
@@ -502,5 +539,35 @@ export const api = {
       this.me(token).catch(() => {});
       // ❌ niente dashboard qui: la carichi quando l'utente entra nella pagina dashboard
     }, 0);
-  }
+  },
+
+  // ----------------------
+  // FATTURE
+  // ----------------------
+  getInvoices(token, { year } = {}) {
+    const params = new URLSearchParams();
+    if (year) params.append('year', String(year));
+    const q = params.toString() ? `?${params.toString()}` : '';
+    return request(`/invoices${q}`, { token, timeoutMs: 30000, retryCount: 1 });
+  },
+
+  getInvoiceNextNumber(token, { year } = {}) {
+    const params = new URLSearchParams();
+    if (year) params.append('year', String(year));
+    const q = params.toString() ? `?${params.toString()}` : '';
+    return request(`/invoices/next-number${q}`, { token, timeoutMs: 30000, retryCount: 1 });
+  },
+
+  createInvoice(token, payload) {
+    return request('/invoices', { method: 'POST', token, timeoutMs: 30000, retryCount: 1, body: payload });
+  },
+
+  deleteInvoice(token, id) {
+    return request(`/invoices/${id}`, { method: 'DELETE', token, timeoutMs: 30000, retryCount: 1 });
+  },
+
+  downloadInvoicePdf(token, id) {
+    return requestBlob(`/invoices/${id}/pdf`, { token, timeoutMs: 45000, retryCount: 1 });
+  },
+
 };
