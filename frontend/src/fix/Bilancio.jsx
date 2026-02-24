@@ -201,7 +201,7 @@ export default function Bilancio({ token }) {
 
   // Clienti HOME
   const [invCustomers, setInvCustomers] = useState(() => readInvoiceCustomers());
-  const [custDraft, setCustDraft] = useState(() => ({ ...buildDefaultCustomer() }));
+  const [custDraft, setCustDraft] = useState(() => ({ ...buildDefaultCustomer(), name: "Balla e Snella" }));
   const [custEditId, setCustEditId] = useState(null);
   const [custQuery, setCustQuery] = useState("");
   const [custModalOpen, setCustModalOpen] = useState(false);
@@ -404,7 +404,7 @@ export default function Bilancio({ token }) {
 
   // ---------------------- HOME: Clienti
   function resetCustomerDraft() {
-    setCustDraft({ ...buildDefaultCustomer() });
+    setCustDraft({ ...buildDefaultCustomer(), name: "Balla e Snella" });
     setCustEditId(null);
   }
 
@@ -435,17 +435,6 @@ export default function Bilancio({ token }) {
     setInvCustomers((prev) => removeCustomerById(prev, id));
     if (custEditId === id) resetCustomerDraft();
   }
-  // ---------------------- HOME: Modale cliente
-  function openNewCustomerModal() {
-    resetCustomerDraft();
-    setCustModalOpen(true);
-  }
-
-  function openEditCustomerModal(c) {
-    editCustomerHome(c);
-    setCustModalOpen(true);
-  }
-
 
   // ---------------------- MODALE: nuove/modifica
   async function openNewInvoice() {
