@@ -37,73 +37,39 @@ function safeText(v) {
   return String(v ?? '').trim();
 }
 
-function pickVatMode(it) {
-  const mode = String(it?.vat_mode ?? it?.vatMode ?? it?.price_mode ?? '').trim().toLowerCase();
-  return mode === 'included' ? 'included' : 'excluded';
-}
-
-function computeLine(it = {}) {
-  const qty = Math.max(0, num(it.qty ?? 1));
-  const inputUnit = num(it.unit_price ?? it.unitPrice ?? 0);
-  const vatRate = Math.max(0, num(it.vat_rate ?? it.vatRate ?? 0));
-  const vatMode = pickVatMode(it);
-
-  let lineSubtotal = 0;
-  let lineVat = 0;
-  let lineTotal = 0;
-  let unitExVat = 0;
-  let unitIncVat = 0;
-
-  if (vatMode === 'included') {
-    unitIncVat = inputUnit;
-    unitExVat = vatRate > 0 ? inputUnit / (1 + vatRate / 100) : inputUnit;
-    lineTotal = qty * unitIncVat;
-    lineSubtotal = qty * unitExVat;
-    lineVat = lineTotal - lineSubtotal;
-  } else {
-    unitExVat = inputUnit;
-    unitIncVat = vatRate > 0 ? inputUnit * (1 + vatRate / 100) : inputUnit;
-    lineSubtotal = qty * unitExVat;
-    lineVat = lineSubtotal * (vatRate / 100);
-    lineTotal = lineSubtotal + lineVat;
-  }
-
-  return {
-    description: safeText(it.description || ''),
-    qty: Number(qty.toFixed(2)),
-    unit_price: Number(inputUnit.toFixed(2)),
-    vat_rate: Number(vatRate.toFixed(2)),
-    vat_mode: vatMode,
-    unit_ex_vat: Number(unitExVat.toFixed(2)),
-    unit_inc_vat: Number(unitIncVat.toFixed(2)),
-    line_subtotal: Number(lineSubtotal.toFixed(2)),
-    line_vat: Number(lineVat.toFixed(2)),
-    line_total: Number(lineTotal.toFixed(2)),
-  };
-}
-
 function computeTotals(items = []) {
   const rows = Array.isArray(items) ? items : [];
+
   let subtotal = 0;
   let vat = 0;
-  let total = 0;
 
   const normalized = rows
-    .map((it) => computeLine(it))
+    .map((it) => {
+      const qty = Math.max(0, num(it.qty ?? 1));
+      const unit = num(it.unit_price ?? it.unitPrice ?? 0);
+      const vatRate = Math.max(0, num(it.vat_rate ?? it.vatRate ?? 0));
+      const lineSubtotal = qty * unit;
+      const lineVat = lineSubtotal * (vatRate / 100);
+      const lineTotal = lineSubtotal + lineVat;
+      subtotal += lineSubtotal;
+      vat += lineVat;
+      return {
+        description: safeText(it.description || ''),
+        qty,
+        unit_price: Number(unit.toFixed(2)),
+        vat_rate: Number(vatRate.toFixed(2)),
+        line_subtotal: Number(lineSubtotal.toFixed(2)),
+        line_vat: Number(lineVat.toFixed(2)),
+        line_total: Number(lineTotal.toFixed(2)),
+      };
+    })
     .filter((it) => it.description || it.qty > 0 || it.unit_price > 0);
 
-  for (const it of normalized) {
-    subtotal += it.line_subtotal;
-    vat += it.line_vat;
-    total += it.line_total;
-  }
+  subtotal = Number(subtotal.toFixed(2));
+  vat = Number(vat.toFixed(2));
+  const total = Number((subtotal + vat).toFixed(2));
 
-  return {
-    items: normalized,
-    subtotal: Number(subtotal.toFixed(2)),
-    vat: Number(vat.toFixed(2)),
-    total: Number(total.toFixed(2)),
-  };
+  return { items: normalized, subtotal, vat, total };
 }
 
 async function getNextNumberForYear({ year }) {
@@ -148,39 +114,94 @@ async function insertInvoiceWithRetry(payload, { maxRetry = 6 } = {}) {
   throw new Error('Impossibile creare la fattura: troppi tentativi (conflitto numerazione).');
 }
 
-function drawLogoOrBadge(doc, seller, x, y, w, h) {
-  const logoCandidate = seller?.logo_data_url || seller?.logo || seller?.logo_path;
-  let drawn = false;
+function resolveInvoiceLogo(seller = {}) {
+  const raw = [seller.logo_data_url, seller.logo, seller.logo_path]
+    .find((v) => typeof v === 'string' && v.trim());
 
-  try {
-    if (logoCandidate && typeof logoCandidate === 'string') {
-      if (logoCandidate.startsWith('data:image/')) {
-        const b64 = logoCandidate.split(',')[1] || '';
-        const buf = Buffer.from(b64, 'base64');
-        doc.image(buf, x, y, { fit: [w, h], align: 'left', valign: 'center' });
-        drawn = true;
-      } else if (fs.existsSync(logoCandidate)) {
-        doc.image(logoCandidate, x, y, { fit: [w, h], align: 'left', valign: 'center' });
-        drawn = true;
-      } else {
-        const maybePublic = path.resolve(process.cwd(), logoCandidate);
-        if (fs.existsSync(maybePublic)) {
-          doc.image(maybePublic, x, y, { fit: [w, h], align: 'left', valign: 'center' });
-          drawn = true;
-        }
-      }
+  if (raw && raw.startsWith('data:image/')) {
+    try {
+      const b64 = raw.split(',')[1] || '';
+      return Buffer.from(b64, 'base64');
+    } catch (_) {
+      return null;
     }
-  } catch (_) {
-    drawn = false;
   }
 
-  if (!drawn) {
-    doc.save();
-    doc.roundedRect(x, y + 2, w, h - 4, 12).fill('#F3E8FF');
-    doc.restore();
-    doc.fillColor('#6D28D9').font('Helvetica-Bold').fontSize(18).text('N', x, y + 12, { width: w, align: 'center' });
-    doc.font('Helvetica').fontSize(8).fillColor('#7C3AED').text('NOVA', x, y + 36, { width: w, align: 'center' });
+  const candidates = [];
+  if (raw) {
+    candidates.push(raw);
+    candidates.push(path.resolve(process.cwd(), raw));
+    candidates.push(path.resolve(__dirname, '..', raw));
+    candidates.push(path.resolve(__dirname, '..', '..', raw));
   }
+
+  candidates.push(
+    path.resolve(process.cwd(), 'frontend/public/logo.png'),
+    path.resolve(process.cwd(), 'public/logo.png'),
+    path.resolve(__dirname, '../../frontend/public/logo.png'),
+    path.resolve(__dirname, '../frontend/public/logo.png')
+  );
+
+  for (const file of candidates) {
+    try {
+      if (file && fs.existsSync(file)) return file;
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  return null;
+}
+
+function drawLogo(doc, seller, x, y, w, h) {
+  const logo = resolveInvoiceLogo(seller);
+  if (logo) {
+    try {
+      doc.image(logo, x, y, { fit: [w, h], align: 'left', valign: 'center' });
+      return;
+    } catch (_) {
+      // fallback below
+    }
+  }
+
+  doc.save();
+  doc.roundedRect(x, y, w, h, 10).fill('#F3E8FF');
+  doc.restore();
+  doc.fillColor('#6D28D9').font('Helvetica-Bold').fontSize(16).text('N', x, y + 10, { width: w, align: 'center' });
+  doc.fillColor('#7C3AED').font('Helvetica').fontSize(7).text('NOVA', x, y + 30, { width: w, align: 'center' });
+}
+
+function drawCard(doc, x, y, w, h, options = {}) {
+  const fill = options.fill || '#FFFFFF';
+  const stroke = options.stroke || '#E5E7EB';
+  const radius = options.radius || 14;
+  doc.save();
+  doc.roundedRect(x, y, w, h, radius).fillAndStroke(fill, stroke);
+  doc.restore();
+}
+
+function buildPartyLines(data = {}, isSeller = false) {
+  return [
+    safeText(data.name),
+    safeText(data.address),
+    safeText(data.city),
+    data.vat ? `P.IVA: ${safeText(data.vat)}` : '',
+    data.cf ? `CF: ${safeText(data.cf)}` : '',
+    data.sdi ? `Codice SDI: ${safeText(data.sdi)}` : '',
+    data.pec ? `PEC: ${safeText(data.pec)}` : '',
+    data.email ? `Email: ${safeText(data.email)}` : '',
+    isSeller && data.iban ? `IBAN: ${safeText(data.iban)}` : '',
+  ].filter(Boolean);
+}
+
+function calcTextHeight(doc, text, width, font = 'Helvetica', size = 9, lineGap = 2) {
+  const prevFont = doc._font;
+  const prevSize = doc._fontSize;
+  doc.font(font).fontSize(size);
+  const h = doc.heightOfString(text || '-', { width, lineGap });
+  if (prevFont) doc.font(prevFont);
+  if (prevSize) doc.fontSize(prevSize);
+  return h;
 }
 
 function drawInvoicePdf(doc, inv) {
@@ -189,264 +210,217 @@ function drawInvoicePdf(doc, inv) {
   const left = doc.page.margins.left;
   const right = pageW - doc.page.margins.right;
   const contentW = right - left;
+  const bottomLimit = () => pageH - doc.page.margins.bottom - 22;
 
-  const brand = '#111827';
+  const brand = '#0F172A';
+  const brand2 = '#111827';
   const accent = '#7C3AED';
-  const line = '#E5E7EB';
+  const border = '#E5E7EB';
   const soft = '#F8FAFC';
+  const text = '#111827';
   const muted = '#6B7280';
 
   const seller = inv.seller || {};
   const customer = inv.customer || {};
   const items = Array.isArray(inv.items) ? inv.items : [];
-
   const invNo = `${inv.year}/${String(inv.number).padStart(4, '0')}`;
 
-  // Header band
-  doc.save();
-  doc.rect(0, 0, pageW, 132).fill(brand);
-  doc.restore();
+  let y = 0;
 
-  drawLogoOrBadge(doc, seller, left, 24, 62, 62);
+  function drawHeader() {
+    doc.save();
+    doc.rect(0, 0, pageW, 122).fill(brand);
+    doc.restore();
 
-  doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(24).text('FATTURA', left + 78, 28);
-  doc.font('Helvetica').fontSize(10).fillColor('#D1D5DB');
-  doc.text(`Numero: ${invNo}`, left + 78, 58);
-  doc.text(`Data: ${inv.issue_date || ''}`, left + 78, 74);
-  if (inv.due_date) doc.text(`Scadenza: ${inv.due_date}`, left + 78, 90);
+    drawLogo(doc, seller, left, 28, 64, 64);
 
-  const sellerX = left + contentW * 0.57;
-  const sellerW = right - sellerX;
-  doc.save();
-  doc.roundedRect(sellerX, 22, sellerW, 88, 12).fill('#0B1220').stroke('#374151');
-  doc.restore();
-  doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(10).text('Cedente / Prestatore', sellerX + 12, 34);
-  doc.font('Helvetica').fontSize(9).fillColor('#E5E7EB');
-  const sellerLines = [
-    safeText(seller.name),
-    safeText(seller.address),
-    safeText(seller.city),
-    seller.vat ? `P.IVA: ${safeText(seller.vat)}` : '',
-    seller.cf ? `CF: ${safeText(seller.cf)}` : '',
-    seller.iban ? `IBAN: ${safeText(seller.iban)}` : '',
-  ].filter(Boolean);
-  doc.text(sellerLines.join('\n') || '-', sellerX + 12, 52, {
-    width: sellerW - 24,
-    lineGap: 2,
-  });
+    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(22).text('FATTURA', left + 82, 30);
+    doc.font('Helvetica').fontSize(10).fillColor('#D1D5DB');
+    doc.text(`Numero: ${invNo}`, left + 82, 58);
+    doc.text(`Data: ${inv.issue_date || ''}`, left + 82, 74);
+    doc.text(`Scadenza: ${inv.due_date || '-'}`, left + 82, 90);
 
-  // Customer + meta
-  let y = 150;
-  const boxGap = 14;
-  const cardH = 116;
-  const leftCardW = contentW * 0.57;
-  const rightCardX = left + leftCardW + boxGap;
-  const rightCardW = right - rightCardX;
+    const badgeW = 156;
+    const badgeX = right - badgeW;
+    drawCard(doc, badgeX, 26, badgeW, 72, { fill: '#0B1220', stroke: '#334155', radius: 14 });
+    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(9).text('Totale documento', badgeX + 14, 40);
+    doc.font('Helvetica-Bold').fontSize(18).text(eur(inv.total || 0), badgeX + 14, 56, { width: badgeW - 28, align: 'right' });
+    doc.font('Helvetica').fontSize(9).fillColor('#CBD5E1').text(inv.currency || 'EUR', badgeX + 14, 78, { width: badgeW - 28, align: 'right' });
 
-  doc.save();
-  doc.roundedRect(left, y, leftCardW, cardH, 12).fill(soft).stroke(line);
-  doc.roundedRect(rightCardX, y, rightCardW, cardH, 12).fill('#FFFFFF').stroke(line);
-  doc.restore();
-
-  doc.fillColor(brand).font('Helvetica-Bold').fontSize(10).text('Cessionario / Committente', left + 14, y + 14);
-  doc.font('Helvetica').fontSize(9).fillColor('#111827');
-  const custLines = [
-    safeText(customer.name),
-    safeText(customer.address),
-    safeText(customer.city),
-    customer.vat ? `P.IVA: ${safeText(customer.vat)}` : '',
-    customer.cf ? `CF: ${safeText(customer.cf)}` : '',
-    customer.sdi ? `Codice SDI: ${safeText(customer.sdi)}` : '',
-    customer.pec ? `PEC: ${safeText(customer.pec)}` : '',
-    customer.email ? `Email: ${safeText(customer.email)}` : '',
-  ].filter(Boolean);
-  doc.text(custLines.join('\n') || '-', left + 14, y + 34, {
-    width: leftCardW - 28,
-    lineGap: 2,
-  });
-
-  doc.fillColor(brand).font('Helvetica-Bold').fontSize(10).text('Riepilogo documento', rightCardX + 14, y + 14);
-  const metaRows = [
-    ['Valuta', inv.currency || 'EUR'],
-    ['Pagamento', safeText(inv.payment_method || seller.payment_method || 'Bonifico')],
-    ['Totale documento', eur(inv.total || 0)],
-  ];
-  let metaY = y + 40;
-  for (const [label, value] of metaRows) {
-    doc.fillColor(muted).font('Helvetica').fontSize(9).text(label, rightCardX + 14, metaY);
-    doc.fillColor(brand).font('Helvetica-Bold').fontSize(9).text(value, rightCardX + 14, metaY, {
-      width: rightCardW - 28,
-      align: 'right',
-    });
-    metaY += 22;
+    y = 144;
   }
 
-  y += cardH + 22;
+  function drawPartySection() {
+    const gap = 14;
+    const sellerW = contentW * 0.48;
+    const customerW = contentW - sellerW - gap;
+    const sellerLines = buildPartyLines(seller, true).join('\n') || '-';
+    const customerLines = buildPartyLines(customer, false).join('\n') || '-';
 
-  // Items table
+    const titleH = 18;
+    const sellerBodyH = calcTextHeight(doc, sellerLines, sellerW - 28, 'Helvetica', 9, 2);
+    const customerBodyH = calcTextHeight(doc, customerLines, customerW - 28, 'Helvetica', 9, 2);
+    const cardH = Math.max(112, Math.max(sellerBodyH, customerBodyH) + titleH + 36);
+
+    drawCard(doc, left, y, sellerW, cardH, { fill: '#FFFFFF', stroke: border, radius: 14 });
+    drawCard(doc, left + sellerW + gap, y, customerW, cardH, { fill: soft, stroke: border, radius: 14 });
+
+    doc.fillColor(accent).font('Helvetica-Bold').fontSize(10).text('Cedente / Prestatore', left + 14, y + 16);
+    doc.fillColor(text).font('Helvetica').fontSize(9).text(sellerLines, left + 14, y + 36, {
+      width: sellerW - 28,
+      lineGap: 2,
+    });
+
+    const cx = left + sellerW + gap;
+    doc.fillColor(brand2).font('Helvetica-Bold').fontSize(10).text('Cessionario / Committente', cx + 14, y + 16);
+    doc.fillColor(text).font('Helvetica').fontSize(9).text(customerLines, cx + 14, y + 36, {
+      width: customerW - 28,
+      lineGap: 2,
+    });
+
+    y += cardH + 20;
+  }
+
   const cols = {
-    desc: { x: left, w: contentW * 0.38 },
-    qty: { x: left + contentW * 0.38, w: contentW * 0.08 },
-    unit: { x: left + contentW * 0.46, w: contentW * 0.14 },
-    mode: { x: left + contentW * 0.60, w: contentW * 0.12 },
-    vat: { x: left + contentW * 0.72, w: contentW * 0.08 },
-    total: { x: left + contentW * 0.80, w: contentW * 0.20 },
+    desc: { x: left, w: contentW * 0.45 },
+    qty: { x: left + contentW * 0.45, w: contentW * 0.08 },
+    unit: { x: left + contentW * 0.53, w: contentW * 0.15 },
+    vat: { x: left + contentW * 0.68, w: contentW * 0.10 },
+    total: { x: left + contentW * 0.78, w: contentW * 0.22 },
   };
-
-  const headerH = 28;
-  const cellPadX = 8;
-  const cellPadY = 8;
-  let tableStartY = y;
+  const tableHeaderH = 30;
+  const cellPadX = 10;
+  const cellPadY = 9;
 
   function drawTableHeader() {
-    doc.save();
-    doc.roundedRect(left, y, contentW, headerH, 10).fill(brand);
-    doc.restore();
-
+    drawCard(doc, left, y, contentW, tableHeaderH, { fill: brand2, stroke: brand2, radius: 10 });
     doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(9);
-    doc.text('Descrizione', cols.desc.x + cellPadX, y + 9, { width: cols.desc.w - 2 * cellPadX });
-    doc.text('Q.tà', cols.qty.x, y + 9, { width: cols.qty.w - 6, align: 'right' });
-    doc.text('Prezzo', cols.unit.x, y + 9, { width: cols.unit.w - 6, align: 'right' });
-    doc.text('IVA', cols.mode.x + 2, y + 9, { width: cols.mode.w - 4, align: 'center' });
-    doc.text('%', cols.vat.x, y + 9, { width: cols.vat.w - 6, align: 'right' });
-    doc.text('Totale', cols.total.x, y + 9, { width: cols.total.w - 8, align: 'right' });
-    y += headerH + 4;
-    tableStartY = tableStartY || y;
+    doc.text('Descrizione', cols.desc.x + cellPadX, y + 10, { width: cols.desc.w - 2 * cellPadX });
+    doc.text('Q.tà', cols.qty.x + 2, y + 10, { width: cols.qty.w - 8, align: 'right' });
+    doc.text('Prezzo', cols.unit.x + 2, y + 10, { width: cols.unit.w - 8, align: 'right' });
+    doc.text('IVA', cols.vat.x + 2, y + 10, { width: cols.vat.w - 8, align: 'right' });
+    doc.text('Totale', cols.total.x + 2, y + 10, { width: cols.total.w - 8, align: 'right' });
+    y += tableHeaderH + 6;
   }
 
-  function pageBottom() {
-    return pageH - doc.page.margins.bottom - 12;
+  function ensureSpace(heightNeeded) {
+    if (y + heightNeeded <= bottomLimit()) return;
+    doc.addPage();
+    drawHeader();
+    drawTableHeader();
   }
 
-  function ensureSpace(h) {
-    if (y + h > pageBottom()) {
-      doc.addPage();
-      y = doc.page.margins.top;
-      tableStartY = y;
-      drawTableHeader();
+  function drawItems() {
+    drawTableHeader();
+
+    if (!items.length) {
+      ensureSpace(50);
+      drawCard(doc, left, y, contentW, 44, { fill: '#FFFFFF', stroke: border, radius: 10 });
+      doc.fillColor(muted).font('Helvetica').fontSize(9).text('Nessuna voce presente.', left + 14, y + 15);
+      y += 54;
+      return;
     }
-  }
 
-  drawTableHeader();
+    items.forEach((it, idx) => {
+      const desc = safeText(it.description) || '-';
+      const qty = num(it.qty ?? 0);
+      const unit = num(it.unit_price ?? 0);
+      const vatRate = num(it.vat_rate ?? 0);
+      const lineTotal = num(it.line_total ?? (qty * unit * (1 + vatRate / 100)));
 
-  items.forEach((raw, idx) => {
-    const it = computeLine(raw);
-    const descH = doc.heightOfString(it.description || '-', {
-      width: cols.desc.w - 2 * cellPadX,
-      align: 'left',
-      lineGap: 2,
-    });
-    const modeLabel = it.vat_mode === 'included' ? 'Compresa' : 'Esclusa';
-    const modeH = doc.heightOfString(modeLabel, {
-      width: cols.mode.w - 2 * cellPadX,
-      align: 'center',
-    });
-    const rowH = Math.max(30, descH + 2 * cellPadY, modeH + 2 * cellPadY);
+      const descH = calcTextHeight(doc, desc, cols.desc.w - 2 * cellPadX, 'Helvetica', 9, 2);
+      const rowH = Math.max(38, descH + cellPadY * 2);
+      ensureSpace(rowH + 8);
 
-    ensureSpace(rowH + 2);
+      drawCard(doc, left, y, contentW, rowH, {
+        fill: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
+        stroke: border,
+        radius: 10,
+      });
 
-    if (idx % 2 === 0) {
       doc.save();
-      doc.roundedRect(left, y, contentW, rowH, 8).fill('#FAFAFA');
+      [cols.qty.x, cols.unit.x, cols.vat.x, cols.total.x].forEach((x) => {
+        doc.moveTo(x, y).lineTo(x, y + rowH).stroke(border);
+      });
       doc.restore();
-    }
 
-    doc.save();
-    doc.roundedRect(left, y, contentW, rowH, 8).stroke(line);
-    [cols.qty.x, cols.unit.x, cols.mode.x, cols.vat.x, cols.total.x].forEach((x) => {
-      doc.moveTo(x, y).lineTo(x, y + rowH).stroke(line);
+      const baseY = y + cellPadY;
+      const numberY = y + (rowH - 10) / 2 - 1;
+
+      doc.fillColor(text).font('Helvetica').fontSize(9).text(desc, cols.desc.x + cellPadX, baseY, {
+        width: cols.desc.w - 2 * cellPadX,
+        lineGap: 2,
+      });
+      doc.text(String(qty).replace('.', ','), cols.qty.x + 2, numberY, { width: cols.qty.w - 8, align: 'right' });
+      doc.text(eur(unit), cols.unit.x + 2, numberY, { width: cols.unit.w - 8, align: 'right' });
+      doc.text(`${vatRate.toFixed(0)}%`, cols.vat.x + 2, numberY, { width: cols.vat.w - 8, align: 'right' });
+      doc.font('Helvetica-Bold').text(eur(lineTotal), cols.total.x + 2, numberY, { width: cols.total.w - 8, align: 'right' });
+
+      y += rowH + 8;
     });
-    doc.restore();
+  }
 
-    const textY = y + cellPadY;
+  function drawBottomSection() {
+    const notesText = safeText(inv.notes) || '-';
+    const gap = 14;
+    const notesW = contentW * 0.54;
+    const totalsW = contentW - notesW - gap;
+    const notesH = Math.max(96, calcTextHeight(doc, notesText, notesW - 28, 'Helvetica', 9, 2) + 38);
+    const totalsH = 112;
+    const sectionH = Math.max(notesH, totalsH);
 
-    doc.fillColor('#111827').font('Helvetica').fontSize(9).text(it.description || '-', cols.desc.x + cellPadX, textY, {
-      width: cols.desc.w - 2 * cellPadX,
+    ensureSpace(sectionH + 26);
+
+    drawCard(doc, left, y, notesW, sectionH, { fill: '#FFFFFF', stroke: border, radius: 14 });
+    drawCard(doc, left + notesW + gap, y, totalsW, sectionH, { fill: '#0B1220', stroke: '#334155', radius: 14 });
+
+    doc.fillColor(accent).font('Helvetica-Bold').fontSize(10).text('Note', left + 14, y + 16);
+    doc.fillColor(text).font('Helvetica').fontSize(9).text(notesText, left + 14, y + 36, {
+      width: notesW - 28,
       lineGap: 2,
     });
-    doc.text(String(it.qty).replace('.', ','), cols.qty.x + 2, textY + (rowH > 30 ? (rowH - 18) / 2 - 3 : 0), {
-      width: cols.qty.w - 8,
-      align: 'right',
+
+    const tx = left + notesW + gap;
+    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(10).text('Riepilogo importi', tx + 14, y + 16);
+
+    const rows = [
+      ['Imponibile', eur(inv.subtotal || 0)],
+      ['IVA', eur(inv.vat || 0)],
+      ['Totale', eur(inv.total || 0)],
+    ];
+
+    let ty = y + 42;
+    rows.forEach(([label, value], index) => {
+      if (index === 2) {
+        doc.save();
+        doc.moveTo(tx + 14, ty - 10).lineTo(tx + totalsW - 14, ty - 10).stroke('#334155');
+        doc.restore();
+      }
+      doc.fillColor(index === 2 ? '#FFFFFF' : '#CBD5E1')
+        .font(index === 2 ? 'Helvetica-Bold' : 'Helvetica')
+        .fontSize(index === 2 ? 11 : 10)
+        .text(label, tx + 14, ty);
+      doc.text(value, tx + 14, ty, { width: totalsW - 28, align: 'right' });
+      ty += 26;
     });
-    doc.text(eur(it.unit_price), cols.unit.x + 2, textY + (rowH > 30 ? (rowH - 18) / 2 - 3 : 0), {
-      width: cols.unit.w - 8,
-      align: 'right',
-    });
-    doc.text(modeLabel, cols.mode.x + 2, textY + (rowH > 30 ? (rowH - 18) / 2 - 3 : 0), {
-      width: cols.mode.w - 4,
-      align: 'center',
-    });
-    doc.text(`${it.vat_rate.toFixed(0)}%`, cols.vat.x + 2, textY + (rowH > 30 ? (rowH - 18) / 2 - 3 : 0), {
-      width: cols.vat.w - 8,
-      align: 'right',
-    });
-    doc.font('Helvetica-Bold').text(eur(it.line_total), cols.total.x + 2, textY + (rowH > 30 ? (rowH - 18) / 2 - 3 : 0), {
-      width: cols.total.w - 8,
-      align: 'right',
-    });
 
-    y += rowH + 6;
-  });
+    y += sectionH + 22;
+  }
 
-  // Notes and totals
-  const notesH = Math.max(
-    92,
-    doc.heightOfString(inv.notes || '-', {
-      width: contentW * 0.52 - 28,
-      lineGap: 2,
-    }) + 34
-  );
-  const totalsH = 110;
-  const sectionH = Math.max(notesH, totalsH);
+  function drawFooter() {
+    doc.fillColor('#6B7280').font('Helvetica').fontSize(8).text(
+      'Documento generato dal Gestionale Nova',
+      left,
+      pageH - doc.page.margins.bottom + 8,
+      { width: contentW, align: 'center' }
+    );
+  }
 
-  ensureSpace(sectionH + 24);
-
-  const notesW = contentW * 0.54;
-  const totalsW = contentW * 0.38;
-  const notesX = left;
-  const totalsX = right - totalsW;
-
-  doc.save();
-  doc.roundedRect(notesX, y + 8, notesW, sectionH, 12).fill('#FFFFFF').stroke(line);
-  doc.roundedRect(totalsX, y + 8, totalsW, sectionH, 12).fill('#0B1220').stroke('#374151');
-  doc.restore();
-
-  doc.fillColor(accent).font('Helvetica-Bold').fontSize(10).text('Note', notesX + 14, y + 22);
-  doc.fillColor('#111827').font('Helvetica').fontSize(9).text(inv.notes || '-', notesX + 14, y + 40, {
-    width: notesW - 28,
-    lineGap: 2,
-  });
-
-  doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(10).text('Totali', totalsX + 14, y + 22);
-
-  const totalsRows = [
-    ['Imponibile', eur(inv.subtotal || 0)],
-    ['IVA', eur(inv.vat || 0)],
-    ['Totale', eur(inv.total || 0)],
-  ];
-
-  let tY = y + 48;
-  totalsRows.forEach(([label, value], index) => {
-    if (index === 2) {
-      doc.save();
-      doc.moveTo(totalsX + 14, tY - 10).lineTo(totalsX + totalsW - 14, tY - 10).stroke('#374151');
-      doc.restore();
-    }
-    doc.fillColor('#9CA3AF').font(index === 2 ? 'Helvetica-Bold' : 'Helvetica').fontSize(10).text(label, totalsX + 14, tY);
-    doc.fillColor('#FFFFFF').font(index === 2 ? 'Helvetica-Bold' : 'Helvetica').text(value, totalsX + 14, tY, {
-      width: totalsW - 28,
-      align: 'right',
-    });
-    tY += 24;
-  });
-
-  // Footer
-  doc.fillColor('#6B7280').font('Helvetica').fontSize(8).text(
-    'Documento generato dal Gestionale Nova',
-    left,
-    pageH - doc.page.margins.bottom + 10,
-    { width: contentW, align: 'center' }
-  );
+  drawHeader();
+  drawPartySection();
+  drawItems();
+  drawBottomSection();
+  drawFooter();
 }
 
 // =============================
@@ -499,6 +473,7 @@ router.post('/', async (req, res) => {
 
     const seller = body.seller && typeof body.seller === 'object' ? body.seller : {};
     const customer = body.customer && typeof body.customer === 'object' ? body.customer : {};
+
     const computed = computeTotals(body.items || []);
 
     let number = toInt(body.number, null);
@@ -543,8 +518,6 @@ router.patch('/:id', async (req, res) => {
     const customer = body.customer && typeof body.customer === 'object' ? body.customer : {};
     const computed = computeTotals(body.items || []);
 
-    const number = toInt(body.number, null);
-
     const patch = {
       year,
       issue_date,
@@ -558,6 +531,8 @@ router.patch('/:id', async (req, res) => {
       total: computed.total,
       currency: 'EUR',
     };
+
+    const number = toInt(body.number, null);
     if (number) patch.number = number;
 
     const { data, error } = await supabase
