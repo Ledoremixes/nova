@@ -19,7 +19,7 @@ function clampYear(y) {
 }
 
 function buildDefaultSeller() {
-  return { name: "", address: "", city: "", vat: "", cf: "", iban: "" };
+  return { name: "", address: "", city: "", vat: "", cf: "", iban: "", logo: "" };
 }
 
 function buildDefaultCustomer() {
@@ -30,18 +30,35 @@ function computeInvoiceTotals(items) {
   const rows = Array.isArray(items) ? items : [];
   let subtotal = 0;
   let vat = 0;
+  let total = 0;
+
   for (const it of rows) {
     const qty = Math.max(0, toNum(it.qty ?? 1));
     const unit = toNum(it.unit_price ?? 0);
     const vatRate = Math.max(0, toNum(it.vat_rate ?? 0));
-    const lineSubtotal = qty * unit;
-    const lineVat = lineSubtotal * (vatRate / 100);
+    const vatMode = String(it.vat_mode || "excluded");
+    let lineSubtotal = 0;
+    let lineVat = 0;
+    let lineTotal = 0;
+
+    if (vatMode === "included") {
+      lineTotal = qty * unit;
+      lineSubtotal = vatRate > 0 ? lineTotal / (1 + vatRate / 100) : lineTotal;
+      lineVat = lineTotal - lineSubtotal;
+    } else {
+      lineSubtotal = qty * unit;
+      lineVat = lineSubtotal * (vatRate / 100);
+      lineTotal = lineSubtotal + lineVat;
+    }
+
     subtotal += lineSubtotal;
     vat += lineVat;
+    total += lineTotal;
   }
+
   subtotal = Number(subtotal.toFixed(2));
   vat = Number(vat.toFixed(2));
-  const total = Number((subtotal + vat).toFixed(2));
+  total = Number(total.toFixed(2));
   return { subtotal, vat, total };
 }
 
@@ -241,7 +258,7 @@ export default function Bilancio({ token }) {
     issue_date: new Date().toISOString().slice(0, 10),
     due_date: "",
     notes: "",
-    items: [{ description: "Affitto sala / affitto ore", qty: 1, unit_price: 0, vat_rate: 0 }],
+    items: [{ description: "Affitto sala / affitto ore", qty: 1, unit_price: 0, vat_rate: 0, vat_mode: "excluded" }],
   });
 
   const invTotals = useMemo(() => computeInvoiceTotals(invoiceForm.items), [invoiceForm.items]);
@@ -461,7 +478,7 @@ export default function Bilancio({ token }) {
         issue_date: new Date().toISOString().slice(0, 10),
         due_date: "",
         notes: "",
-        items: [{ description: "Affitto sala / affitto ore", qty: 1, unit_price: 0, vat_rate: 0 }],
+        items: [{ description: "Affitto sala / affitto ore", qty: 1, unit_price: 0, vat_rate: 0, vat_mode: "excluded" }],
       });
 
       setInvEditId(null);
@@ -499,8 +516,9 @@ export default function Bilancio({ token }) {
               qty: it.qty ?? 1,
               unit_price: it.unit_price ?? 0,
               vat_rate: it.vat_rate ?? 0,
+              vat_mode: it.vat_mode ?? "excluded",
             }))
-          : [{ description: "Affitto sala / affitto ore", qty: 1, unit_price: 0, vat_rate: 0 }],
+          : [{ description: "Affitto sala / affitto ore", qty: 1, unit_price: 0, vat_rate: 0, vat_mode: "excluded" }],
     });
 
     setInvModalOpen(true);
@@ -522,7 +540,7 @@ export default function Bilancio({ token }) {
   function addItem() {
     setInvoiceForm((s) => ({
       ...s,
-      items: [...(s.items || []), { description: "", qty: 1, unit_price: 0, vat_rate: 0 }],
+      items: [...(s.items || []), { description: "", qty: 1, unit_price: 0, vat_rate: 0, vat_mode: "excluded" }],
     }));
   }
 
@@ -530,7 +548,7 @@ export default function Bilancio({ token }) {
     setInvoiceForm((s) => {
       const items = [...(s.items || [])];
       items.splice(idx, 1);
-      return { ...s, items: items.length ? items : [{ description: "", qty: 1, unit_price: 0, vat_rate: 0 }] };
+      return { ...s, items: items.length ? items : [{ description: "", qty: 1, unit_price: 0, vat_rate: 0, vat_mode: "excluded" }] };
     });
   }
 
@@ -583,6 +601,7 @@ export default function Bilancio({ token }) {
           qty: Number(it.qty || 0),
           unit_price: Number(it.unit_price || 0),
           vat_rate: Number(it.vat_rate || 0),
+          vat_mode: it.vat_mode || "excluded",
         })),
         notes: invoiceForm.notes,
       };
@@ -773,6 +792,10 @@ export default function Bilancio({ token }) {
                     <label>
                       IBAN
                       <input type="text" value={sellerDraft.iban} onChange={(e) => setSellerDraft((s) => ({ ...s, iban: e.target.value }))} />
+                    </label>
+                    <label>
+                      Logo (path file o data URL)
+                      <input type="text" value={sellerDraft.logo || ""} onChange={(e) => setSellerDraft((s) => ({ ...s, logo: e.target.value }))} placeholder="es. C:/loghi/logo.png oppure data:image/png;base64,..." />
                     </label>
                   </div>
 
@@ -1252,7 +1275,8 @@ export default function Bilancio({ token }) {
                         <th>Descrizione</th>
                         <th className="num">Q.tà</th>
                         <th className="num">Prezzo</th>
-                        <th className="num">IVA</th>
+                        <th className="num">IVA %</th>
+                        <th>Modo IVA</th>
                         <th className="num">Totale</th>
                         <th></th>
                       </tr>
@@ -1262,7 +1286,8 @@ export default function Bilancio({ token }) {
                         const qty = Math.max(0, toNum(it.qty ?? 1));
                         const unit = toNum(it.unit_price ?? 0);
                         const vatRate = Math.max(0, toNum(it.vat_rate ?? 0));
-                        const lineTotal = Number((qty * unit + (qty * unit * vatRate) / 100).toFixed(2));
+                        const vatMode = String(it.vat_mode || "excluded");
+                        const lineTotal = Number((vatMode === "included" ? qty * unit : qty * unit + (qty * unit * vatRate) / 100).toFixed(2));
                         return (
                           <tr key={idx}>
                             <td>
@@ -1279,6 +1304,12 @@ export default function Bilancio({ token }) {
                                 <option value={0}>0%</option>
                                 <option value={10}>10%</option>
                                 <option value={22}>22%</option>
+                              </select>
+                            </td>
+                            <td>
+                              <select className="small-input" value={it.vat_mode || "excluded"} onChange={(e) => updateItem(idx, { vat_mode: e.target.value })}>
+                                <option value="excluded">IVA esclusa</option>
+                                <option value="included">IVA compresa</option>
                               </select>
                             </td>
                             <td className="num">{fmt.format(lineTotal)}</td>

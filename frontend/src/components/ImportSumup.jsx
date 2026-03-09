@@ -189,6 +189,20 @@ export default function ImportSumup({ token, onImported }) {
     }
   }
 
+  const [lastImportDate, setLastImportDate] = useState(() => {
+    const saved = localStorage.getItem('lastSumupImport');
+    return saved ? new Date(saved).toLocaleString('it-IT') : null;
+  });
+
+  const handleFileChangeWithDate = async (e) => {
+    await handleFileChange(e);
+    if (info && !error) {
+      const now = new Date().toISOString();
+      localStorage.setItem('lastSumupImport', now);
+      setLastImportDate(new Date(now).toLocaleString('it-IT'));
+    }
+  };
+
   return (
     <div className="import-box">
       <label className="import-label">
@@ -196,13 +210,14 @@ export default function ImportSumup({ token, onImported }) {
         <input
           type="file"
           accept=".xlsx,.xls"
-          onChange={handleFileChange}
+          onChange={handleFileChangeWithDate}
           disabled={loading}
         />
       </label>
       {loading && <div className="import-info">Import in corso...</div>}
       {info && <div className="import-info">{info}</div>}
       {error && <div className="error">{error}</div>}
+      {lastImportDate && <div className="import-info">Ultimo import: {lastImportDate}</div>}
     </div>
   );
 }
