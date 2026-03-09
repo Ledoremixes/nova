@@ -6,16 +6,13 @@ const router = express.Router();
 
 router.use(auth);
 
-// NOTE RBAC:
-// - Lettura: tutti gli utenti autenticati vedono TUTTI i dati (niente più filtro user_id)
-// - Scrittura: lasciata com’è (tutti autenticati possono creare/modificare/eliminare).
-//   Se vuoi bloccare la scrittura agli user, posso aggiungere requireAdmin su POST/PATCH/DELETE.
-
-router.get('/', async (_req, res) => {
+// GET /api/accounts
+router.get('/', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('accounts')
       .select('*')
+      .eq('user_id', req.user.id)
       .order('code', { ascending: true });
 
     if (error) {
@@ -38,7 +35,6 @@ router.post('/', async (req, res) => {
     const { data, error } = await supabase
       .from('accounts')
       .insert({
-        // lascio user_id come "created_by" se la colonna esiste / non-null
         user_id: req.user.id,
         code,
         name,
@@ -59,7 +55,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PATCH /api/accounts/:id
+// PATCH /api/accounts/:id  (modifica conto)
 router.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -74,6 +70,7 @@ router.patch('/:id', async (req, res) => {
       .from('accounts')
       .update(update)
       .eq('id', id)
+      .eq('user_id', req.user.id)
       .select()
       .single();
 
@@ -97,7 +94,8 @@ router.delete('/:id', async (req, res) => {
     const { error } = await supabase
       .from('accounts')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', req.user.id);
 
     if (error) {
       console.error('Errore delete account:', error);

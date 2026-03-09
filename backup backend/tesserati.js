@@ -32,18 +32,13 @@ function pickCore(row) {
   };
 }
 
-// ==================================================
-// RBAC FIX:
-// - Prima era filtrato per user_id => nuovi utenti vedevano sempre vuoto.
-// - Ora: lettura/scrittura NON dipendono dall'utente.
-// ==================================================
-
 // GET /api/tesserati
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('tesserati')
       .select('*')
+      .eq('user_id', req.user.id)
       .order('cognome', { ascending: true })
       .order('nome', { ascending: true });
 
@@ -60,6 +55,7 @@ router.post('/', async (req, res) => {
   try {
     const payload = pickCore(req.body || {});
 
+    // scarta SOLO righe totalmente vuote
     const hasAny =
       (payload.nome && String(payload.nome).trim()) ||
       (payload.cognome && String(payload.cognome).trim()) ||
@@ -129,7 +125,9 @@ router.patch('/:id', async (req, res) => {
       .from('tesserati')
       .update(payload)
       .eq('id', id)
-      .select('*')
+      // .eq('user_id', req.user.id) // niente filtro per user_id
+      .select("*")
+      .order("created_at", { ascending: false })
       .single();
 
     if (error) throw error;
@@ -154,7 +152,8 @@ router.delete('/:id', async (req, res) => {
     const { error } = await supabase
       .from('tesserati')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', req.user.id);
 
     if (error) throw error;
     res.status(204).send();
@@ -197,6 +196,7 @@ router.post('/import/preview', async (req, res) => {
     const { data: existing, error } = await supabase
       .from('tesserati')
       .select('id, nome, cognome, cod_fiscale, cellulare, email, tipo, anno, pagamento, note')
+      .eq('user_id', req.user.id)
       .in('cod_fiscale', cfList);
 
     if (error) throw error;
@@ -221,6 +221,9 @@ router.post('/import/preview', async (req, res) => {
 /**
  * IMPORT - COMMIT
  * POST /api/tesserati/import/commit
+ * FIX: niente upsert/onConflict. Se CF presente:
+ *  - update per (user_id + cod_fiscale)
+ *  - se nessuna riga aggiornata -> insert
  */
 router.post('/import/commit', async (req, res) => {
   try {
@@ -257,11 +260,13 @@ router.post('/import/commit', async (req, res) => {
         continue;
       }
 
+      // scarto SOLO righe totalmente vuote
       if (!hasAny(incoming)) {
         skipped++;
         continue;
       }
 
+      // normalizza CF se presente
       if (incoming.cod_fiscale) {
         incoming.cod_fiscale = String(incoming.cod_fiscale).trim().toUpperCase().replace(/\s+/g, '');
       }
@@ -275,7 +280,8 @@ router.post('/import/commit', async (req, res) => {
         const { error } = await supabase
           .from('tesserati')
           .update(incoming)
-          .eq('id', targetId);
+          .eq('id', targetId)
+          .eq('user_id', req.user.id);
 
         if (error) {
           errors.push({ action, incoming, error: error.message });
@@ -287,10 +293,12 @@ router.post('/import/commit', async (req, res) => {
       }
 
       if (action === 'insert') {
+        // CF presente -> update-first (user_id + cod_fiscale), altrimenti insert
         if (incoming.cod_fiscale) {
           const { data: updRows, error: updErr } = await supabase
             .from('tesserati')
             .update(incoming)
+            .eq('user_id', req.user.id)
             .eq('cod_fiscale', incoming.cod_fiscale)
             .select('id');
 
@@ -306,7 +314,7 @@ router.post('/import/commit', async (req, res) => {
 
           const { error: insErr } = await supabase
             .from('tesserati')
-            .insert([{ ...incoming }]);
+            .insert([{ ...incoming, user_id: req.user.id }]);
 
           if (insErr) {
             errors.push({ action, incoming, error: insErr.message });
@@ -317,9 +325,10 @@ router.post('/import/commit', async (req, res) => {
           continue;
         }
 
+        // CF vuoto -> insert normale
         const { error: insErr } = await supabase
           .from('tesserati')
-          .insert([{ ...incoming }]);
+          .insert([{ ...incoming, user_id: req.user.id }]);
 
         if (insErr) {
           errors.push({ action, incoming, error: insErr.message });

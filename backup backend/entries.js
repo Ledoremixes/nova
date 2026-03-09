@@ -26,15 +26,16 @@ router.get('/', async (req, res) => {
         ? Number(vatRate)
         : null;
 
+
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const sizeNum = Math.max(1, Math.min(500, parseInt(pageSize, 10) || 100));
     const fromIdx = (pageNum - 1) * sizeNum;
     const toIdx = fromIdx + sizeNum - 1;
 
-    // ✅ RBAC: niente più filtro .eq('user_id', req.user.id)
     let query = supabase
       .from('entries')
-      .select('*', { count: 'exact' });
+      .select('*', { count: 'exact' })
+      .eq('user_id', req.user.id);
 
     if (search) {
       query = query.ilike('description', `%${search}%`);
@@ -51,9 +52,11 @@ router.get('/', async (req, res) => {
     if (withoutAccount === 'true') {
       query = query.or('account_code.is.null,account_code.eq.""');
     } else if (accountCode) {
+      // filtro per specifico conto (AS, B, C, F, I, SCU, ...)
       query = query.eq('account_code', accountCode);
     }
 
+    // filtro per percentuale IVA
     if (vatRateNum !== null && !Number.isNaN(vatRateNum)) {
       query = query.eq('vat_rate', vatRateNum);
     }
@@ -61,6 +64,7 @@ router.get('/', async (req, res) => {
     query = query
       .order('operation_datetime', { ascending: false })
       .range(fromIdx, toIdx);
+
 
     const { data, error, count } = await query;
 
@@ -89,6 +93,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const payload = req.body;
+
     const usedDate = payload.date || null;
 
     let opDatetime =
@@ -101,7 +106,6 @@ router.post('/', async (req, res) => {
     }
 
     const entry = {
-      // lascio user_id come "created_by" se presente
       user_id: req.user.id,
       date: usedDate,
       operation_datetime: opDatetime,
@@ -150,7 +154,8 @@ router.delete('/:id', async (req, res) => {
     const { error } = await supabase
       .from('entries')
       .delete()
-      .eq('id', id); // ✅ niente filtro user_id
+      .eq('id', id)
+      .eq('user_id', req.user.id);
 
     if (error) {
       console.error('Errore delete entry:', error);
@@ -187,6 +192,7 @@ router.patch('/:id/meta', async (req, res) => {
         ? body.meta.nature
         : undefined;
 
+    // ✅ AGGIUNGI QUESTO
     const description =
       body.description !== undefined
         ? body.description
@@ -198,6 +204,8 @@ router.patch('/:id/meta', async (req, res) => {
 
     if (accountCode !== undefined) updates.account_code = accountCode || null;
     if (nature !== undefined) updates.nature = nature || null;
+
+    // ✅ AGGIUNGI QUESTO
     if (description !== undefined) updates.description = description;
 
     if (Object.keys(updates).length === 0) {
@@ -210,7 +218,8 @@ router.patch('/:id/meta', async (req, res) => {
     const { data, error } = await supabase
       .from('entries')
       .update(updates)
-      .eq('id', id) // ✅ niente filtro user_id
+      .eq('id', id)
+      .eq('user_id', req.user.id)
       .select('*');
 
     if (error) {
@@ -229,5 +238,7 @@ router.patch('/:id/meta', async (req, res) => {
     return res.status(500).json({ error: 'Errore update meta' });
   }
 });
+
+
 
 module.exports = router;

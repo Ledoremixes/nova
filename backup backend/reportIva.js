@@ -104,9 +104,9 @@ router.get('/data', async (req, res) => {
     const to = toISOTsOrNull(req.query.to);
 
     const [sumRaw, byRateRaw, rowsRaw] = await Promise.all([
-      rpc('iva_commercialista_summary', { p_user_id: null, p_from: from, p_to: to }),
-      rpc('iva_commercialista_by_rate', { p_user_id: null, p_from: from, p_to: to }),
-      rpc('iva_commercialista_rows', { p_user_id: null, p_from: from, p_to: to }),
+      rpc('iva_commercialista_summary', { p_user_id: req.user.id, p_from: from, p_to: to }),
+      rpc('iva_commercialista_by_rate', { p_user_id: req.user.id, p_from: from, p_to: to }),
+      rpc('iva_commercialista_rows', { p_user_id: req.user.id, p_from: from, p_to: to }),
     ]);
 
     res.json({
@@ -131,9 +131,9 @@ router.get('/pdf', async (req, res) => {
     const to = toISOTsOrNull(req.query.to);
 
     const [sumRaw, byRateRaw, rowsRaw] = await Promise.all([
-      rpc('iva_commercialista_summary', { p_user_id: null, p_from: from, p_to: to }),
-      rpc('iva_commercialista_by_rate', { p_user_id: null, p_from: from, p_to: to }),
-      rpc('iva_commercialista_rows', { p_user_id: null, p_from: from, p_to: to }),
+      rpc('iva_commercialista_summary', { p_user_id: req.user.id, p_from: from, p_to: to }),
+      rpc('iva_commercialista_by_rate', { p_user_id: req.user.id, p_from: from, p_to: to }),
+      rpc('iva_commercialista_rows', { p_user_id: req.user.id, p_from: from, p_to: to }),
     ]);
 
     const summary = sumRaw?.[0] || {

@@ -70,10 +70,11 @@ function computeTotals(items = []) {
   return { items: normalized, subtotal, vat, total };
 }
 
-async function getNextNumberForYear({ year }) {
+async function getNextNumberForYear({ userId, year }) {
   const { data, error } = await supabase
     .from('invoices')
     .select('number')
+    .eq('user_id', userId)
     .eq('year', year)
     .order('number', { ascending: false })
     .limit(1);
@@ -103,7 +104,7 @@ async function insertInvoiceWithRetry(payload, { maxRetry = 6 } = {}) {
 
     // in caso di violazione univocità, ricalcola number e riprova
     if (/duplicate key|unique constraint|violates unique/i.test(msg)) {
-      payload.number = await getNextNumberForYear({ year: payload.year });
+      payload.number = await getNextNumberForYear({ userId: payload.user_id, year: payload.year });
       continue;
     }
 
@@ -125,7 +126,8 @@ router.get('/', async (req, res) => {
     let q = supabase
       .from('invoices')
       .select('*')
-            .order('issue_date', { ascending: false })
+      .eq('user_id', req.user.id)
+      .order('issue_date', { ascending: false })
       .order('number', { ascending: false });
 
     if (year) q = q.eq('year', year);
@@ -145,7 +147,7 @@ router.get('/', async (req, res) => {
 router.get('/next-number', async (req, res) => {
   try {
     const year = toInt(req.query.year, new Date().getFullYear());
-    const nextNumber = await getNextNumberForYear({ year });
+    const nextNumber = await getNextNumberForYear({ userId: req.user.id, year });
     res.json({ ok: true, data: { year, nextNumber } });
   } catch (err) {
     res.status(400).json({ error: err?.message || 'Errore calcolo progressivo' });
@@ -170,7 +172,7 @@ router.post('/', async (req, res) => {
     const computed = computeTotals(body.items || []);
 
     let number = toInt(body.number, null);
-    if (!number) number = await getNextNumberForYear({ year });
+    if (!number) number = await getNextNumberForYear({ userId: req.user.id, year });
 
     const row = {
       user_id: req.user.id,
@@ -226,7 +228,8 @@ router.get('/:id/pdf', async (req, res) => {
       .from('invoices')
       .select('*')
       .eq('id', id)
-            .single();
+      .eq('user_id', req.user.id)
+      .single();
 
     if (error) throw error;
     if (!data) return res.status(404).json({ error: 'Fattura non trovata' });

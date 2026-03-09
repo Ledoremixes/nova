@@ -1,6 +1,7 @@
 const express = require('express');
 const { supabase } = require('../supabaseClient');
 const { auth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/requireAdmin');
 
 const router = express.Router();
 router.use(auth);
@@ -31,17 +32,14 @@ async function rpc(fnName, params) {
 }
 
 // ==============================
-// DASHBOARD (tutti autenticati)
+// 1) ADMIN DASHBOARD (con €)
 // GET /api/dashboard
 // ==============================
-//
-// ✅ Fix: prima era requireAdmin e filtrava per user_id -> vuoto per nuovi utenti.
-// Ora è globale (non dipende dal singolo utente).
-//
-router.get('/', async (_req, res) => {
+router.get('/', requireAdmin, async (req, res) => {
   try {
+    // Totali calcolati da Postgres (niente fetch massivo)
     const totalsRaw = await rpc('report_global_totals', {
-      p_user_id: null,
+      p_user_id: req.user.id,
       p_from: null,
       p_to: null,
     });
@@ -52,11 +50,15 @@ router.get('/', async (_req, res) => {
     const saldo = Number(num(t.saldo).toFixed(2));
     const totalVat = Number(num(t.total_vat).toFixed(2));
 
+    // Count movimenti (veloce)
     const { count, error: countErr } = await supabase
       .from('entries')
-      .select('id', { count: 'exact', head: true });
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', req.user.id);
 
-    if (countErr) console.warn('Count entries error:', countErr);
+    if (countErr) {
+      console.warn('Count entries error:', countErr);
+    }
 
     res.json({
       totalEntrate,
@@ -64,6 +66,7 @@ router.get('/', async (_req, res) => {
       saldo,
       totalVat,
       totalMovements: count ?? 0,
+      // alias per compatibilità
       totalIn: totalEntrate,
       totalOut: totalUscite,
       balance: saldo,
@@ -75,10 +78,10 @@ router.get('/', async (_req, res) => {
 });
 
 // ==============================
-// DASHBOARD "PUBBLICA" (globale)
+// 2) USER DASHBOARD (NO €) - TUTTI AUTENTICATI
 // GET /api/dashboard/public
 // ==============================
-router.get('/public', async (_req, res) => {
+router.get('/public', async (req, res) => {
   try {
     const todayISO = toISODateOrNull(new Date());
     const startToday = todayISO ? `${todayISO}T00:00:00.000Z` : null;
@@ -91,17 +94,28 @@ router.get('/public', async (_req, res) => {
       tesseratiDaCompletare,
       ultimiTesserati,
     ] = await Promise.all([
-      supabase.from('tesserati').select('id', { count: 'exact', head: true }),
-      supabase.from('teachers').select('id', { count: 'exact', head: true }),
       supabase
         .from('tesserati')
         .select('id', { count: 'exact', head: true })
+        .eq('user_id', req.user.id),
+      supabase
+        .from('teachers')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', req.user.id),
+      supabase
+        .from('tesserati')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', req.user.id)
         .gte('created_at', startToday)
         .lte('created_at', endToday),
-      supabase.from('tesserati').select('id, nome, cognome, stato, created_at'),
       supabase
         .from('tesserati')
         .select('id, nome, cognome, stato, created_at')
+        .eq('user_id', req.user.id),
+      supabase
+        .from('tesserati')
+        .select('id, nome, cognome, stato, created_at')
+        .eq('user_id', req.user.id)
         .order('created_at', { ascending: false })
         .limit(10),
     ]);
@@ -119,17 +133,21 @@ router.get('/public', async (_req, res) => {
       return res.status(500).json({ error: 'Errore dashboard pubblica' });
     }
 
+    // tesseramenti da completare: stato diverso da 'completo' o 'completato'
     const incompleti = (tesseratiDaCompletare.data || []).filter((x) => {
       const s = String(x.stato || '').toLowerCase();
       return s && s !== 'completo' && s !== 'completato';
     });
 
-    const ultimi = (ultimiTesserati.data || []).map((x) => ({
-      id: x.id,
-      nome: `${x.nome || ''} ${x.cognome || ''}`.trim(),
-      data: x.created_at ? new Date(x.created_at).toLocaleDateString('it-IT') : '',
-      stato: String(x.stato || ''),
-    }));
+    const ultimi = (ultimiTesserati.data || []).map((x) => {
+      const stato = String(x.stato || '');
+      return {
+        id: x.id,
+        nome: `${x.nome || ''} ${x.cognome || ''}`.trim(),
+        data: x.created_at ? new Date(x.created_at).toLocaleDateString('it-IT') : '',
+        stato,
+      };
+    });
 
     res.json({
       totalTesserati: totalTesserati.count || 0,

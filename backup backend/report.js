@@ -181,9 +181,9 @@ router.get('/full', async (req, res) => {
     const to = toISODateOrNull(req.query.to);
 
     const [financialRowsRaw, opRowsRaw, totalsRaw] = await Promise.all([
-      rpc('report_financial_statement', { p_user_id: null, p_from: from, p_to: to }),
-      rpc('report_operating_result', { p_user_id: null, p_from: from, p_to: to }),
-      rpc('report_global_totals', { p_user_id: null, p_from: from, p_to: to }),
+      rpc('report_financial_statement', { p_user_id: req.user.id, p_from: from, p_to: to }),
+      rpc('report_operating_result', { p_user_id: req.user.id, p_from: from, p_to: to }),
+      rpc('report_global_totals', { p_user_id: req.user.id, p_from: from, p_to: to }),
     ]);
 
     const financialRows = (financialRowsRaw || []).map((r) => ({
@@ -237,9 +237,9 @@ router.get('/export/xlsx', async (req, res) => {
     const to = toISODateOrNull(req.query.to);
 
     const [financialRowsRaw, opRowsRaw, totalsRaw] = await Promise.all([
-      rpc('report_financial_statement', { p_user_id: null, p_from: from, p_to: to }),
-      rpc('report_operating_result', { p_user_id: null, p_from: from, p_to: to }),
-      rpc('report_global_totals', { p_user_id: null, p_from: from, p_to: to }),
+      rpc('report_financial_statement', { p_user_id: req.user.id, p_from: from, p_to: to }),
+      rpc('report_operating_result', { p_user_id: req.user.id, p_from: from, p_to: to }),
+      rpc('report_global_totals', { p_user_id: req.user.id, p_from: from, p_to: to }),
     ]);
 
     const financialRows = (financialRowsRaw || []).map((r) => ({
@@ -358,8 +358,8 @@ router.get('/export/pdf', async (req, res) => {
     const to = toISODateOrNull(req.query.to);
 
     const [financialRowsRaw, totalsRaw] = await Promise.all([
-      rpc('report_financial_statement', { p_user_id: null, p_from: from, p_to: to }),
-      rpc('report_global_totals', { p_user_id: null, p_from: from, p_to: to }),
+      rpc('report_financial_statement', { p_user_id: req.user.id, p_from: from, p_to: to }),
+      rpc('report_global_totals', { p_user_id: req.user.id, p_from: from, p_to: to }),
     ]);
 
     const financialRows = (financialRowsRaw || []).map((r) => ({
@@ -461,7 +461,7 @@ router.get('/rendiconto/pdf', async (req, res) => {
     const to = toISODateOrNull(req.query.to);
 
     const rows = await rpc('report_rendiconto_grouped', {
-      p_user_id: null,
+      p_user_id: req.user.id,
       p_from: from,
       p_to: to,
     });
@@ -516,8 +516,8 @@ router.get('/summary', async (req, res) => {
     const to = toISODateOrNull(req.query.to);
 
     const [totalsRaw, opRowsRaw] = await Promise.all([
-      rpc('report_global_totals', { p_user_id: null, p_from: from, p_to: to }),
-      rpc('report_operating_result', { p_user_id: null, p_from: from, p_to: to }),
+      rpc('report_global_totals', { p_user_id: req.user.id, p_from: from, p_to: to }),
+      rpc('report_operating_result', { p_user_id: req.user.id, p_from: from, p_to: to }),
     ]);
 
     const t = totalsRaw?.[0] || {};

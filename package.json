@@ -1,0 +1,51 @@
+{
+  "name": "nova-desktop",
+  "version": "1.0.0",
+  "description": "Gestionale Nova Desktop",
+  "author": "Manuel",
+  "private": true,
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:frontend\" \"npm:dev:electron\"",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:electron": "wait-on http://localhost:5173 && cross-env BACKEND_PORT=4010 electron .",
+    "build:frontend": "npm --prefix frontend run build",
+    "pack": "npm run build:frontend && electron-builder --dir",
+    "dist": "npm run build:frontend && electron-builder"
+  },
+  "build": {
+    "appId": "it.nova.gestionale",
+    "productName": "Nova",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "frontend/dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "backend", "to": "backend", "filter": ["**/*"] }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Nova"
+    }
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "cross-env": "^7.0.3",
+    "electron": "^30.0.0",
+    "electron-builder": "^26.8.1",
+    "wait-on": "^7.0.1"
+  }
+}

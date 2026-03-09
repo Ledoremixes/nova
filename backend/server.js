@@ -42,6 +42,7 @@ app.options(/.*/, cors());
 
 
 const PORT = process.env.PORT || 4000;
+const HOST = process.env.HOST || "127.0.0.1";
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -54,6 +55,8 @@ app.get('/api/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'Backend gestionale ASD' });
 });
+
+app.get("/api/health", (req, res) => res.json({ ok: true }));
 
 // API protette / pubbliche
 app.use('/api/auth', authRoutes);         // register / login
@@ -74,6 +77,6 @@ app.use('/api/invoices', invoicesRouter);
 // ✅ case-sensitive fix
 app.use('/api/report', require('./routes/reportIva'));
 
-app.listen(PORT, () => {
-  console.log(`Backend in ascolto su http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Backend on http://${HOST}:${PORT}`);
 });

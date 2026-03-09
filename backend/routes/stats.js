@@ -39,29 +39,83 @@ async function rpc(fnName, params) {
 
 // =======================
 // GET /api/stats/dashboard
-// - già basato su RPC dashboard_stats in Supabase
 // =======================
-router.get('/dashboard', async (req, res) => {
+//
+// ✅ FIX: il tuo progetto non deve dipendere dal singolo utente.
+// Questa route ora prova:
+// 1) RPC dashboard_stats con p_user_id: null (globale)
+// 2) RPC dashboard_stats senza parametri (compat)
+// 3) Fallback: report_global_totals + count varie tabelle
+//
+router.get('/dashboard', async (_req, res) => {
   try {
-    const { data, error } = await supabase.rpc('dashboard_stats', {
-      p_user_id: req.user.id,
-    });
-
-    if (error) {
-      console.error('Errore RPC dashboard_stats:', error);
-      return res.status(500).json({ error: 'Errore stats dashboard' });
+    // 1) prova firma "globale"
+    try {
+      const { data, error } = await supabase.rpc('dashboard_stats', { p_user_id: null });
+      if (!error) return res.json(data || {});
+      console.warn('dashboard_stats(p_user_id:null) error:', error);
+    } catch (e) {
+      console.warn('dashboard_stats(p_user_id:null) throw:', e.details || e);
     }
 
-    return res.json(data || {});
+    // 2) prova firma senza parametri (come era prima)
+    try {
+      const { data, error } = await supabase.rpc('dashboard_stats', {});
+      if (!error) return res.json(data || {});
+      console.warn('dashboard_stats({}) error:', error);
+    } catch (e) {
+      console.warn('dashboard_stats({}) throw:', e.details || e);
+    }
+
+    // 3) fallback robusto (senza dashboard_stats)
+    const totalsRaw = await rpc('report_global_totals', {
+      p_user_id: null,
+      p_from: null,
+      p_to: null,
+    });
+
+    const t = (totalsRaw && totalsRaw[0]) ? totalsRaw[0] : {};
+    const totalEntrate = Number(num(t.total_entrate).toFixed(2));
+    const totalUscite = Number(num(t.total_uscite).toFixed(2));
+    const saldo = Number(num(t.saldo).toFixed(2));
+    const totalVat = Number(num(t.total_vat).toFixed(2));
+
+    const [
+      tesseratiCount,
+      teachersCount,
+      entriesCount,
+      invoicesCount,
+    ] = await Promise.all([
+      supabase.from('tesserati').select('id', { count: 'exact', head: true }),
+      supabase.from('teachers').select('id', { count: 'exact', head: true }),
+      supabase.from('entries').select('id', { count: 'exact', head: true }),
+      supabase.from('invoices').select('id', { count: 'exact', head: true }),
+    ]);
+
+    const payload = {
+      totalEntrate,
+      totalUscite,
+      saldo,
+      totalVat,
+      totalTesserati: tesseratiCount.count || 0,
+      totalInsegnanti: teachersCount.count || 0,
+      totalMovements: entriesCount.count || 0,
+      totalInvoices: invoicesCount.count || 0,
+      // alias compat
+      totalIn: totalEntrate,
+      totalOut: totalUscite,
+      balance: saldo,
+    };
+
+    return res.json(payload);
   } catch (err) {
-    console.error('Errore /stats/dashboard:', err);
+    console.error('Errore /stats/dashboard (fallback):', err.details || err);
     res.status(500).json({ error: 'Errore stats dashboard' });
   }
 });
 
 // =======================
 // GET /api/stats/bar
-// - ora calcola tutto su Supabase (RPC bar_top_items)
 // =======================
 router.get('/bar', async (req, res) => {
   try {
@@ -69,7 +123,8 @@ router.get('/bar', async (req, res) => {
     const to = toISODateOrNull(req.query.to);
     const limit = Math.max(1, Math.min(50, Number(req.query.limit || 10)));
 
-    const key = JSON.stringify({ uid: req.user.id, from, to, limit, codes: BAR_ACCOUNT_CODES });
+    // ✅ cache globale (non dipende dall'utente)
+    const key = JSON.stringify({ from, to, limit, codes: BAR_ACCOUNT_CODES });
     const cached = cache.get(key);
     const now = Date.now();
     if (cached && now - cached.ts < BAR_TTL_MS) {
@@ -77,7 +132,6 @@ router.get('/bar', async (req, res) => {
     }
 
     const rows = await rpc('bar_top_items', {
-      p_user_id: req.user.id,
       p_from: from,
       p_to: to,
       p_bar_account_codes: BAR_ACCOUNT_CODES,
