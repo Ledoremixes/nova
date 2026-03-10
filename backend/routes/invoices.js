@@ -42,22 +42,39 @@ function computeTotals(items = []) {
 
   let subtotal = 0;
   let vat = 0;
+  let total = 0;
 
   const normalized = rows
     .map((it) => {
       const qty = Math.max(0, num(it.qty ?? 1));
       const unit = num(it.unit_price ?? it.unitPrice ?? 0);
       const vatRate = Math.max(0, num(it.vat_rate ?? it.vatRate ?? 0));
-      const lineSubtotal = qty * unit;
-      const lineVat = lineSubtotal * (vatRate / 100);
-      const lineTotal = lineSubtotal + lineVat;
+      const vatMode = String(it.vat_mode ?? it.vatMode ?? 'excluded').trim().toLowerCase();
+
+      let lineSubtotal = 0;
+      let lineVat = 0;
+      let lineTotal = 0;
+
+      if (vatMode === 'included') {
+        lineTotal = qty * unit;
+        lineSubtotal = vatRate > 0 ? lineTotal / (1 + vatRate / 100) : lineTotal;
+        lineVat = lineTotal - lineSubtotal;
+      } else {
+        lineSubtotal = qty * unit;
+        lineVat = lineSubtotal * (vatRate / 100);
+        lineTotal = lineSubtotal + lineVat;
+      }
+
       subtotal += lineSubtotal;
       vat += lineVat;
+      total += lineTotal;
+
       return {
         description: safeText(it.description || ''),
-        qty,
+        qty: Number(qty.toFixed(2)),
         unit_price: Number(unit.toFixed(2)),
         vat_rate: Number(vatRate.toFixed(2)),
+        vat_mode: vatMode === 'included' ? 'included' : 'excluded',
         line_subtotal: Number(lineSubtotal.toFixed(2)),
         line_vat: Number(lineVat.toFixed(2)),
         line_total: Number(lineTotal.toFixed(2)),
@@ -67,7 +84,7 @@ function computeTotals(items = []) {
 
   subtotal = Number(subtotal.toFixed(2));
   vat = Number(vat.toFixed(2));
-  const total = Number((subtotal + vat).toFixed(2));
+  total = Number(total.toFixed(2));
 
   return { items: normalized, subtotal, vat, total };
 }
@@ -326,10 +343,18 @@ function drawInvoicePdf(doc, inv) {
       const qty = num(it.qty ?? 0);
       const unit = num(it.unit_price ?? 0);
       const vatRate = num(it.vat_rate ?? 0);
-      const lineTotal = num(it.line_total ?? (qty * unit * (1 + vatRate / 100)));
+      const vatMode = String(it.vat_mode || 'excluded');
+      const lineTotal = num(
+        it.line_total ??
+        (vatMode === 'included'
+          ? qty * unit
+          : qty * unit * (1 + vatRate / 100))
+      );
 
-      const descH = calcTextHeight(doc, desc, cols.desc.w - 2 * cellPadX, 'Helvetica', 9, 2);
-      const rowH = Math.max(38, descH + cellPadY * 2);
+      const descFull = `${desc}\n${vatMode === 'included' ? 'IVA compresa' : 'IVA esclusa'}`;
+      const descH = calcTextHeight(doc, descFull, cols.desc.w - 2 * cellPadX, 'Helvetica', 9, 2);
+      const rowH = Math.max(52, descH + cellPadY * 2);
+
       ensureSpace(rowH + 8);
 
       drawCard(doc, left, y, contentW, rowH, {
@@ -345,16 +370,30 @@ function drawInvoicePdf(doc, inv) {
       doc.restore();
 
       const baseY = y + cellPadY;
-      const numberY = y + (rowH - 10) / 2 - 1;
 
       doc.fillColor(text).font('Helvetica').fontSize(9).text(desc, cols.desc.x + cellPadX, baseY, {
         width: cols.desc.w - 2 * cellPadX,
         lineGap: 2,
       });
-      doc.text(String(qty).replace('.', ','), cols.qty.x + 2, numberY, { width: cols.qty.w - 8, align: 'right' });
-      doc.text(eur(unit), cols.unit.x + 2, numberY, { width: cols.unit.w - 8, align: 'right' });
-      doc.text(`${vatRate.toFixed(0)}%`, cols.vat.x + 2, numberY, { width: cols.vat.w - 8, align: 'right' });
-      doc.font('Helvetica-Bold').text(eur(lineTotal), cols.total.x + 2, numberY, { width: cols.total.w - 8, align: 'right' });
+
+      doc
+        .fillColor(muted)
+        .font('Helvetica')
+        .fontSize(8)
+        .text(
+          vatMode === 'included' ? 'IVA compresa' : 'IVA esclusa',
+          cols.desc.x + cellPadX,
+          baseY + calcTextHeight(doc, desc, cols.desc.w - 2 * cellPadX, 'Helvetica', 9, 2) + 2,
+          {
+            width: cols.desc.w - 2 * cellPadX,
+          }
+        );
+
+      doc.fillColor(text).font('Helvetica').fontSize(9);
+      doc.text(String(qty).replace('.', ','), cols.qty.x + 2, y + 16, { width: cols.qty.w - 8, align: 'right' });
+      doc.text(eur(unit), cols.unit.x + 2, y + 16, { width: cols.unit.w - 8, align: 'right' });
+      doc.text(`${vatRate.toFixed(0)}%`, cols.vat.x + 2, y + 16, { width: cols.vat.w - 8, align: 'right' });
+      doc.font('Helvetica-Bold').text(eur(lineTotal), cols.total.x + 2, y + 16, { width: cols.total.w - 8, align: 'right' });
 
       y += rowH + 8;
     });
@@ -574,28 +613,245 @@ router.delete('/:id', async (req, res) => {
 // GET /api/invoices/:id/pdf
 // =============================
 router.get('/:id/pdf', async (req, res) => {
+  let doc = null;
+
   try {
     const id = req.params.id;
+
     const { data, error } = await supabase
       .from('invoices')
       .select('*')
       .eq('id', id)
+      .eq('user_id', req.user.id)
       .single();
 
     if (error) throw error;
-    if (!data) return res.status(404).json({ error: 'Fattura non trovata' });
+    if (!data) {
+      return res.status(404).json({ error: 'Fattura non trovata' });
+    }
 
     const inv = data;
     const filename = `Fattura_${inv.year}_${String(inv.number).padStart(4, '0')}.pdf`;
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-    const doc = new PDFDocument({ size: 'A4', margin: 42 });
+    doc = new PDFDocument({ size: 'A4', margin: 44 });
+
+    doc.on('error', (pdfErr) => {
+      console.error('PDF stream error:', pdfErr);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Errore generazione PDF' });
+      } else if (!res.writableEnded) {
+        res.end();
+      }
+    });
+
+    res.on('error', (resErr) => {
+      console.error('Response stream error:', resErr);
+    });
+
+    const pageW = doc.page.width;
+    const left = doc.page.margins.left;
+    const right = pageW - doc.page.margins.right;
+    const contentW = right - left;
+
+    const brand = '#111827';
+    const soft = '#F3F4F6';
+
+    const seller = inv.seller || {};
+    const customer = inv.customer || {};
+    const items = Array.isArray(inv.items) ? inv.items : [];
+
     doc.pipe(res);
-    drawInvoicePdf(doc, inv);
+
+    // Header
+    doc.save();
+    doc.rect(0, 0, pageW, 120).fill(brand);
+    doc.restore();
+
+    doc.fillColor('#fff');
+    doc.font('Helvetica-Bold').fontSize(20).text('FATTURA', left, 32);
+
+    const invNo = `${inv.year}/${String(inv.number).padStart(4, '0')}`;
+    doc.fontSize(11).font('Helvetica').text(`N. ${invNo}`, left, 60);
+    doc.text(`Data: ${inv.issue_date || ''}`, left, 78);
+    if (inv.due_date) doc.text(`Scadenza: ${inv.due_date}`, left, 94);
+
+    // Seller box
+    const sellerX = left + contentW * 0.52;
+    const sellerW = right - sellerX;
+
+    doc.save();
+    doc.roundedRect(sellerX, 28, sellerW, 82, 10).fill('#0B1220');
+    doc.restore();
+
+    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(10).text('Cedente / Prestatore', sellerX + 12, 38);
+    doc.font('Helvetica').fontSize(9).fillColor('#D1D5DB');
+
+    const sellerLines = [
+      safeText(seller.name),
+      safeText(seller.address),
+      safeText(seller.city),
+      seller.vat ? `P.IVA: ${safeText(seller.vat)}` : '',
+      seller.cf ? `CF: ${safeText(seller.cf)}` : '',
+      seller.iban ? `IBAN: ${safeText(seller.iban)}` : '',
+    ].filter(Boolean);
+
+    doc.text(sellerLines.join('\n') || '—', sellerX + 12, 54, { width: sellerW - 24 });
+
+    // Customer box
+    doc.y = 140;
+    const boxY = doc.y;
+
+    // Altezza box cessionario
+    doc.save();
+    doc.roundedRect(left, boxY, contentW, 132, 12).fill(soft).stroke('#E5E7EB');
+    doc.restore();
+
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(10).text('Cessionario / Committente', left + 14, boxY + 12);
+    doc.font('Helvetica').fontSize(9).fillColor('#111827');
+
+    const custLines = [
+      safeText(customer.name),
+      safeText(customer.address),
+      safeText(customer.city),
+      customer.vat ? `P.IVA: ${safeText(customer.vat)}` : '',
+      customer.cf ? `CF: ${safeText(customer.cf)}` : '',
+      customer.sdi ? `Codice SDI: ${safeText(customer.sdi)}` : '',
+      customer.pec ? `PEC: ${safeText(customer.pec)}` : '',
+      customer.email ? `Email: ${safeText(customer.email)}` : '',
+    ].filter(Boolean);
+
+    doc.text(custLines.join('\n') || '—', left + 14, boxY + 30, { width: contentW - 28 });
+
+    // Items table
+    doc.y = boxY + 118;
+
+    const cols = {
+      desc: { x: left, w: contentW * 0.46 },
+      qty: { x: left + contentW * 0.46, w: contentW * 0.09 },
+      unit: { x: left + contentW * 0.55, w: contentW * 0.15 },
+      vat: { x: left + contentW * 0.70, w: contentW * 0.10 },
+      total: { x: left + contentW * 0.80, w: contentW * 0.20 },
+    };
+
+    const headerH = 24;
+    const rowH = 22;
+    const tableTop = doc.y;
+
+    const drawHeader = () => {
+      const y = doc.y;
+      doc.save();
+      doc.rect(left, y, contentW, headerH).fill('#111827');
+      doc.restore();
+
+      doc.fillColor('#fff').font('Helvetica-Bold').fontSize(9);
+      doc.text('Descrizione', cols.desc.x + 8, y + 7, { width: cols.desc.w - 16 });
+      doc.text('Q.tà', cols.qty.x, y + 7, { width: cols.qty.w, align: 'right' });
+      doc.text('Prezzo', cols.unit.x, y + 7, { width: cols.unit.w, align: 'right' });
+      doc.text('IVA', cols.vat.x, y + 7, { width: cols.vat.w, align: 'right' });
+      doc.text('Totale', cols.total.x, y + 7, { width: cols.total.w - 8, align: 'right' });
+
+      doc.y = y + headerH;
+    };
+
+    const bottomY = () => doc.page.height - doc.page.margins.bottom;
+
+    const ensureSpace = (need) => {
+      if (doc.y + need > bottomY()) {
+        doc.addPage();
+        drawHeader();
+      }
+    };
+
+    drawHeader();
+
+    doc.font('Helvetica').fontSize(9).fillColor('#111827');
+
+    items.forEach((it, idx) => {
+      ensureSpace(rowH + 6);
+      const y = doc.y;
+
+      if (idx % 2 === 0) {
+        doc.save();
+        doc.rect(left, y, contentW, rowH).fill('#F9FAFB');
+        doc.restore();
+      }
+
+      const desc = safeText(it.description);
+      const qty = num(it.qty ?? 0);
+      const unit = num(it.unit_price ?? 0);
+      const vatRate = num(it.vat_rate ?? 0);
+      const lineTotal = num(it.line_total ?? (qty * unit * (1 + vatRate / 100)));
+
+      doc.fillColor('#111827').text(desc, cols.desc.x + 8, y + 6, { width: cols.desc.w - 16 });
+      doc.text(String(qty).replace('.', ','), cols.qty.x, y + 6, { width: cols.qty.w, align: 'right' });
+      doc.text(eur(unit), cols.unit.x, y + 6, { width: cols.unit.w, align: 'right' });
+      doc.text(`${vatRate.toFixed(0)}%`, cols.vat.x, y + 6, { width: cols.vat.w, align: 'right' });
+      doc.text(eur(lineTotal), cols.total.x, y + 6, { width: cols.total.w - 8, align: 'right' });
+
+      doc.y = y + rowH;
+    });
+
+    doc.save();
+    doc.rect(left, tableTop, contentW, doc.y - tableTop).stroke('#E5E7EB');
+    doc.restore();
+
+    // Totals
+    ensureSpace(120);
+
+    const totalsW = contentW * 0.42;
+    const totalsX = right - totalsW;
+    const totalsY = doc.y + 16;
+
+    doc.save();
+    doc.roundedRect(totalsX, totalsY, totalsW, 92, 12).fill('#0B1220');
+    doc.restore();
+
+    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(10).text('Totali', totalsX + 14, totalsY + 12);
+    doc.font('Helvetica').fontSize(10);
+
+    const totalRow = (label, value, y) => {
+      doc.fillColor('#9CA3AF').text(label, totalsX + 14, y);
+      doc.fillColor('#fff').text(value, totalsX + 14, y, { width: totalsW - 28, align: 'right' });
+    };
+
+    totalRow('Imponibile', eur(inv.subtotal), totalsY + 34);
+    totalRow('IVA', eur(inv.vat), totalsY + 52);
+
+    doc.save();
+    doc.moveTo(totalsX + 14, totalsY + 72).lineTo(totalsX + totalsW - 14, totalsY + 72).stroke('#374151');
+    doc.restore();
+
+    doc.fillColor('#fff').font('Helvetica-Bold');
+    totalRow('Totale', eur(inv.total), totalsY + 78);
+
+    // Notes
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(10).text('Note', left, totalsY);
+    doc.font('Helvetica').fontSize(9).fillColor('#111827');
+    doc.text(inv.notes || '—', left, totalsY + 18, { width: contentW * 0.54 });
+
+    // Footer
+    doc.fillColor('#6B7280').fontSize(8);
+    doc.text('Documento generato dal Gestionale ASD', left, doc.page.height - doc.page.margins.bottom - 10, {
+      width: contentW,
+      align: 'center',
+    });
+
     doc.end();
   } catch (err) {
-    res.status(400).json({ error: err?.message || 'Errore generazione PDF fattura' });
+    console.error('Errore generazione PDF fattura:', err);
+
+    if (!res.headersSent) {
+      return res.status(400).json({ error: err?.message || 'Errore generazione PDF fattura' });
+    }
+
+    if (doc && !doc.destroyed) {
+      try {
+        doc.end();
+      } catch {}
+    }
   }
 });
 

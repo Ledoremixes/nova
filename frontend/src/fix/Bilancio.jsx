@@ -30,21 +30,39 @@ function computeInvoiceTotals(items) {
   const rows = Array.isArray(items) ? items : [];
   let subtotal = 0;
   let vat = 0;
+  let total = 0;
+
   for (const it of rows) {
     const qty = Math.max(0, toNum(it.qty ?? 1));
     const unit = toNum(it.unit_price ?? 0);
     const vatRate = Math.max(0, toNum(it.vat_rate ?? 0));
-    const lineSubtotal = qty * unit;
-    const lineVat = lineSubtotal * (vatRate / 100);
+    const vatMode = String(it.vat_mode || "excluded");
+
+    let lineSubtotal = 0;
+    let lineVat = 0;
+    let lineTotal = 0;
+
+    if (vatMode === "included") {
+      lineTotal = qty * unit;
+      lineSubtotal = vatRate > 0 ? lineTotal / (1 + vatRate / 100) : lineTotal;
+      lineVat = lineTotal - lineSubtotal;
+    } else {
+      lineSubtotal = qty * unit;
+      lineVat = lineSubtotal * (vatRate / 100);
+      lineTotal = lineSubtotal + lineVat;
+    }
+
     subtotal += lineSubtotal;
     vat += lineVat;
+    total += lineTotal;
   }
+
   subtotal = Number(subtotal.toFixed(2));
   vat = Number(vat.toFixed(2));
-  const total = Number((subtotal + vat).toFixed(2));
+  total = Number(total.toFixed(2));
+
   return { subtotal, vat, total };
 }
-
 /* ===============================
    Cedente / prestatore (localStorage)
    =============================== */
@@ -500,6 +518,11 @@ export default function Bilancio({ token }) {
     setInvSaving(false);
   }
 
+  function closeCustomerModal() {
+  setCustModalOpen(false);
+  resetCustomerDraft();
+}
+
   function updateItem(idx, patch) {
     setInvoiceForm((s) => {
       const items = [...(s.items || [])];
@@ -528,24 +551,30 @@ export default function Bilancio({ token }) {
   }
 
   async function updateInvoiceRequest(id, payload) {
-    // se esiste api.updateInvoice la uso, altrimenti fetch PATCH
     if (api.updateInvoice) return api.updateInvoice(token, id, payload);
 
     const base = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
     const res = await fetch(`${base}/invoices/${id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify(payload),
     });
 
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      if (res.status === 404 || res.status === 405) {
-        throw new Error("Manca la route backend PATCH /api/invoices/:id (te la preparo io).");
-      }
-      throw new Error(txt || "Errore modifica fattura");
+    let data = null;
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
     }
-    return res.json();
+
+    if (!res.ok) {
+      throw new Error(data?.error || "Errore modifica fattura");
+    }
+
+    return data;
   }
 
   async function saveInvoice() {

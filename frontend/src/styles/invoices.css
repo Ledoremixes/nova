@@ -627,3 +627,68 @@
     font-size: 14px;
   }
 }
+
+/* ===== Fix leggibilità select ===== */
+.invoice-form select,
+.invoice-topbar select,
+.inv-customer-tools select,
+.invoice-items select,
+.small-input {
+  background: #111827 !important;
+  color: #f9fafb !important;
+  border: 1px solid rgba(255,255,255,.16) !important;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.invoice-form select option,
+.invoice-topbar select option,
+.inv-customer-tools select option,
+.invoice-items select option,
+.small-input option {
+  background: #111827 !important;
+  color: #f9fafb !important;
+}
+
+.invoice-form select:focus,
+.invoice-topbar select:focus,
+.inv-customer-tools select:focus,
+.invoice-items select:focus,
+.small-input:focus {
+  border-color: rgba(168, 85, 247, .75) !important;
+  box-shadow: 0 0 0 3px rgba(168,85,247,.18) !important;
+  outline: none !important;
+}
+
+/* celle tabella fatture più ordinate */
+.invoice-items table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 10px;
+}
+
+.invoice-items td,
+.invoice-items th {
+  vertical-align: top;
+}
+
+.invoice-items td {
+  padding: 8px 6px;
+}
+
+.invoice-items td:first-child input,
+.invoice-items td:first-child textarea,
+.invoice-items td:first-child .small-input {
+  min-width: 220px;
+}
+
+/* evita che i campi rompano il layout */
+.invoice-form input,
+.invoice-form select,
+.invoice-form textarea,
+.invoice-items input,
+.invoice-items select,
+.invoice-items textarea {
+  box-sizing: border-box;
+  max-width: 100%;
+}

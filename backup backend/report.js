@@ -591,6 +591,7 @@ router.get('/summary', async (req, res) => {
       details: err.details || null,
     });
   }
+
 });
 
 module.exports = router;
