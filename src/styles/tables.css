@@ -1,0 +1,45 @@
+.tableWrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.dataTable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1000px;
+}
+
+.dataTable th,
+.dataTable td {
+  text-align: left;
+  padding: 14px 12px;
+  border-bottom: 1px solid rgba(23, 32, 51, 0.08);
+  vertical-align: middle;
+}
+
+.dataTable th {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.rowActions {
+  display: flex;
+  gap: 8px;
+}
+
+.actionBtn {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.actionBtn--danger {
+  color: #b91c1c;
+  border-color: rgba(185, 28, 28, 0.18);
+  background: #fff5f5;
+}

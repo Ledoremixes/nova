@@ -1,51 +1,35 @@
 {
-  "name": "nova-desktop",
-  "version": "1.0.0",
-  "description": "Gestionale Nova Desktop",
-  "author": "Manuel",
+  "name": "nova-next",
   "private": true,
-  "main": "electron/main.cjs",
+  "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"npm:dev:frontend\" \"npm:dev:electron\"",
-    "dev:frontend": "npm --prefix frontend run dev",
-    "dev:electron": "wait-on http://localhost:5173 && cross-env BACKEND_PORT=4010 electron .",
-    "build:frontend": "npm --prefix frontend run build",
-    "pack": "npm run build:frontend && electron-builder --dir",
-    "dist": "npm run build:frontend && electron-builder"
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
   },
-  "build": {
-    "appId": "it.nova.gestionale",
-    "productName": "Nova",
-    "directories": {
-      "buildResources": "build",
-      "output": "dist"
-    },
-    "files": [
-      "electron/**/*",
-      "frontend/dist/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      { "from": "backend", "to": "backend", "filter": ["**/*"] }
-    ],
-    "win": {
-      "icon": "build/icon.ico",
-      "target": ["nsis"]
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Nova"
-    }
+  "dependencies": {
+    "@supabase/supabase-js": "^2.100.1",
+    "@tanstack/react-query": "^5.95.2",
+    "clsx": "^2.1.1",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
+    "lucide-react": "^1.7.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "concurrently": "^9.0.0",
-    "cross-env": "^7.0.3",
-    "electron": "^30.0.0",
-    "electron-builder": "^26.8.1",
-    "wait-on": "^7.0.1"
+    "@eslint/js": "^9.39.4",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.4.0",
+    "vite": "^8.0.1"
   }
 }

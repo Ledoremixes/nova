@@ -1,0 +1,56 @@
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.topbar__title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.topbar__subtitle {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar__button {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 14px;
+  padding: 11px 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.topbar__button--primary {
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  color: #fff;
+  border: none;
+}
+
+.topbar__userpill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--border);
+}
+
+.topbar__role {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #5b4bdb;
+}

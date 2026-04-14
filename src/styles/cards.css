@@ -1,0 +1,41 @@
+.card-soft {
+  background: #fff;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 20px;
+}
+
+.stat-card {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  border-radius: 24px;
+  padding: 22px;
+  min-height: 132px;
+}
+
+.stat-card--accent {
+  background: linear-gradient(135deg, rgba(109, 74, 255, 0.12), rgba(139, 92, 246, 0.08)), #fff;
+  border-color: rgba(109, 74, 255, 0.18);
+}
+
+.stat-card__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.stat-card__value {
+  font-size: clamp(28px, 3vw, 38px);
+  font-weight: 800;
+  line-height: 1.05;
+  color: var(--text);
+}
+
+.stat-card__hint {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}

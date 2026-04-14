@@ -1,0 +1,100 @@
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+.toolbar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.searchInput,
+.filterSelect,
+.formGrid input,
+.formGrid textarea {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--text);
+  outline: none;
+}
+
+.searchInput::placeholder,
+.formGrid input::placeholder,
+.formGrid textarea::placeholder {
+  color: var(--muted);
+}
+
+.searchInput:focus,
+.filterSelect:focus,
+.formGrid input:focus,
+.formGrid textarea:focus {
+  border-color: rgba(109, 74, 255, 0.45);
+  box-shadow: 0 0 0 4px rgba(109, 74, 255, 0.1);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.formTextarea {
+  min-height: 120px;
+  resize: vertical;
+  grid-column: 1 / -1;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 50;
+}
+
+.modalCard {
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 28px;
+  border: 1px solid var(--border);
+  box-shadow: 0 30px 60px rgba(15, 23, 42, 0.18);
+  padding: 24px;
+}
+
+.modalActions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+@media (max-width: 860px) {
+  .toolbar {
+    flex-direction: column;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.toolbar--wrap {
+  flex-wrap: wrap;
+}
+
+.toolbar--wrap > * {
+  min-width: 180px;
+  flex: 1;
+}

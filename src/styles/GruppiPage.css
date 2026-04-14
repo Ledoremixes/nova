@@ -1,0 +1,621 @@
+.gruppi-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.gruppi-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.gruppi-header h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 800;
+  color: #18243d;
+}
+
+.gruppi-header p {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 15px;
+}
+
+.gruppi-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 16px;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, #6d5dfc, #4f46e5);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 12px 30px rgba(79, 70, 229, 0.22);
+}
+
+.gruppi-toolbar {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.gruppi-search {
+  flex: 1 1 340px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #e6e8f0;
+  border-radius: 18px;
+  padding: 0 16px;
+  min-height: 54px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.gruppi-search svg {
+  color: #7c86a0;
+  flex-shrink: 0;
+}
+
+.gruppi-search input {
+  border: none;
+  outline: none;
+  background: transparent;
+  width: 100%;
+  font-size: 15px;
+  color: #18243d;
+}
+
+.gruppi-summary {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.gruppi-summary-card {
+  min-width: 140px;
+  background: #fff;
+  border: 1px solid #e6e8f0;
+  border-radius: 18px;
+  padding: 14px 16px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.gruppi-summary-card span {
+  display: block;
+  font-size: 13px;
+  color: #7c86a0;
+  margin-bottom: 6px;
+}
+
+.gruppi-summary-card strong {
+  font-size: 24px;
+  color: #18243d;
+}
+
+.gruppi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.gruppo-card {
+  background: #fff;
+  border: 1px solid #e7eaf3;
+  border-radius: 24px;
+  padding: 20px;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.gruppo-card-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.gruppo-color {
+  width: 16px;
+  height: 56px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.gruppo-title-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.gruppo-title-wrap h3 {
+  margin: 0;
+  font-size: 20px;
+  color: #18243d;
+}
+
+.gruppo-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.gruppo-status.active {
+  background: rgba(34, 197, 94, 0.14);
+  color: #15803d;
+}
+
+.gruppo-status.inactive {
+  background: rgba(239, 68, 68, 0.14);
+  color: #b91c1c;
+}
+
+.gruppo-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+}
+
+.gruppo-meta span {
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.gruppo-description {
+  margin: 0;
+  font-size: 14px;
+  color: #667085;
+  line-height: 1.6;
+}
+
+.gruppo-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.gruppo-actions button {
+  flex: 1;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.gruppo-actions .edit {
+  background: rgba(79, 70, 229, 0.10);
+  color: #4338ca;
+}
+
+.gruppo-actions .delete {
+  background: rgba(239, 68, 68, 0.10);
+  color: #b91c1c;
+}
+
+.gruppi-empty {
+  background: #fff;
+  border: 1px dashed #d8deea;
+  border-radius: 24px;
+  padding: 40px 24px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 16px;
+}
+
+.gruppi-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 999;
+}
+
+.gruppi-modal {
+  width: min(900px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 28px;
+  padding: 24px;
+  box-shadow: 0 30px 80px rgba(2, 6, 23, 0.22);
+}
+
+.gruppi-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.gruppi-modal-header h2 {
+  margin: 0;
+  font-size: 26px;
+  color: #18243d;
+}
+
+.close-btn {
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 14px;
+  background: #f3f4f6;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.gruppi-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.gruppi-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gruppi-form label span {
+  font-size: 13px;
+  font-weight: 700;
+  color: #475467;
+}
+
+.gruppi-form input,
+.gruppi-form textarea {
+  width: 100%;
+  border: 1px solid #d8deea;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: #18243d;
+  outline: none;
+  background: #fff;
+}
+
+.gruppi-form textarea {
+  resize: vertical;
+  min-height: 110px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.checkbox-field {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 10px !important;
+  margin-top: 30px;
+}
+
+.checkbox-field input {
+  width: 18px;
+  height: 18px;
+}
+
+.gruppi-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.gruppi-form-actions button {
+  border: none;
+  border-radius: 14px;
+  padding: 12px 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.gruppi-form-actions .secondary {
+  background: #eef2f7;
+  color: #344054;
+}
+
+.gruppi-form-actions .primary {
+  background: linear-gradient(135deg, #6d5dfc, #4f46e5);
+  color: #fff;
+}
+
+@media (max-width: 900px) {
+  .form-grid,
+  .gruppo-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .gruppi-title-wrap {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .gruppi-page {
+    gap: 18px;
+  }
+
+  .gruppi-header h1 {
+    font-size: 26px;
+  }
+
+  .gruppi-modal {
+    padding: 18px;
+    border-radius: 22px;
+  }
+
+  .gruppo-actions {
+    flex-direction: column;
+  }
+}
+
+.gruppi-form-error {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.10);
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  color: #b91c1c;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.gruppi-form-error {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.10);
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  color: #b91c1c;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.gruppo-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: auto;
+}
+
+.gruppo-actions .manage {
+  background: rgba(14, 165, 233, 0.10);
+  color: #0369a1;
+}
+
+.gruppi-modal.large {
+  width: min(1100px, 100%);
+}
+
+.modal-subtitle {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.group-athletes-layout {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 18px;
+}
+
+.group-athletes-box {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 18px;
+}
+
+.group-athletes-box h3 {
+  margin: 0 0 14px;
+  font-size: 18px;
+  color: #18243d;
+}
+
+.gruppi-search.small {
+  min-height: 48px;
+  margin-bottom: 14px;
+}
+
+.athlete-select {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #d8deea;
+  border-radius: 14px;
+  padding: 0 14px;
+  font-size: 14px;
+  background: #fff;
+  color: #18243d;
+  margin-bottom: 14px;
+}
+
+.add-athlete-btn,
+.remove-athlete-btn {
+  border: none;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.add-athlete-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #6d5dfc, #4f46e5);
+  color: #fff;
+}
+
+.remove-athlete-btn {
+  background: rgba(239, 68, 68, 0.10);
+  color: #b91c1c;
+}
+
+.athletes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.athlete-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+}
+
+.athlete-row strong {
+  display: block;
+  color: #18243d;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.athlete-row span {
+  display: block;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.gruppi-empty.compact {
+  padding: 20px 16px;
+  border-radius: 16px;
+}
+
+@media (max-width: 900px) {
+  .group-athletes-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .gruppo-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .athlete-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .remove-athlete-btn {
+    width: 100%;
+  }
+}
+
+.athlete-results {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+  margin-bottom: 14px;
+  padding-right: 4px;
+}
+
+.athlete-results-empty {
+  padding: 14px;
+  border: 1px dashed #d8deea;
+  border-radius: 14px;
+  background: #fff;
+  color: #6b7280;
+  font-size: 14px;
+  text-align: center;
+}
+
+.athlete-result-item {
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.athlete-result-item:hover {
+  border-color: #a5b4fc;
+  box-shadow: 0 8px 22px rgba(79, 70, 229, 0.08);
+  transform: translateY(-1px);
+}
+
+.athlete-result-item.selected {
+  border-color: #6d5dfc;
+  background: rgba(109, 93, 252, 0.08);
+  box-shadow: 0 10px 24px rgba(79, 70, 229, 0.12);
+}
+
+.athlete-result-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.athlete-result-text strong {
+  color: #18243d;
+  font-size: 15px;
+}
+
+.athlete-result-text span {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.selected-athlete-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(79, 70, 229, 0.08);
+  border: 1px solid rgba(79, 70, 229, 0.12);
+  margin-bottom: 14px;
+}
+
+.selected-athlete-box span {
+  font-size: 12px;
+  font-weight: 700;
+  color: #5b5bd6;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.selected-athlete-box strong {
+  color: #18243d;
+  font-size: 15px;
+}

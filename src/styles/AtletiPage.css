@@ -1,0 +1,774 @@
+.atleti-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.card-surface {
+  background: #ffffff;
+  border: 1px solid #e7eaf3;
+  border-radius: 24px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.atleti-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 28px;
+}
+
+.atleti-hero h1 {
+  margin: 4px 0 8px;
+  font-size: 2rem;
+  line-height: 1.1;
+  color: #172033;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6d5dfc;
+}
+
+.hero-subtitle {
+  margin: 0;
+  color: #667085;
+  font-size: 1rem;
+}
+
+.primary-btn,
+.secondary-btn,
+.icon-btn {
+  border: 0;
+  outline: none;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.primary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #6d5dfc, #4f46e5);
+  color: #fff;
+  font-weight: 700;
+}
+
+.primary-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(109, 93, 252, 0.25);
+}
+
+.secondary-btn {
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: #f3f4f6;
+  color: #1f2937;
+  font-weight: 700;
+}
+
+.atleti-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+.stat-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: rgba(109, 93, 252, 0.1);
+  color: #5b4cf0;
+}
+
+.stat-card span {
+  display: block;
+  font-size: 0.92rem;
+  color: #667085;
+}
+
+.stat-card strong {
+  display: block;
+  font-size: 1.35rem;
+  color: #172033;
+}
+
+.atleti-toolbar {
+  padding: 18px;
+}
+
+.search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid #dbe1ea;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.search-field svg {
+  flex-shrink: 0;
+  color: #667085;
+}
+
+.search-field input {
+  width: 100%;
+  height: 52px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  padding-left: 12px;
+  font-size: 0.98rem;
+  color: #172033;
+}
+
+.atleti-table-card {
+  padding: 12px;
+}
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.atleti-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.atleti-table thead th {
+  text-align: left;
+  padding: 16px 14px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #667085;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.atleti-table tbody td {
+  padding: 16px 14px;
+  border-bottom: 1px solid #edf0f5;
+  vertical-align: middle;
+  color: #172033;
+}
+
+.atleta-main,
+.atleta-subinfo,
+.status-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.atleta-main strong {
+  font-size: 0.98rem;
+  color: #172033;
+}
+
+.atleta-main span,
+.atleta-subinfo span,
+.status-stack small {
+  color: #667085;
+  font-size: 0.9rem;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.status-badge.success {
+  background: #eafaf0;
+  color: #107c41;
+}
+
+.status-badge.warning {
+  background: #fff7e8;
+  color: #b76e00;
+}
+
+.status-badge.danger {
+  background: #fdecec;
+  color: #c62828;
+}
+
+.status-badge.neutral {
+  background: #eef2f7;
+  color: #5f6b7a;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.icon-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: #f3f4f6;
+  color: #344054;
+}
+
+.icon-btn:hover {
+  background: #e8ebf2;
+}
+
+.icon-btn.danger {
+  color: #c62828;
+  background: #fff1f1;
+}
+
+.icon-btn.danger:hover {
+  background: #ffe4e4;
+}
+
+.empty-state {
+  padding: 38px 18px;
+  text-align: center;
+  color: #667085;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-card {
+  width: min(1100px, 100%);
+  max-height: 92vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 24px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+}
+
+.atleta-modal {
+  padding: 24px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.modal-header h2 {
+  margin: 0 0 6px;
+  color: #172033;
+}
+
+.modal-header p {
+  margin: 0;
+  color: #667085;
+}
+
+.atleta-form {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-grid label span {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #344054;
+}
+
+.form-grid input,
+.form-grid textarea {
+  width: 100%;
+  border: 1px solid #dbe1ea;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px 14px;
+  font-size: 0.96rem;
+  color: #172033;
+  outline: none;
+}
+
+.form-grid input:focus,
+.form-grid textarea:focus {
+  border-color: #6d5dfc;
+  box-shadow: 0 0 0 4px rgba(109, 93, 252, 0.12);
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+.checkbox-row {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 10px !important;
+  min-height: 48px;
+  padding: 0 2px;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+@media (max-width: 1024px) {
+  .atleti-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .atleti-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 768px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .atleta-modal {
+    padding: 18px;
+  }
+
+  .modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .modal-actions button {
+    width: 100%;
+  }
+
+  .atleti-table thead {
+    display: none;
+  }
+
+  .atleti-table,
+  .atleti-table tbody,
+  .atleti-table tr,
+  .atleti-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .atleti-table tr {
+    border-bottom: 1px solid #edf0f5;
+    padding: 10px 0;
+  }
+
+  .atleti-table tbody td {
+    border-bottom: 0;
+    padding: 8px 10px;
+  }
+}
+
+.form-grid select {
+  width: 100%;
+  border: 1px solid #dbe1ea;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px 14px;
+  font-size: 0.96rem;
+  color: #172033;
+  outline: none;
+}
+
+.form-grid select:focus {
+  border-color: #6d5dfc;
+  box-shadow: 0 0 0 4px rgba(109, 93, 252, 0.12);
+}
+
+.create-mode-switch {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.mode-btn {
+  border: 1px solid #dbe1ea;
+  background: #f8fafc;
+  color: #344054;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.mode-btn.active {
+  background: rgba(109, 93, 252, 0.12);
+  border-color: #6d5dfc;
+  color: #4f46e5;
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.import-modal {
+  width: min(1200px, 100%);
+}
+
+.import-upload-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.import-file-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  color: #172033;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.import-file-label input {
+  display: none;
+}
+
+.import-file-name {
+  margin: 0;
+  color: #667085;
+}
+
+.import-preview {
+  margin-bottom: 22px;
+}
+
+.import-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.import-preview-header h3,
+.import-result h3,
+.import-errors h4 {
+  margin: 0;
+}
+
+.import-note {
+  margin: 10px 0 0;
+  color: #667085;
+  font-size: 0.92rem;
+}
+
+.import-result {
+  padding: 18px;
+  margin-bottom: 20px;
+}
+
+.import-result-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.import-result-grid div {
+  background: #f8fafc;
+  border: 1px solid #e7eaf3;
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.import-result-grid span {
+  display: block;
+  color: #667085;
+  font-size: 0.9rem;
+  margin-bottom: 4px;
+}
+
+.import-result-grid strong {
+  font-size: 1.2rem;
+  color: #172033;
+}
+
+.import-errors {
+  margin-top: 18px;
+}
+
+.import-errors-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.import-error-item {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff1f1;
+  color: #b42318;
+  font-size: 0.92rem;
+}
+
+@media (max-width: 768px) {
+  .hero-actions {
+    width: 100%;
+  }
+
+  .hero-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .import-result-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.import-progress-card {
+  margin-bottom: 20px;
+  padding: 18px;
+  border-radius: 18px;
+  background: #f8fafc;
+  border: 1px solid #e7eaf3;
+}
+
+.import-progress-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.import-progress-top h3 {
+  margin: 0 0 4px;
+  color: #172033;
+}
+
+.import-progress-top p {
+  margin: 0;
+  color: #667085;
+}
+
+.import-progress-top strong {
+  font-size: 1.1rem;
+  color: #4f46e5;
+}
+
+.import-progress-bar {
+  width: 100%;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e9edf5;
+}
+
+.import-progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #6d5dfc, #4f46e5);
+  transition: width 0.25s ease;
+}
+
+.import-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  color: #667085;
+  font-size: 0.92rem;
+  flex-wrap: wrap;
+}
+
+.import-progress-message {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e7eaf3;
+  color: #344054;
+  font-size: 0.94rem;
+}
+
+.import-toast {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  font-weight: 700;
+}
+
+.import-toast.success {
+  background: #eafaf0;
+  color: #107c41;
+  border: 1px solid #cfead8;
+}
+
+.import-toast.warning {
+  background: #fff7e8;
+  color: #b76e00;
+  border: 1px solid #f4dfae;
+}
+
+.import-toast.error {
+  background: #fff1f1;
+  color: #b42318;
+  border: 1px solid #f3c7c7;
+}
+
+@media (max-width: 768px) {
+  .import-progress-top {
+    flex-direction: column;
+  }
+
+  .import-progress-meta {
+    flex-direction: column;
+  }
+}
+
+.table-muted {
+  color: #667085;
+  font-size: 0.92rem;
+}
+
+.athlete-courses-box {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #e7eaf3;
+  border-radius: 18px;
+  background: #f8fafc;
+}
+
+.athlete-courses-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.athlete-courses-header p {
+  margin: 4px 0 0;
+  color: #667085;
+  font-size: 0.92rem;
+}
+
+.section-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #172033;
+}
+
+.athlete-courses-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.course-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1.2fr auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.course-remove-btn {
+  margin-bottom: 2px;
+}
+
+.course-summary-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+  .athlete-courses-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .athlete-courses-header .secondary-btn {
+    width: 100%;
+  }
+
+  .course-row {
+    grid-template-columns: 1fr;
+  }
+
+  .course-remove-btn {
+    width: 100%;
+    height: 44px;
+  }
+}
+
+.table-course-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

@@ -1,0 +1,30 @@
+:root {
+  --bg: #f3f5fb;
+  --surface: rgba(255, 255, 255, 0.9);
+  --surface-strong: #ffffff;
+  --text: #172033;
+  --muted: #6b7280;
+  --primary: #6d4aff;
+  --primary-2: #8b5cf6;
+  --border: rgba(23, 32, 51, 0.08);
+  --shadow: 0 12px 40px rgba(23, 32, 51, 0.08);
+  --radius: 22px;
+  font-family: Inter, system-ui, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  background: linear-gradient(180deg, #f7f8fc 0%, #eef2ff 100%);
+  color: var(--text);
+}
+
+body {
+  min-height: 100vh;
+}
