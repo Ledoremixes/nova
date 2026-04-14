@@ -31,6 +31,7 @@ export async function fetchEntries({
   toDate = '',
   toTime = '',
   onlyWithoutAccount = false,
+  onlyWithoutNature = false,
   accountCode = '',
   ivaFilter = '',
   page = 1,
@@ -60,6 +61,10 @@ export async function fetchEntries({
     query = query.or('account_code.is.null,account_code.eq.')
   } else if (accountCode) {
     query = query.eq('account_code', accountCode)
+  }
+
+  if (onlyWithoutNature) {
+    query = query.or('nature.is.null,nature.eq.')
   }
 
   if (ivaFilter === 'with_vat') {
@@ -172,6 +177,7 @@ export async function fetchEntriesFilteredTotals(filters) {
     p_to_date: filters.toDate || null,
     p_to_time: filters.toTime || null,
     p_only_without_account: filters.onlyWithoutAccount || false,
+    p_only_without_nature: filters.onlyWithoutNature || false,
     p_account_code: filters.accountCode || null,
     p_iva_filter: filters.ivaFilter || null,
   })
@@ -193,13 +199,20 @@ export async function bulkUpdateEntries({
     p_to_date: filters.toDate || null,
     p_to_time: filters.toTime || null,
     p_only_without_account: filters.onlyWithoutAccount || false,
+    p_only_without_nature: filters.onlyWithoutNature || false,
     p_account_code: filters.accountCode || null,
     p_iva_filter: filters.ivaFilter || null,
 
+    p_set_date: updates.date ?? null,
+    p_set_operation_datetime: updates.operation_datetime ?? null,
+    p_set_description: updates.description ?? null,
+    p_set_amount_in: updates.amount_in ?? null,
+    p_set_amount_out: updates.amount_out ?? null,
     p_set_account_code: updates.account_code ?? null,
     p_set_nature: updates.nature ?? null,
     p_set_method: updates.method ?? null,
     p_set_center: updates.center ?? null,
+    p_set_note: updates.note ?? null,
     p_set_vat_rate: updates.vat_rate ?? null,
     p_set_vat_amount: updates.vat_amount ?? null,
     p_set_vat_side: updates.vat_side ?? null,
@@ -230,7 +243,7 @@ export async function importSumupEntries({ userId, fileName, rows }) {
     if (error) {
       throw new Error(
         error.message ||
-          `Errore import SumUp nel blocco ${i + 1} di ${chunks.length}`
+        `Errore import SumUp nel blocco ${i + 1} di ${chunks.length}`
       )
     }
 

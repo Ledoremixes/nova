@@ -210,6 +210,7 @@ export default function EntriesPage() {
   const [toDateDraft, setToDateDraft] = useState('')
   const [toTimeDraft, setToTimeDraft] = useState('')
   const [onlyWithoutAccountDraft, setOnlyWithoutAccountDraft] = useState(false)
+  const [onlyWithoutNatureDraft, setOnlyWithoutNatureDraft] = useState(false)
   const [accountCodeDraft, setAccountCodeDraft] = useState('')
   const [ivaFilterDraft, setIvaFilterDraft] = useState('')
   const [applyScope, setApplyScope] = useState('single')
@@ -221,6 +222,7 @@ export default function EntriesPage() {
     toDate: '',
     toTime: '',
     onlyWithoutAccount: false,
+    onlyWithoutNature: false,
     accountCode: '',
     ivaFilter: '',
   })
@@ -250,7 +252,7 @@ export default function EntriesPage() {
     queryFn: fetchAccounts,
   })
 
-    const lastImportQuery = useQuery({
+  const lastImportQuery = useQuery({
     queryKey: ['last-sumup-import'],
     queryFn: fetchLastSumupImport,
   })
@@ -290,7 +292,7 @@ export default function EntriesPage() {
     },
   })
 
-    const importMutation = useMutation({
+  const importMutation = useMutation({
     mutationFn: importSumupEntries,
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['entries'] })
@@ -338,6 +340,7 @@ export default function EntriesPage() {
       toDate: toDateDraft,
       toTime: toTimeDraft,
       onlyWithoutAccount: onlyWithoutAccountDraft,
+      onlyWithoutNature: onlyWithoutNatureDraft,
       accountCode: onlyWithoutAccountDraft ? '' : accountCodeDraft,
       ivaFilter: ivaFilterDraft,
     })
@@ -350,6 +353,7 @@ export default function EntriesPage() {
     setToDateDraft('')
     setToTimeDraft('')
     setOnlyWithoutAccountDraft(false)
+    setOnlyWithoutNatureDraft(false)
     setAccountCodeDraft('')
     setIvaFilterDraft('')
     setPage(1)
@@ -361,6 +365,7 @@ export default function EntriesPage() {
       toDate: '',
       toTime: '',
       onlyWithoutAccount: false,
+      onlyWithoutNature: false,
       accountCode: '',
       ivaFilter: '',
     })
@@ -564,7 +569,22 @@ export default function EntriesPage() {
                 />
                 <span className="slider" />
               </label>
-              <span>Solo senza conto</span>
+              <span>Senza conto</span>
+            </div>
+          </div>
+
+          <div className="entries-field entries-toggle">
+            <label>Filtro</label>
+            <div className="entries-toggle__row entries-toggle__row--light">
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  checked={onlyWithoutNatureDraft}
+                  onChange={(e) => setOnlyWithoutNatureDraft(e.target.checked)}
+                />
+                <span className="slider" />
+              </label>
+              <span>Senza natura</span>
             </div>
           </div>
 
