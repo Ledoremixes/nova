@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as XLSX from 'xlsx'
 import { useAuth } from '../context/AuthProvider'
@@ -213,7 +213,9 @@ export default function EntriesPage() {
   const [onlyWithoutNatureDraft, setOnlyWithoutNatureDraft] = useState(false)
   const [accountCodeDraft, setAccountCodeDraft] = useState('')
   const [ivaFilterDraft, setIvaFilterDraft] = useState('')
+  const [methodDraft, setMethodDraft] = useState('')
   const [applyScope, setApplyScope] = useState('single')
+  const [modalSuccess, setModalSuccess] = useState(false)
 
   const [filters, setFilters] = useState({
     search: '',
@@ -225,6 +227,7 @@ export default function EntriesPage() {
     onlyWithoutNature: false,
     accountCode: '',
     ivaFilter: '',
+    method: '',
   })
 
   const [lastImportedFile, setLastImportedFile] = useState('')
@@ -234,6 +237,16 @@ export default function EntriesPage() {
   const [importPreview, setImportPreview] = useState([])
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
   const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    if (!modalSuccess) return
+
+    const timeoutId = window.setTimeout(() => {
+      closeModal(true)
+    }, 900)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [modalSuccess])
 
   const PAGE_SIZE = 1000
 
@@ -262,7 +275,7 @@ export default function EntriesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       queryClient.invalidateQueries({ queryKey: ['entries-totals'] })
-      closeModal()
+      setModalSuccess(true)
     },
   })
 
@@ -271,7 +284,7 @@ export default function EntriesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       queryClient.invalidateQueries({ queryKey: ['entries-totals'] })
-      closeModal()
+      setModalSuccess(true)
     },
   })
 
@@ -280,7 +293,7 @@ export default function EntriesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       queryClient.invalidateQueries({ queryKey: ['entries-totals'] })
-      closeModal()
+      setModalSuccess(true)
     },
   })
 
@@ -343,6 +356,7 @@ export default function EntriesPage() {
       onlyWithoutNature: onlyWithoutNatureDraft,
       accountCode: onlyWithoutAccountDraft ? '' : accountCodeDraft,
       ivaFilter: ivaFilterDraft,
+      method: methodDraft,
     })
   }
 
@@ -356,6 +370,7 @@ export default function EntriesPage() {
     setOnlyWithoutNatureDraft(false)
     setAccountCodeDraft('')
     setIvaFilterDraft('')
+    setMethodDraft('')
     setPage(1)
 
     setFilters({
@@ -368,6 +383,7 @@ export default function EntriesPage() {
       onlyWithoutNature: false,
       accountCode: '',
       ivaFilter: '',
+      method: '',
     })
   }
 
@@ -389,6 +405,7 @@ export default function EntriesPage() {
   function openCreateModal() {
     setEditing(null)
     setApplyScope('single')
+    setModalSuccess(false)
     setForm(emptyForm)
     setIsModalOpen(true)
   }
@@ -396,6 +413,7 @@ export default function EntriesPage() {
   function handleEdit(row) {
     setEditing(row)
     setApplyScope('single')
+    setModalSuccess(false)
     setForm({
       date: row.date || today,
       description: row.description || '',
@@ -418,9 +436,12 @@ export default function EntriesPage() {
     setIsModalOpen(true)
   }
 
-  function closeModal() {
+  function closeModal(force = false) {
+    if (modalSuccess && !force) return
+
     setEditing(null)
     setApplyScope('single')
+    setModalSuccess(false)
     setForm(emptyForm)
     setIsModalOpen(false)
   }
@@ -610,6 +631,18 @@ export default function EntriesPage() {
               <option value="">Tutte</option>
               <option value="with_vat">Solo con IVA</option>
               <option value="without_vat">Solo senza IVA</option>
+            </select>
+          </div>
+
+          <div className="entries-field">
+            <label>Metodo</label>
+            <select value={methodDraft} onChange={(e) => setMethodDraft(e.target.value)}>
+              <option value="">Tutti</option>
+              {METHOD_OPTIONS.map((method) => (
+                <option key={method} value={method}>
+                  {method}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -813,13 +846,41 @@ export default function EntriesPage() {
 
       {isModalOpen ? (
         <div className="modalOverlay" onClick={closeModal}>
-          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modalCard"
+            onClick={(e) => e.stopPropagation()}
+            style={
+              modalSuccess
+                ? {
+                  background: 'linear-gradient(180deg, rgba(13, 148, 88, 0.18) 0%, rgba(255, 255, 255, 0.98) 38%)',
+                  border: '1px solid rgba(34, 197, 94, 0.45)',
+                  boxShadow: '0 24px 60px rgba(22, 163, 74, 0.22)',
+                }
+                : undefined
+            }
+          >
             <div className="section-head">
               <div>
                 <h3>{editing ? 'Modifica movimento' : 'Nuovo movimento'}</h3>
                 <p>Inserisci il movimento in modo semplice e ordinato.</p>
               </div>
             </div>
+
+            {modalSuccess ? (
+              <div
+                style={{
+                  marginBottom: 18,
+                  padding: '14px 16px',
+                  borderRadius: 14,
+                  background: 'rgba(34, 197, 94, 0.14)',
+                  color: '#166534',
+                  border: '1px solid rgba(34, 197, 94, 0.28)',
+                  fontWeight: 700,
+                }}
+              >
+                ✓ Movimento registrato correttamente
+              </div>
+            ) : null}
 
             <form className="entry-modal-form" onSubmit={handleSubmit}>
               <div className="entry-modal-section">
@@ -1056,6 +1117,7 @@ export default function EntriesPage() {
                     type="button"
                     className="topbar__button"
                     onClick={clearAmounts}
+                    disabled={modalSuccess}
                   >
                     Svuota importi
                   </button>
@@ -1065,7 +1127,8 @@ export default function EntriesPage() {
                   <button
                     type="button"
                     className="topbar__button"
-                    onClick={closeModal}
+                    onClick={() => closeModal()}
+                    disabled={modalSuccess}
                   >
                     Annulla
                   </button>
@@ -1077,7 +1140,8 @@ export default function EntriesPage() {
                       !isAdmin ||
                       createMutation.isPending ||
                       updateMutation.isPending ||
-                      bulkUpdateMutation.isPending
+                      bulkUpdateMutation.isPending ||
+                      modalSuccess
                     }
                   >
                     {editing ? 'Salva modifiche' : 'Salva movimento'}
