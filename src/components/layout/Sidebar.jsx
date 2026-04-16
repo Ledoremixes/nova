@@ -49,11 +49,13 @@ const items = [
   { to: '/audit', label: 'Audit', icon: ShieldCheck },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onNavigate }) {
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isOpen ? 'sidebar--open' : ''}`}>
       <div className="sidebar__brand">
-        <div className="sidebar__logo">N</div>
+        <div className="sidebar__logo sidebar__logo--image">
+          <img src="/NOVA.png" alt="Logo Orchidea" className="sidebar__logo-img" />
+        </div>
         <div>
           <div className="sidebar__title">Nova</div>
           <div className="sidebar__subtitle">Gestionale ASD</div>
@@ -65,6 +67,7 @@ export default function Sidebar() {
           <NavLink
             key={to}
             to={to}
+            onClick={onNavigate}
             className={({ isActive }) =>
               isActive ? 'sidebar__link sidebar__link--active' : 'sidebar__link'
             }

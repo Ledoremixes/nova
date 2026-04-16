@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as XLSX from 'xlsx'
 import { useAuth } from '../context/AuthProvider'
@@ -51,6 +51,7 @@ const METHOD_OPTIONS = [
 
 const CENTER_OPTIONS = ['Bar', 'Sheet0']
 const VAT_RATE_OPTIONS = ['0.00', '10.00', '22.00', '22.01']
+const PAGE_SIZE = 1000
 
 const emptyForm = {
   date: today,
@@ -215,7 +216,6 @@ export default function EntriesPage() {
   const [ivaFilterDraft, setIvaFilterDraft] = useState('')
   const [methodDraft, setMethodDraft] = useState('')
   const [applyScope, setApplyScope] = useState('single')
-  const [modalSuccess, setModalSuccess] = useState(false)
 
   const [filters, setFilters] = useState({
     search: '',
@@ -234,21 +234,11 @@ export default function EntriesPage() {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [modalSuccess, setModalSuccess] = useState(false)
   const [importPreview, setImportPreview] = useState([])
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
   const [page, setPage] = useState(1)
-
-  useEffect(() => {
-    if (!modalSuccess) return
-
-    const timeoutId = window.setTimeout(() => {
-      closeModal(true)
-    }, 900)
-
-    return () => window.clearTimeout(timeoutId)
-  }, [modalSuccess])
-
-  const PAGE_SIZE = 1000
+  const [saveAlert, setSaveAlert] = useState(null)
 
   const entriesQuery = useQuery({
     queryKey: ['entries', filters, page],
@@ -270,31 +260,41 @@ export default function EntriesPage() {
     queryFn: fetchLastSumupImport,
   })
 
+  function handleSaveSuccess() {
+    const message = editing ? 'Movimento modificato correttamente' : 'Movimento creato correttamente'
+
+    queryClient.invalidateQueries({ queryKey: ['entries'] })
+    queryClient.invalidateQueries({ queryKey: ['entries-totals'] })
+    setModalSuccess(true)
+    setSaveAlert({ type: 'success', message })
+
+    window.clearTimeout(window.__entriesSaveAlertTimeout)
+    window.__entriesSaveAlertTimeout = window.setTimeout(() => {
+      setSaveAlert(null)
+    }, 3500)
+
+    window.setTimeout(() => {
+      setEditing(null)
+      setApplyScope('single')
+      setModalSuccess(false)
+      setForm(emptyForm)
+      setIsModalOpen(false)
+    }, 900)
+  }
+
   const createMutation = useMutation({
     mutationFn: createEntry,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['entries'] })
-      queryClient.invalidateQueries({ queryKey: ['entries-totals'] })
-      setModalSuccess(true)
-    },
+    onSuccess: handleSaveSuccess,
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }) => updateEntry(id, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['entries'] })
-      queryClient.invalidateQueries({ queryKey: ['entries-totals'] })
-      setModalSuccess(true)
-    },
+    onSuccess: handleSaveSuccess,
   })
 
   const bulkUpdateMutation = useMutation({
     mutationFn: bulkUpdateEntries,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['entries'] })
-      queryClient.invalidateQueries({ queryKey: ['entries-totals'] })
-      setModalSuccess(true)
-    },
+    onSuccess: handleSaveSuccess,
   })
 
   const deleteMutation = useMutation({
@@ -341,7 +341,7 @@ export default function EntriesPage() {
     saldo: 0,
   }
 
-  const entries = entriesData.rows
+  const entries = entriesData.rows || []
   const accounts = accountsQuery.data || []
 
   function applyFilters() {
@@ -436,9 +436,8 @@ export default function EntriesPage() {
     setIsModalOpen(true)
   }
 
-  function closeModal(force = false) {
-    if (modalSuccess && !force) return
-
+  function closeModal() {
+    if (modalSuccess) return
     setEditing(null)
     setApplyScope('single')
     setModalSuccess(false)
@@ -447,7 +446,7 @@ export default function EntriesPage() {
   }
 
   function handleDelete(row) {
-    const ok = window.confirm(`Eliminare il movimento \"${row.description || 'senza descrizione'}\"?`)
+    const ok = window.confirm(`Eliminare il movimento "${row.description || 'senza descrizione'}"?`)
     if (!ok) return
     deleteMutation.mutate(row.id)
   }
@@ -487,6 +486,36 @@ export default function EntriesPage() {
     })
   }
 
+  function buildChangedPayload(fullPayload) {
+    if (!editing) return fullPayload
+
+    const original = {
+      date: editing.date || null,
+      operation_datetime: editing.date ? new Date(`${editing.date}T00:00:00`).toISOString() : null,
+      description: editing.description || null,
+      amount_in: normalizeNumberInput(editing.amount_in),
+      amount_out: normalizeNumberInput(editing.amount_out),
+      account_code: editing.account_code || null,
+      method: editing.method || null,
+      center: editing.center || null,
+      note: editing.note || null,
+      source: editing.source || 'Manuale',
+      nature: editing.nature || null,
+      vat_rate: normalizeNumberInput(editing.vat_rate),
+      vat_amount: normalizeNumberInput(editing.vat_amount),
+      vat_side: editing.vat_side || null,
+    }
+
+    const changed = {}
+    Object.entries(fullPayload).forEach(([key, value]) => {
+      if (key === 'user_id') return
+      if (original[key] !== value) {
+        changed[key] = value
+      }
+    })
+    return changed
+  }
+
   function handleSubmit(e) {
     e.preventDefault()
 
@@ -523,17 +552,46 @@ export default function EntriesPage() {
       return
     }
 
-    if (applyScope === 'page') {
-      const pageIds = entries.map((row) => row.id)
-      bulkUpdateMutation.mutate({ ids: pageIds, filters, updates: payload })
+    const changedPayload = buildChangedPayload(payload)
+
+    if (Object.keys(changedPayload).length === 0) {
+      alert('Non hai modificato nessun campo.')
       return
     }
 
-    bulkUpdateMutation.mutate({ ids: null, filters, updates: payload })
+    if (applyScope === 'page') {
+      const pageIds = entries.map((row) => row.id)
+      bulkUpdateMutation.mutate({ ids: pageIds, filters, updates: changedPayload })
+      return
+    }
+
+    bulkUpdateMutation.mutate({ ids: null, filters, updates: changedPayload })
   }
 
   return (
     <section className="page">
+      {saveAlert ? (
+        <div
+          style={{
+            position: 'fixed',
+            top: 20,
+            right: 20,
+            zIndex: 9999,
+            minWidth: 320,
+            maxWidth: 'calc(100vw - 32px)',
+            padding: '14px 16px',
+            borderRadius: 14,
+            background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.96), rgba(22, 163, 74, 0.96))',
+            color: '#ffffff',
+            boxShadow: '0 18px 40px rgba(22, 163, 74, 0.24)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            fontWeight: 700,
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          ✓ {saveAlert.message}
+        </div>
+      ) : null}
       <div className="page-card">
         <div className="section-head">
           <div>
@@ -543,7 +601,7 @@ export default function EntriesPage() {
 
           {isAdmin ? (
             <button type="button" className="topbar__button topbar__button--primary" onClick={openCreateModal}>
-              Nuovo movimento
+              Nuovo movimento +
             </button>
           ) : null}
         </div>
@@ -638,9 +696,9 @@ export default function EntriesPage() {
             <label>Metodo</label>
             <select value={methodDraft} onChange={(e) => setMethodDraft(e.target.value)}>
               <option value="">Tutti</option>
-              {METHOD_OPTIONS.map((method) => (
-                <option key={method} value={method}>
-                  {method}
+              {METHOD_OPTIONS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
                 </option>
               ))}
             </select>
@@ -660,20 +718,15 @@ export default function EntriesPage() {
           <strong>Ultimo import Excel:</strong>{' '}
           {lastImportQuery.data
             ? `${lastImportQuery.data.file_name || 'file senza nome'} · ${new Date(
-              lastImportQuery.data.created_at
-            ).toLocaleString('it-IT')} · importate ${lastImportQuery.data.imported_rows} · duplicate saltate ${lastImportQuery.data.skipped_rows}`
+                lastImportQuery.data.created_at
+              ).toLocaleString('it-IT')} · importate ${lastImportQuery.data.imported_rows} · duplicate saltate ${lastImportQuery.data.skipped_rows}`
             : '—'}
         </div>
 
         <div className="entries-import-box entries-import-box--light">
           <label>Importa da SumUp (.xlsx):</label>
           <div className="entries-import-box__row entries-import-box__row--light">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFilePick}
-            />
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFilePick} />
           </div>
         </div>
       </div>
@@ -803,12 +856,7 @@ export default function EntriesPage() {
       </div>
 
       <div className="entries-pagination-bottom">
-        <button
-          type="button"
-          className="topbar__button"
-          onClick={() => setPage(1)}
-          disabled={page === 1}
-        >
+        <button type="button" className="topbar__button" onClick={() => setPage(1)} disabled={page === 1}>
           Prima
         </button>
 
@@ -846,19 +894,7 @@ export default function EntriesPage() {
 
       {isModalOpen ? (
         <div className="modalOverlay" onClick={closeModal}>
-          <div
-            className="modalCard"
-            onClick={(e) => e.stopPropagation()}
-            style={
-              modalSuccess
-                ? {
-                  background: 'linear-gradient(180deg, rgba(13, 148, 88, 0.18) 0%, rgba(255, 255, 255, 0.98) 38%)',
-                  border: '1px solid rgba(34, 197, 94, 0.45)',
-                  boxShadow: '0 24px 60px rgba(22, 163, 74, 0.22)',
-                }
-                : undefined
-            }
-          >
+          <div className={`modalCard ${modalSuccess ? 'modalCard--success' : ''}`} onClick={(e) => e.stopPropagation()}>
             <div className="section-head">
               <div>
                 <h3>{editing ? 'Modifica movimento' : 'Nuovo movimento'}</h3>
@@ -866,23 +902,23 @@ export default function EntriesPage() {
               </div>
             </div>
 
-            {modalSuccess ? (
-              <div
-                style={{
-                  marginBottom: 18,
-                  padding: '14px 16px',
-                  borderRadius: 14,
-                  background: 'rgba(34, 197, 94, 0.14)',
-                  color: '#166534',
-                  border: '1px solid rgba(34, 197, 94, 0.28)',
-                  fontWeight: 700,
-                }}
-              >
-                ✓ Movimento registrato correttamente
-              </div>
-            ) : null}
-
             <form className="entry-modal-form" onSubmit={handleSubmit}>
+              {modalSuccess ? (
+                <div
+                  style={{
+                    marginBottom: 16,
+                    padding: '12px 14px',
+                    borderRadius: 12,
+                    background: 'rgba(34, 197, 94, 0.16)',
+                    border: '1px solid rgba(34, 197, 94, 0.35)',
+                    color: '#166534',
+                    fontWeight: 700,
+                  }}
+                >
+                  ✓ {editing ? 'Movimento modificato correttamente' : 'Movimento creato correttamente'}
+                </div>
+              ) : null}
+
               <div className="entry-modal-section">
                 <div className="entry-modal-section__header">
                   <h4>Dati principali</h4>
@@ -917,22 +953,12 @@ export default function EntriesPage() {
                 <div className="entry-modal-grid entry-modal-grid--3">
                   <div className="entry-modal-field">
                     <label>Entrata</label>
-                    <input
-                      name="amount_in"
-                      placeholder="0,00"
-                      value={form.amount_in}
-                      onChange={onChange}
-                    />
+                    <input name="amount_in" placeholder="0,00" value={form.amount_in} onChange={onChange} />
                   </div>
 
                   <div className="entry-modal-field">
                     <label>Uscita</label>
-                    <input
-                      name="amount_out"
-                      placeholder="0,00"
-                      value={form.amount_out}
-                      onChange={onChange}
-                    />
+                    <input name="amount_out" placeholder="0,00" value={form.amount_out} onChange={onChange} />
                   </div>
 
                   <div className="entry-modal-field entry-modal-field--full">
@@ -1002,13 +1028,7 @@ export default function EntriesPage() {
 
                 <div className="entry-vat-cards">
                   <label className={form.vat_mode === 'none' ? 'entry-vat-card entry-vat-card--active' : 'entry-vat-card'}>
-                    <input
-                      type="radio"
-                      name="vat_mode"
-                      value="none"
-                      checked={form.vat_mode === 'none'}
-                      onChange={onChange}
-                    />
+                    <input type="radio" name="vat_mode" value="none" checked={form.vat_mode === 'none'} onChange={onChange} />
                     <div>
                       <strong>Nessuna</strong>
                       <span>Il movimento non ha gestione IVA</span>
@@ -1016,13 +1036,7 @@ export default function EntriesPage() {
                   </label>
 
                   <label className={form.vat_mode === 'debit' ? 'entry-vat-card entry-vat-card--active' : 'entry-vat-card'}>
-                    <input
-                      type="radio"
-                      name="vat_mode"
-                      value="debit"
-                      checked={form.vat_mode === 'debit'}
-                      onChange={onChange}
-                    />
+                    <input type="radio" name="vat_mode" value="debit" checked={form.vat_mode === 'debit'} onChange={onChange} />
                     <div>
                       <strong>A debito</strong>
                       <span>Vendite / IVA da versare</span>
@@ -1030,13 +1044,7 @@ export default function EntriesPage() {
                   </label>
 
                   <label className={form.vat_mode === 'credit' ? 'entry-vat-card entry-vat-card--active' : 'entry-vat-card'}>
-                    <input
-                      type="radio"
-                      name="vat_mode"
-                      value="credit"
-                      checked={form.vat_mode === 'credit'}
-                      onChange={onChange}
-                    />
+                    <input type="radio" name="vat_mode" value="credit" checked={form.vat_mode === 'credit'} onChange={onChange} />
                     <div>
                       <strong>A credito</strong>
                       <span>Acquisti / IVA detraibile</span>
@@ -1059,12 +1067,7 @@ export default function EntriesPage() {
 
                   <div className="entry-modal-field">
                     <label>Importo IVA</label>
-                    <input
-                      name="vat_amount"
-                      placeholder="0,00"
-                      value={form.vat_amount}
-                      onChange={onChange}
-                    />
+                    <input name="vat_amount" placeholder="0,00" value={form.vat_amount} onChange={onChange} />
                   </div>
                 </div>
               </div>
@@ -1077,12 +1080,7 @@ export default function EntriesPage() {
 
                 <div className="entry-modal-grid entry-modal-grid--1">
                   <div className="entry-modal-field entry-modal-field--full">
-                    <input
-                      name="note"
-                      placeholder="Inserisci eventuali note..."
-                      value={form.note}
-                      onChange={onChange}
-                    />
+                    <input name="note" placeholder="Inserisci eventuali note..." value={form.note} onChange={onChange} />
                   </div>
                 </div>
               </div>
@@ -1097,11 +1095,7 @@ export default function EntriesPage() {
                   <div className="entry-modal-grid entry-modal-grid--1">
                     <div className="entry-modal-field">
                       <label>Ambito modifica</label>
-                      <select
-                        name="apply_scope"
-                        value={applyScope}
-                        onChange={(e) => setApplyScope(e.target.value)}
-                      >
+                      <select name="apply_scope" value={applyScope} onChange={(e) => setApplyScope(e.target.value)}>
                         <option value="single">Solo questa voce</option>
                         <option value="page">Tutte le voci della pagina corrente</option>
                         <option value="search">Tutti i risultati della ricerca</option>
@@ -1113,23 +1107,13 @@ export default function EntriesPage() {
 
               <div className="entry-modal-actions">
                 <div className="entry-modal-actions__left">
-                  <button
-                    type="button"
-                    className="topbar__button"
-                    onClick={clearAmounts}
-                    disabled={modalSuccess}
-                  >
+                  <button type="button" className="topbar__button" onClick={clearAmounts}>
                     Svuota importi
                   </button>
                 </div>
 
                 <div className="entry-modal-actions__right">
-                  <button
-                    type="button"
-                    className="topbar__button"
-                    onClick={() => closeModal()}
-                    disabled={modalSuccess}
-                  >
+                  <button type="button" className="topbar__button" onClick={closeModal}>
                     Annulla
                   </button>
 
@@ -1140,8 +1124,7 @@ export default function EntriesPage() {
                       !isAdmin ||
                       createMutation.isPending ||
                       updateMutation.isPending ||
-                      bulkUpdateMutation.isPending ||
-                      modalSuccess
+                      bulkUpdateMutation.isPending
                     }
                   >
                     {editing ? 'Salva modifiche' : 'Salva movimento'}
@@ -1163,13 +1146,13 @@ export default function EntriesPage() {
               </div>
             </div>
 
-            <div className="tableWrap">
+            <div className="tableWrap" style={{ maxHeight: '50vh' }}>
               <table className="dataTable">
                 <thead>
                   <tr>
                     <th>Data</th>
                     <th>Descrizione</th>
-                    <th>Entrata</th>
+                    <th>Importo</th>
                     <th>Metodo</th>
                     <th>Centro</th>
                     <th>Nota</th>
@@ -1193,9 +1176,7 @@ export default function EntriesPage() {
             </div>
 
             {importPreview.length > 50 ? (
-              <p style={{ marginTop: 12 }}>
-                Anteprima limitata alle prime 50 righe su {importPreview.length}.
-              </p>
+              <p style={{ marginTop: 12 }}>Anteprima limitata alle prime 50 righe su {importPreview.length}.</p>
             ) : null}
 
             <div className="entry-modal-actions" style={{ marginTop: 16 }}>

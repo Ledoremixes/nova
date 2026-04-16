@@ -682,3 +682,85 @@
     grid-template-columns: 1fr;
   }
 }
+/* Mobile optimization */
+@media (max-width: 900px) {
+  .contabilita-account-list--grid {
+    grid-template-columns: 1fr;
+  }
+
+  .contabilita-card__header h2 {
+    font-size: 20px;
+  }
+
+  .contabilita-link-btn {
+    width: 100%;
+  }
+
+  .contabilita-table {
+    min-width: 680px;
+  }
+}
+
+@media (max-width: 640px) {
+  .contabilita-page {
+    gap: 16px;
+  }
+
+  .contabilita-page__header h1 {
+    font-size: 24px;
+  }
+
+  .contabilita-card,
+  .contabilita-stat,
+  .contabilita-filterbar {
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .contabilita-stat {
+    gap: 12px;
+  }
+
+  .contabilita-stat__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+  }
+
+  .contabilita-stat__value,
+  .contabilita-account-list--grid .contabilita-account-row strong {
+    font-size: 22px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .contabilita-card__header h2 {
+    font-size: 18px;
+  }
+
+  .contabilita-card__header p,
+  .contabilita-empty__description,
+  .contabilita-action__description {
+    font-size: 13px;
+  }
+
+  .contabilita-actions-grid {
+    gap: 12px;
+  }
+
+  .contabilita-action {
+    align-items: flex-start;
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .contabilita-table {
+    min-width: 620px;
+  }
+
+  .contabilita-table th,
+  .contabilita-table td {
+    padding: 12px 10px;
+    font-size: 13px;
+  }
+}

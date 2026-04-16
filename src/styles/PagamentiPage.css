@@ -579,3 +579,77 @@
     grid-template-columns: 1fr;
   }
 }
+/* Mobile optimization */
+@media (max-width: 900px) {
+  .payments-header > * {
+    width: 100%;
+  }
+
+  .payments-tabs {
+    width: 100%;
+  }
+
+  .payments-table {
+    min-width: 860px;
+  }
+}
+
+@media (max-width: 640px) {
+  .payments-page {
+    gap: 16px;
+  }
+
+  .payments-header h1 {
+    font-size: 1.55rem;
+    line-height: 1.1;
+  }
+
+  .payments-summary-card,
+  .payments-filters-card,
+  .payments-modal {
+    border-radius: 18px;
+  }
+
+  .payments-summary-card,
+  .payments-filters-card,
+  .payments-modal {
+    padding: 14px;
+  }
+
+  .payments-summary-card {
+    align-items: flex-start;
+  }
+
+  .payments-summary-card strong {
+    font-size: 1.06rem;
+  }
+
+  .payments-primary-btn,
+  .payments-secondary-btn,
+  .payments-close-btn {
+    min-height: 44px;
+  }
+
+  .payments-modal-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .payments-form-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .payments-form-actions > * {
+    width: 100%;
+  }
+
+  .payments-table {
+    min-width: 760px;
+  }
+
+  .payments-table thead th,
+  .payments-table tbody td {
+    padding: 13px 12px;
+  }
+}

@@ -28,3 +28,31 @@ body,
 body {
   min-height: 100vh;
 }
+/* Mobile optimization */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --radius: 18px;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+}

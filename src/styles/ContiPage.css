@@ -322,3 +322,67 @@
     width: 100%;
   }
 }
+/* Mobile optimization */
+@media (max-width: 900px) {
+  .conti-page {
+    gap: 16px;
+  }
+
+  .conti-hero,
+  .conti-toolbar,
+  .lookup-block,
+  .conti-modal {
+    padding: 18px;
+  }
+
+  .lookup-table {
+    min-width: 720px;
+  }
+}
+
+@media (max-width: 640px) {
+  .conti-hero {
+    padding: 16px;
+  }
+
+  .conti-hero h1 {
+    font-size: 1.55rem;
+  }
+
+  .section-tab,
+  .primary-btn,
+  .secondary-btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .search-field {
+    min-height: 48px;
+    border-radius: 14px;
+  }
+
+  .search-field input {
+    height: 48px;
+    font-size: 0.94rem;
+  }
+
+  .lookup-block,
+  .conti-modal {
+    padding: 14px;
+  }
+
+  .modal-backdrop {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .modal-card {
+    border-radius: 20px 20px 0 0;
+    max-height: 94vh;
+  }
+
+  .lookup-table {
+    min-width: 640px;
+  }
+}

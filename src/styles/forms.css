@@ -98,3 +98,37 @@ button {
   min-width: 180px;
   flex: 1;
 }
+/* Mobile optimization */
+@media (max-width: 640px) {
+  .toolbar {
+    gap: 10px;
+  }
+
+  .searchInput,
+  .filterSelect,
+  .formGrid input,
+  .formGrid textarea,
+  .modalActions button {
+    min-height: 44px;
+  }
+
+  .modalOverlay {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .modalCard {
+    padding: 16px;
+    border-radius: 20px 20px 0 0;
+    max-height: 94vh;
+  }
+
+  .modalActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .modalActions > * {
+    width: 100%;
+  }
+}

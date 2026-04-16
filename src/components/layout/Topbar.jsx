@@ -1,7 +1,8 @@
+import { Menu } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthProvider'
 
-export default function Topbar() {
+export default function Topbar({ onMenuClick }) {
   const navigate = useNavigate()
   const { profile, user, signOut } = useAuth()
 
@@ -16,11 +17,22 @@ export default function Topbar() {
 
   return (
     <header className="topbar">
-      <div>
-        <h1 className="topbar__title">Club Orchidea ASD</h1>
-        <p className="topbar__subtitle">
-          {profile?.full_name || user?.email || 'Utente autenticato'}
-        </p>
+      <div className="topbar__left">
+        <button
+          type="button"
+          className="topbar__menuBtn"
+          onClick={onMenuClick}
+          aria-label="Apri menu"
+        >
+          <Menu size={20} />
+        </button>
+
+        <div>
+          <h1 className="topbar__title">Club Orchidea ASD</h1>
+          <p className="topbar__subtitle">
+            {profile?.full_name || user?.email || 'Utente autenticato'}
+          </p>
+        </div>
       </div>
 
       <div className="topbar__actions">

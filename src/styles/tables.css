@@ -43,3 +43,40 @@
   border-color: rgba(185, 28, 28, 0.18);
   background: #fff5f5;
 }
+/* Mobile optimization */
+@media (max-width: 900px) {
+  .tableWrap {
+    margin-inline: -4px;
+    padding-inline: 4px;
+  }
+
+  .dataTable {
+    min-width: 760px;
+  }
+
+  .dataTable th,
+  .dataTable td {
+    padding: 12px 10px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .dataTable {
+    min-width: 680px;
+  }
+
+  .dataTable th,
+  .dataTable td {
+    padding: 11px 9px;
+    font-size: 13px;
+  }
+
+  .rowActions {
+    flex-wrap: wrap;
+  }
+
+  .actionBtn {
+    min-height: 36px;
+  }
+}

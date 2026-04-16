@@ -619,3 +619,84 @@
   color: #18243d;
   font-size: 15px;
 }
+/* Mobile optimization */
+@media (max-width: 900px) {
+  .gruppi-page {
+    gap: 18px;
+  }
+
+  .gruppi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gruppi-modal.large,
+  .gruppi-modal {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .gruppi-header h1 {
+    font-size: 24px;
+  }
+
+  .gruppi-add-btn,
+  .gruppi-form-actions button,
+  .add-athlete-btn,
+  .remove-athlete-btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .gruppi-search,
+  .gruppi-search.small,
+  .athlete-select {
+    min-height: 48px;
+    border-radius: 14px;
+  }
+
+  .gruppi-summary {
+    width: 100%;
+  }
+
+  .gruppi-summary-card {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+  }
+
+  .gruppo-card {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .gruppo-title-wrap {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .gruppo-title-wrap h3 {
+    font-size: 18px;
+  }
+
+  .gruppo-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .gruppi-modal-overlay {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .gruppi-modal {
+    max-height: 94vh;
+    border-radius: 20px 20px 0 0;
+    padding: 16px;
+  }
+
+  .group-athletes-box,
+  .athlete-row {
+    padding: 14px;
+    border-radius: 16px;
+  }
+}

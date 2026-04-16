@@ -803,3 +803,71 @@
     margin-right: 10px;
   }
 }
+/* Mobile optimization */
+@media (max-width: 900px) {
+  .login-page {
+    padding: 16px;
+  }
+
+  .login-card,
+  .dashboard-hero {
+    padding: 22px 18px;
+    border-radius: 22px;
+  }
+
+  .login-card h1,
+  .dashboard-hero__title {
+    font-size: clamp(24px, 7vw, 32px);
+  }
+
+  .section-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .entries-filters-grid,
+  .entries-form-grid {
+    gap: 10px;
+  }
+
+  .entry-modal-section {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .entry-modal-actions__left,
+  .entry-modal-actions__right {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 640px) {
+  .login-card,
+  .dashboard-hero {
+    padding: 18px 16px;
+    border-radius: 20px;
+  }
+
+  .entries-form-actions,
+  .entry-modal-actions__left,
+  .entry-modal-actions__right {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .entries-form-actions > *,
+  .entry-modal-actions__left > *,
+  .entry-modal-actions__right > * {
+    width: 100%;
+  }
+
+  .modalCard {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .modalCard .dataTable {
+    min-width: 760px;
+  }
+}

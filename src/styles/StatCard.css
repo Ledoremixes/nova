@@ -73,3 +73,28 @@
     font-size: 0.9rem;
   }
 }
+/* Mobile optimization */
+@media (max-width: 640px) {
+  .stat-card {
+    min-height: 118px;
+    gap: 10px;
+  }
+
+  .stat-card__top {
+    align-items: flex-start;
+  }
+
+  .stat-card__title {
+    font-size: 0.9rem;
+  }
+
+  .stat-card__value {
+    font-size: clamp(1.45rem, 7vw, 2rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+
+  .stat-card__hint {
+    font-size: 0.84rem;
+  }
+}
