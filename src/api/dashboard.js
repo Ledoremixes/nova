@@ -62,22 +62,19 @@ export async function fetchBarTopItems(userId) {
   }))
 }
 
-export async function fetchDashboardRegistry(userId) {
+export async function fetchDashboardRegistry() {
   const [tesseratiCountRes, teachersCountRes, ultimiTesseratiRes] = await Promise.all([
     supabase
       .from('tesserati')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId),
+      .select('id', { count: 'exact', head: true }),
 
     supabase
       .from('teachers')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId),
+      .select('id', { count: 'exact', head: true }),
 
     supabase
       .from('tesserati')
       .select('id, nome, cognome, tipo, anno, created_at')
-      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(8),
   ])
