@@ -27,11 +27,19 @@ export default function Topbar({ onMenuClick }) {
           <Menu size={20} />
         </button>
 
-        <div>
-          <h1 className="topbar__title">Club Orchidea ASD</h1>
-          <p className="topbar__subtitle">
-            {profile?.full_name || user?.email || 'Utente autenticato'}
-          </p>
+        <div className="topbar__brand">
+          <img
+            src="/orchidea.png"
+            alt="Logo Orchidea"
+            className="topbar__logo"
+          />
+
+          <div className="topbar__brandText">
+            <h1 className="topbar__title">Club Orchidea ASD</h1>
+            <p className="topbar__subtitle">
+              {profile?.full_name || user?.email || 'Utente autenticato'}
+            </p>
+          </div>
         </div>
       </div>
 

@@ -159,3 +159,46 @@
     justify-content: flex-end;
   }
 }
+
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.topbar__logo {
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 0px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+  flex-shrink: 0;
+}
+
+.topbar__brandText {
+  min-width: 0;
+}
+
+@media (max-width: 980px) {
+  .topbar__logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar__brand {
+    gap: 10px;
+  }
+
+  .topbar__title {
+    font-size: 1.25rem;
+    line-height: 1.1;
+  }
+
+  .topbar__subtitle {
+    font-size: 0.92rem;
+  }
+}
