@@ -134,7 +134,7 @@ export default function TesseratiPage() {
         <div className="section-head">
           <div>
             <h2>Tesserati</h2>
-            <p>Archivio condiviso tesserati collegato a Supabase.</p>
+            <p>Archivio tesserati completo</p>
           </div>
 
           {isAdmin ? (

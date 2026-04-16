@@ -93,7 +93,7 @@ export default function DashboardPage() {
           <div className="dashboard-hero__eyebrow">Panoramica</div>
           <h2 className="dashboard-hero__title">Benvenuto nel nuovo gestionale Nova</h2>
           <p className="dashboard-hero__text">
-            Dashboard collegata direttamente alle funzioni Supabase del tuo database.
+            Dashboard completa con statistiche, andamento mensile, top articoli bar e ultimi tesserati.
           </p>
         </div>
       </div>
