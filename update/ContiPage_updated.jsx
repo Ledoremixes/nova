@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   CirclePlus,
@@ -102,7 +102,7 @@ const emptyForm = {
 }
 
 function prettifyKey(value) {
-  return String(value || '').replaceAll('_', ' ')
+  return value.replaceAll('_', ' ')
 }
 
 function isAccountingSection(sectionKey) {
@@ -123,33 +123,11 @@ export default function ContiPage() {
     queryFn: fetchLookupOptions,
   })
 
-  useEffect(() => {
-    if (!modalOpen) return
-
-    const originalOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-
-    function onKeyDown(event) {
-      if (event.key === 'Escape') {
-        handleCloseModal()
-      }
-    }
-
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.body.style.overflow = originalOverflow
-      window.removeEventListener('keydown', onKeyDown)
-    }
-  }, [modalOpen])
-
   const createMutation = useMutation({
     mutationFn: createLookupOption,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lookup-options'] })
       handleCloseModal()
-    },
-    onError: (error) => {
-      alert(error?.message || 'Errore durante la creazione della voce.')
     },
   })
 
@@ -159,18 +137,12 @@ export default function ContiPage() {
       queryClient.invalidateQueries({ queryKey: ['lookup-options'] })
       handleCloseModal()
     },
-    onError: (error) => {
-      alert(error?.message || 'Errore durante il salvataggio della voce.')
-    },
   })
 
   const deleteMutation = useMutation({
     mutationFn: deleteLookupOption,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lookup-options'] })
-    },
-    onError: (error) => {
-      alert(error?.message || 'Errore durante l’eliminazione della voce.')
     },
   })
 
@@ -180,7 +152,8 @@ export default function ContiPage() {
     const term = search.trim().toLowerCase()
 
     return allItems.filter((item) => {
-      if (item.section_key !== selectedSection) return false
+      const inSection = item.section_key === selectedSection
+      if (!inSection) return false
       if (!term) return true
 
       return [
@@ -221,13 +194,11 @@ export default function ContiPage() {
   }
 
   function handleOpenEdit(item) {
-    if (!item) return
-
     setEditingItem(item)
     setForm({
-      id: item.id ?? null,
-      section_key: item.section_key ?? '',
-      list_key: item.list_key ?? '',
+      id: item.id,
+      section_key: item.section_key,
+      list_key: item.list_key,
       label: item.label ?? '',
       value: item.value ?? '',
       sort_order: item.sort_order ?? 0,
@@ -275,7 +246,7 @@ export default function ContiPage() {
       report_row_label: form.report_row_label?.trim() || null,
     }
 
-    if (editingItem?.id) {
+    if (editingItem) {
       updateMutation.mutate({ id: editingItem.id, payload })
       return
     }
@@ -288,10 +259,6 @@ export default function ContiPage() {
     if (!ok) return
     deleteMutation.mutate(item.id)
   }
-
-  const currentSectionMeta = LOOKUP_SECTIONS.find(
-    (section) => section.sectionKey === selectedSection
-  )
 
   return (
     <div className="conti-page">
@@ -309,7 +276,6 @@ export default function ContiPage() {
         {LOOKUP_SECTIONS.map((section) => (
           <button
             key={section.sectionKey}
-            type="button"
             className={`section-tab ${selectedSection === section.sectionKey ? 'active' : ''}`}
             onClick={() => setSelectedSection(section.sectionKey)}
           >
@@ -331,120 +297,94 @@ export default function ContiPage() {
         </div>
       </section>
 
-      {lookupsQuery.isLoading ? (
-        <section className="card-surface lookup-block">
-          <div className="empty-state">Caricamento voci...</div>
-        </section>
-      ) : null}
-
-      {lookupsQuery.isError ? (
-        <section className="card-surface lookup-block">
-          <div className="empty-state">
-            Errore caricamento voci: {lookupsQuery.error?.message || 'errore sconosciuto'}
-          </div>
-        </section>
-      ) : null}
-
-      {!lookupsQuery.isLoading && !lookupsQuery.isError && currentSectionMeta ? (
-        groupedLists.map((list) => (
-          <section key={list.listKey} className="card-surface lookup-block">
-            <div className="lookup-block-header">
-              <div>
-                <h2>{list.label}</h2>
-                <p>{prettifyKey(list.listKey)}</p>
-              </div>
-
-              <button
-                type="button"
-                className="primary-btn"
-                onClick={() => handleOpenCreate(selectedSection, list.listKey)}
-              >
-                <CirclePlus size={18} />
-                Nuova voce
-              </button>
+      {groupedLists.map((list) => (
+        <section key={list.listKey} className="card-surface lookup-block">
+          <div className="lookup-block-header">
+            <div>
+              <h2>{list.label}</h2>
+              <p>{prettifyKey(list.listKey)}</p>
             </div>
 
-            {list.items.length === 0 ? (
-              <div className="empty-state">Nessuna voce configurata.</div>
-            ) : (
-              <div className="table-wrap">
-                <table className="lookup-table">
-                  <thead>
-                    <tr>
-                      <th>Etichetta</th>
-                      <th>Valore</th>
-                      <th>Ordine</th>
+            <button
+              className="primary-btn"
+              onClick={() => handleOpenCreate(selectedSection, list.listKey)}
+            >
+              <CirclePlus size={18} />
+              Nuova voce
+            </button>
+          </div>
+
+          {list.items.length === 0 ? (
+            <div className="empty-state">Nessuna voce configurata.</div>
+          ) : (
+            <div className="table-wrap">
+              <table className="lookup-table">
+                <thead>
+                  <tr>
+                    <th>Etichetta</th>
+                    <th>Valore</th>
+                    <th>Ordine</th>
+                    {isAccountingSection(selectedSection) ? (
+                      <>
+                        <th>Area</th>
+                        <th>Bucket rendiconto</th>
+                        <th>Riga</th>
+                        <th>Descrizione riga</th>
+                      </>
+                    ) : null}
+                    <th>Stato</th>
+                    <th>Azioni</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.items.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.label}</td>
+                      <td>{item.value || '—'}</td>
+                      <td>{item.sort_order}</td>
                       {isAccountingSection(selectedSection) ? (
                         <>
-                          <th>Area</th>
-                          <th>Bucket rendiconto</th>
-                          <th>Riga</th>
-                          <th>Descrizione riga</th>
+                          <td>{item.report_area || '—'}</td>
+                          <td>{item.report_bucket || '—'}</td>
+                          <td>{item.report_row_code || '—'}</td>
+                          <td>{item.report_row_label || '—'}</td>
                         </>
                       ) : null}
-                      <th>Stato</th>
-                      <th>Azioni</th>
+                      <td>
+                        <span className={`status-badge ${item.is_active ? 'success' : 'neutral'}`}>
+                          {item.is_active ? 'Attiva' : 'Disattiva'}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="row-actions">
+                          <button
+                            className="icon-btn"
+                            onClick={() => handleOpenEdit(item)}
+                            title="Modifica"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                          <button
+                            className="icon-btn danger"
+                            onClick={() => handleDelete(item)}
+                            title="Elimina"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {list.items.map((item) => (
-                      <tr key={item.id}>
-                        <td>{item.label}</td>
-                        <td>{item.value || '—'}</td>
-                        <td>{item.sort_order}</td>
-
-                        {isAccountingSection(selectedSection) ? (
-                          <>
-                            <td>{item.report_area || '—'}</td>
-                            <td>{item.report_bucket || '—'}</td>
-                            <td>{item.report_row_code || '—'}</td>
-                            <td>{item.report_row_label || '—'}</td>
-                          </>
-                        ) : null}
-
-                        <td>
-                          <span className={`status-badge ${item.is_active ? 'success' : 'neutral'}`}>
-                            {item.is_active ? 'Attiva' : 'Disattiva'}
-                          </span>
-                        </td>
-
-                        <td>
-                          <div className="row-actions">
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              onClick={() => handleOpenEdit(item)}
-                              title="Modifica"
-                            >
-                              <Pencil size={16} />
-                            </button>
-
-                            <button
-                              type="button"
-                              className="icon-btn danger"
-                              onClick={() => handleDelete(item)}
-                              title="Elimina"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        ))
-      ) : null}
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      ))}
 
       {modalOpen ? (
-        <div className="modal-overlay conti-modal-overlay" onClick={handleCloseModal}>
-          <div
-            className="modal-card conti-modal-card"
-            onClick={(event) => event.stopPropagation()}
-          >
+        <div className="modal-overlay" onClick={handleCloseModal}>
+          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <h2>{editingItem ? 'Modifica voce' : 'Nuova voce'}</h2>
@@ -455,7 +395,7 @@ export default function ContiPage() {
                 </p>
               </div>
 
-              <button type="button" className="icon-btn" onClick={handleCloseModal}>
+              <button className="icon-btn" onClick={handleCloseModal}>
                 <X size={18} />
               </button>
             </div>
@@ -464,51 +404,27 @@ export default function ContiPage() {
               <div className="lookup-form-grid">
                 <label>
                   <span>Sezione</span>
-                  <input
-                    name="section_key"
-                    value={form.section_key}
-                    onChange={handleChange}
-                    readOnly
-                  />
+                  <input name="section_key" value={form.section_key} onChange={handleChange} readOnly />
                 </label>
 
                 <label>
                   <span>Lista</span>
-                  <input
-                    name="list_key"
-                    value={form.list_key}
-                    onChange={handleChange}
-                    readOnly
-                  />
+                  <input name="list_key" value={form.list_key} onChange={handleChange} readOnly />
                 </label>
 
                 <label>
                   <span>Etichetta</span>
-                  <input
-                    name="label"
-                    value={form.label}
-                    onChange={handleChange}
-                    required
-                  />
+                  <input name="label" value={form.label} onChange={handleChange} required />
                 </label>
 
                 <label>
                   <span>Valore / codice</span>
-                  <input
-                    name="value"
-                    value={form.value}
-                    onChange={handleChange}
-                  />
+                  <input name="value" value={form.value} onChange={handleChange} />
                 </label>
 
                 <label>
                   <span>Ordine</span>
-                  <input
-                    name="sort_order"
-                    type="number"
-                    value={form.sort_order}
-                    onChange={handleChange}
-                  />
+                  <input name="sort_order" type="number" value={form.sort_order} onChange={handleChange} />
                 </label>
 
                 <label className="lookup-form-checkbox">
@@ -525,11 +441,7 @@ export default function ContiPage() {
                   <>
                     <label>
                       <span>Area rendiconto</span>
-                      <select
-                        name="report_area"
-                        value={form.report_area}
-                        onChange={handleChange}
-                      >
+                      <select name="report_area" value={form.report_area} onChange={handleChange}>
                         <option value="">Seleziona...</option>
                         {REPORT_AREAS.map((item) => (
                           <option key={item.value} value={item.value}>
@@ -541,11 +453,7 @@ export default function ContiPage() {
 
                     <label>
                       <span>Bucket rendiconto</span>
-                      <select
-                        name="report_bucket"
-                        value={form.report_bucket}
-                        onChange={handleChange}
-                      >
+                      <select name="report_bucket" value={form.report_bucket} onChange={handleChange}>
                         <option value="">Seleziona...</option>
                         {REPORT_BUCKETS.map((item) => (
                           <option key={item.value} value={item.value}>
@@ -579,19 +487,10 @@ export default function ContiPage() {
               </div>
 
               <div className="modal-actions">
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={handleCloseModal}
-                >
+                <button type="button" className="secondary-btn" onClick={handleCloseModal}>
                   Annulla
                 </button>
-
-                <button
-                  type="submit"
-                  className="primary-btn"
-                  disabled={createMutation.isPending || updateMutation.isPending}
-                >
+                <button type="submit" className="primary-btn">
                   {editingItem ? 'Salva modifiche' : 'Crea voce'}
                 </button>
               </div>

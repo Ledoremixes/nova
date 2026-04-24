@@ -251,7 +251,7 @@ export default function EntriesPage() {
   })
 
   const accountsQuery = useQuery({
-    queryKey: ['accounts'],
+    queryKey: ['lookup-conti-rendiconto'],
     queryFn: fetchAccounts,
   })
 

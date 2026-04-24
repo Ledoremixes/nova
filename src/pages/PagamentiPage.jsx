@@ -32,9 +32,10 @@ import {
 const CATEGORY_OPTIONS = [
   'Affitto',
   'Pulizie',
-  'Varie',
+  'SIAE',
   'Utenze',
   'Fornitori',
+  'Varie',
   'Altro',
 ]
 

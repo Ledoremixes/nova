@@ -369,7 +369,12 @@ export default function ContabilitaPage() {
                                 <button
                                     type="button"
                                     className="contabilita-link-btn"
-                                    onClick={() => exportRendicontoExcel({ periodLabel, rendiconto, iva: ivaSummary })}
+                                    onClick={() =>
+                                        exportRendicontoExcel({
+                                            periodLabel,
+                                            rendiconto,
+                                        })
+                                    }
                                 >
                                     <Download size={16} />
                                     Excel
@@ -377,7 +382,20 @@ export default function ContabilitaPage() {
                                 <button
                                     type="button"
                                     className="contabilita-link-btn"
-                                    onClick={() => exportRendicontoPdf({ periodLabel, rendiconto, iva: ivaSummary })}
+                                    onClick={() =>
+                                        exportRendicontoPdf({
+                                            periodLabel,
+                                            rendiconto,
+                                            organization: {
+                                                name: 'Club Orchidea asd',
+                                                address: 'Via Giuseppe Ungaretti 34',
+                                                city: '21047 Saronno (VA)',
+                                                email: 'info@orchideaclub.it',
+                                                taxCode: '',
+                                                vatNumber: '14275140961',
+                                            },
+                                        })
+                                    }
                                 >
                                     <Download size={16} />
                                     PDF

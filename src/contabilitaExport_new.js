@@ -1,3 +1,4 @@
+
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -14,12 +15,6 @@ function numberPlain(value) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number(value || 0))
-}
-
-function safeFileName(value) {
-  return String(value || 'report')
-    .replace(/[^\w\d-_]+/g, '_')
-    .replace(/_+/g, '_')
 }
 
 function downloadBlob(blob, filename) {
@@ -44,50 +39,18 @@ function saveWorkbook(workbook, filename) {
 function sectionLabel(code, isIncome) {
   const map = {
     A: isIncome ? 'A) Entrate da attività istituzionali' : 'A) Uscite da attività istituzionali',
-    B: isIncome
-      ? 'B) Entrate da attività secondarie e strumentali'
-      : 'B) Uscite da attività secondarie e strumentali',
     C: isIncome
       ? 'C) Entrate da attività di raccolta fondi e attività commerciali connesse'
       : 'C) Uscite da attività di raccolta fondi e attività commerciali connesse',
-    D: isIncome
-      ? 'D) Entrate da attività finanziarie e patrimoniali'
-      : 'D) Uscite da attività finanziarie e patrimoniali',
+    D: isIncome ? 'D) Entrate da attività finanziarie e patrimoniali' : 'D) Uscite da attività finanziarie e patrimoniali',
     E: isIncome ? 'E) Entrate di supporto generale' : 'E) Uscite di supporto generale',
   }
   return map[code] || code
 }
 
-function normalizeStatementSide(rendiconto, side) {
-  const fallbackSections = rendiconto?.sections || []
-  const wantsIncome = side === 'in'
-
-  if (rendiconto?.statement?.[side]?.length) {
-    return rendiconto.statement[side]
-  }
-
-  const rows = []
-
-  for (const section of fallbackSections) {
-    for (const item of section.rows || []) {
-      rows.push({
-        section: section.sectionCode || section.code || 'A',
-        code: item.rowCode || '',
-        label: item.label || '',
-        amount: wantsIncome ? Number(item.totalIn || 0) : Number(item.totalOut || 0),
-      })
-    }
-  }
-
-  return rows.filter((row) => Number(row.amount || 0) !== 0)
-}
-
 function buildStatementTableRows(rendiconto, side) {
-  const currentLines = normalizeStatementSide(rendiconto, side)
-  const comparisonLines =
-    rendiconto?.comparison?.statement?.[side] ||
-    []
-
+  const currentLines = side === 'in' ? rendiconto.statement.in : rendiconto.statement.out
+  const comparisonLines = side === 'in' ? rendiconto.comparison?.statement?.in || [] : rendiconto.comparison?.statement?.out || []
   const comparisonMap = comparisonLines.reduce((acc, line) => {
     acc[line.code] = Number(line.amount || 0)
     return acc
@@ -114,9 +77,9 @@ function buildStatementTableRows(rendiconto, side) {
     }
 
     rows.push([
-      line.code || '',
-      line.label || '',
-      numberPlain(line.amount || 0),
+      line.code,
+      line.label,
+      numberPlain(line.amount),
       numberPlain(comparisonMap[line.code] || 0),
     ])
   }
@@ -137,20 +100,17 @@ function statementSectionTotal(lines, comparisonLines, sectionCode) {
 }
 
 function addStatementFooterRows(rows, rendiconto, side) {
-  const currentLines = normalizeStatementSide(rendiconto, side)
-  const comparisonLines = rendiconto?.comparison?.statement?.[side] || []
+  const currentLines = side === 'in' ? rendiconto.statement.in : rendiconto.statement.out
+  const comparisonLines = side === 'in' ? rendiconto.comparison?.statement?.in || [] : rendiconto.comparison?.statement?.out || []
 
-  for (const sectionCode of ['A', 'B', 'C', 'D', 'E']) {
+  for (const sectionCode of ['A', 'C', 'D', 'E']) {
     const total = statementSectionTotal(currentLines, comparisonLines, sectionCode)
-
-    if (total.current !== 0 || total.comparison !== 0) {
-      rows.push([
-        '',
-        `Totale sezione ${sectionCode}`,
-        numberPlain(total.current),
-        numberPlain(total.comparison),
-      ])
-    }
+    rows.push([
+      '',
+      `Totale sezione ${sectionCode}`,
+      numberPlain(total.current),
+      numberPlain(total.comparison),
+    ])
   }
 
   const currentTotal =
@@ -173,23 +133,19 @@ function addStatementFooterRows(rows, rendiconto, side) {
   return rows
 }
 
-function addHeader(
-  doc,
-  {
-    title,
-    organization = {},
-    currentColumnLabel,
-    comparisonColumnLabel,
-    criteriaNote,
-  }
-) {
+function addHeader(doc, {
+  title,
+  organization = {},
+  currentColumnLabel,
+  comparisonColumnLabel,
+  criteriaNote,
+}) {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(22)
   doc.text(organization.name || 'Associazione Sportiva Dilettantistica', 14, 16)
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
-
   const addressLines = [
     organization.address,
     organization.city,
@@ -222,30 +178,10 @@ function addHeader(
 
 function addFinancialPosition(doc, startY, rendiconto) {
   const body = [
-    [
-      'ACIV',
-      'Cassa e banca',
-      numberPlain(rendiconto.financialPosition?.current?.total || 0),
-      numberPlain(rendiconto.financialPosition?.comparison?.total || 0),
-    ],
-    [
-      'ACIV3',
-      'Cassa',
-      numberPlain(rendiconto.financialPosition?.current?.cashBalance || 0),
-      numberPlain(rendiconto.financialPosition?.comparison?.cashBalance || 0),
-    ],
-    [
-      'ACIV1',
-      'Depositi bancari e postali',
-      numberPlain(rendiconto.financialPosition?.current?.bankBalance || 0),
-      numberPlain(rendiconto.financialPosition?.comparison?.bankBalance || 0),
-    ],
-    [
-      'ACIV4',
-      'Portafoglio e conto federale',
-      numberPlain(rendiconto.financialPosition?.current?.portfolioBalance || 0),
-      numberPlain(rendiconto.financialPosition?.comparison?.portfolioBalance || 0),
-    ],
+    ['ACIV', 'Cassa e banca', numberPlain(rendiconto.financialPosition?.current?.total || 0), numberPlain(rendiconto.financialPosition?.comparison?.total || 0)],
+    ['ACIV3', 'Cassa', numberPlain(rendiconto.financialPosition?.current?.cashBalance || 0), numberPlain(rendiconto.financialPosition?.comparison?.cashBalance || 0)],
+    ['ACIV1', 'Depositi bancari e postali', numberPlain(rendiconto.financialPosition?.current?.bankBalance || 0), numberPlain(rendiconto.financialPosition?.comparison?.bankBalance || 0)],
+    ['ACIV4', 'Portafoglio e conto federale', numberPlain(rendiconto.financialPosition?.current?.portfolioBalance || 0), numberPlain(rendiconto.financialPosition?.comparison?.portfolioBalance || 0)],
   ]
 
   autoTable(doc, {
@@ -303,22 +239,11 @@ export function exportRendicontoPdf({
     organization,
     currentColumnLabel,
     comparisonColumnLabel,
-    criteriaNote:
-      rendiconto?.meta?.criteriaNote ||
-      'Documento gestionale predisposto sulla base delle registrazioni di prima nota e delle regole di riclassificazione adottate.',
+    criteriaNote: rendiconto?.meta?.criteriaNote,
   })
 
-  const outRows = addStatementFooterRows(
-    buildStatementTableRows(rendiconto, 'out'),
-    rendiconto,
-    'out'
-  )
-
-  const inRows = addStatementFooterRows(
-    buildStatementTableRows(rendiconto, 'in'),
-    rendiconto,
-    'in'
-  )
+  const outRows = addStatementFooterRows(buildStatementTableRows(rendiconto, 'out'), rendiconto, 'out')
+  const inRows = addStatementFooterRows(buildStatementTableRows(rendiconto, 'in'), rendiconto, 'in')
 
   autoTable(doc, {
     startY: 58,
@@ -374,9 +299,7 @@ export function exportRendicontoPdf({
     },
   })
 
-  const finalLeftY = doc.lastAutoTable?.finalY || 160
-  const nextY = Math.max(finalLeftY + 6, 190)
-
+  const nextY = Math.max(doc.lastAutoTable.finalY + 6, 190)
   addFinancialPosition(doc, nextY, rendiconto)
 
   doc.setFontSize(8)
@@ -387,7 +310,7 @@ export function exportRendicontoPdf({
     { maxWidth: 265 }
   )
 
-  doc.save(`rendiconto_${safeFileName(periodLabel || 'periodo')}.pdf`)
+  doc.save('rendiconto-per-cassa.pdf')
 }
 
 export function exportRendicontoExcel({ periodLabel, rendiconto }) {
@@ -422,8 +345,7 @@ export function exportRendicontoExcel({ periodLabel, rendiconto }) {
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'Sintesi')
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detailsRows), 'Dettaglio')
-
-  saveWorkbook(wb, `rendiconto_${safeFileName(periodLabel || 'periodo')}.xlsx`)
+  saveWorkbook(wb, 'rendiconto-per-cassa.xlsx')
 }
 
 export function exportIvaPdf({ periodLabel, iva }) {
@@ -447,7 +369,7 @@ export function exportIvaPdf({ periodLabel, iva }) {
     headStyles: { fillColor: [47, 116, 181] },
   })
 
-  doc.save(`iva_${safeFileName(periodLabel || 'periodo')}.pdf`)
+  doc.save('iva-riepilogo.pdf')
 }
 
 export function exportIvaExcel({ periodLabel, iva, scadenziario }) {
@@ -472,5 +394,5 @@ export function exportIvaExcel({ periodLabel, iva, scadenziario }) {
   }))
 
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(periodRows), 'Scadenziario IVA')
-  saveWorkbook(wb, `iva_${safeFileName(periodLabel || 'periodo')}.xlsx`)
+  saveWorkbook(wb, 'iva-riepilogo.xlsx')
 }

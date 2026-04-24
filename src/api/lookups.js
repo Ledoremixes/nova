@@ -14,7 +14,21 @@ async function getCurrentUserId() {
 export async function fetchLookupOptions() {
   const { data, error } = await supabase
     .from('lookup_options')
-    .select('*')
+    .select(`
+      id,
+      user_id,
+      section_key,
+      list_key,
+      label,
+      value,
+      sort_order,
+      is_active,
+      report_area,
+      report_bucket,
+      report_row_code,
+      report_row_label,
+      created_at
+    `)
     .order('section_key', { ascending: true })
     .order('list_key', { ascending: true })
     .order('sort_order', { ascending: true })
@@ -27,7 +41,21 @@ export async function fetchLookupOptions() {
 export async function fetchLookupList(sectionKey, listKey, onlyActive = true) {
   let query = supabase
     .from('lookup_options')
-    .select('*')
+    .select(`
+      id,
+      user_id,
+      section_key,
+      list_key,
+      label,
+      value,
+      sort_order,
+      is_active,
+      report_area,
+      report_bucket,
+      report_row_code,
+      report_row_label,
+      created_at
+    `)
     .eq('section_key', sectionKey)
     .eq('list_key', listKey)
     .order('sort_order', { ascending: true })
@@ -56,6 +84,10 @@ export async function createLookupOption(payload) {
         value: payload.value?.trim() || null,
         sort_order: Number(payload.sort_order || 0),
         is_active: payload.is_active !== false,
+        report_area: payload.report_area || null,
+        report_bucket: payload.report_bucket || null,
+        report_row_code: payload.report_row_code?.trim() || null,
+        report_row_label: payload.report_row_label?.trim() || null,
       },
     ])
     .select()
@@ -73,6 +105,10 @@ export async function updateLookupOption(id, payload) {
       value: payload.value?.trim() || null,
       sort_order: Number(payload.sort_order || 0),
       is_active: payload.is_active !== false,
+      report_area: payload.report_area || null,
+      report_bucket: payload.report_bucket || null,
+      report_row_code: payload.report_row_code?.trim() || null,
+      report_row_label: payload.report_row_label?.trim() || null,
     })
     .eq('id', id)
     .select()

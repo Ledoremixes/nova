@@ -95,12 +95,27 @@ export async function fetchEntries({
 
 export async function fetchAccounts() {
   const { data, error } = await supabase
-    .from('accounts')
-    .select('*')
-    .order('code', { ascending: true })
+    .from('lookup_options')
+    .select('id, label, value, sort_order, is_active, section_key, list_key')
+    .eq('section_key', 'contabilita')
+    .eq('list_key', 'conti_rendiconto')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+    .order('label', { ascending: true })
 
-  if (error) throw new Error(error.message || 'Errore caricamento conti')
-  return data || []
+  if (error) {
+    throw new Error(error.message || 'Errore caricamento conti')
+  }
+
+  return (data || []).map((item) => ({
+    id: item.id,
+    code: item.value || '',
+    name: item.label || '',
+    sort_order: item.sort_order ?? 0,
+    is_active: item.is_active ?? true,
+    section_key: item.section_key,
+    list_key: item.list_key,
+  }))
 }
 
 export async function createEntry(payload) {

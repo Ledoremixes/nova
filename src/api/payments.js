@@ -9,6 +9,46 @@ export function euro(value) {
   }).format(Number(value || 0))
 }
 
+/**
+ * Conti considerati come "pagamenti registrati".
+ * Qui dentro mettiamo i conti spesa che devono comparire nella dashboard pagamenti.
+ */
+const PAYMENT_ACCOUNT_CODES = [
+  'AFF', // Affitto
+  'AF', // Affiliazioni / OPES / pratiche varie
+  'F', // Fatture servizi / pulizie
+  'S', // SIAE
+  'CB1', // Costi bar / fornitori
+  'CB2', // Costi bar / fornitori
+  'AB', // Acquisti bar / acquisti vari
+  'B', // Banca / commissioni / abbonamenti
+  'AS', // Abbonamenti servizi
+  'SCU', // SCIA / SUAP / diritti
+  'M', // Compensi insegnanti / corsi
+  'OR', // Organizzazione eventi
+  'C', // Commerciale, se usato anche per costi/fatture bar
+]
+
+const ACCOUNT_CODE_CATEGORY_MAP = {
+  AFF: 'Affitto',
+
+  F: 'Pulizie',
+
+  S: 'SIAE',
+
+  CB1: 'Fornitori',
+  CB2: 'Fornitori',
+  AB: 'Fornitori',
+  C: 'Fornitori',
+
+  AF: 'Varie',
+  B: 'Varie',
+  AS: 'Varie',
+  SCU: 'Varie',
+  M: 'Varie',
+  OR: 'Varie',
+}
+
 export async function fetchRegisteredPayments({
   search = '',
   category = 'all',
@@ -23,6 +63,7 @@ export async function fetchRegisteredPayments({
     .from('entries')
     .select('*', { count: 'exact' })
     .gt('amount_out', 0)
+    .in('account_code', PAYMENT_ACCOUNT_CODES)
     .order('operation_datetime', { ascending: false, nullsFirst: false })
     .order('id_key', { ascending: false })
     .range(fromIndex, toIndex)
@@ -36,12 +77,13 @@ export async function fetchRegisteredPayments({
 
   if (search.trim()) {
     const q = search.trim()
+
     query = query.or(
-      `description.ilike.%${q}%,note.ilike.%${q}%,source.ilike.%${q}%`
+      `description.ilike.%${q}%,note.ilike.%${q}%,source.ilike.%${q}%,account_code.ilike.%${q}%`
     )
   }
 
-  const { data, error, count } = await query
+  const { data, error } = await query
 
   if (error) throw new Error(error.message || 'Errore caricamento pagamenti')
 
@@ -53,7 +95,7 @@ export async function fetchRegisteredPayments({
 
   return {
     rows,
-    total: count || 0,
+    total: rows.length,
     page,
     pageSize,
   }
@@ -62,20 +104,26 @@ export async function fetchRegisteredPayments({
 export async function fetchRegisteredPaymentsSummary({ month = '' } = {}) {
   let query = supabase
     .from('entries')
-    .select('amount_out, description, note, source, date')
+    .select('amount_out, description, note, source, date, account_code')
     .gt('amount_out', 0)
+    .in('account_code', PAYMENT_ACCOUNT_CODES)
 
   if (month) {
     const fromDate = `${month}-01`
     const toDate = dayjs(fromDate).add(1, 'month').format('YYYY-MM-DD')
+
     query = query.gte('date', fromDate).lt('date', toDate)
   }
 
   const { data, error } = await query
+
   if (error) throw new Error(error.message || 'Errore riepilogo pagamenti')
 
   const rows = data || []
-  const total = rows.reduce((sum, row) => sum + Number(row.amount_out || 0), 0)
+
+  const total = rows.reduce((sum, row) => {
+    return sum + Number(row.amount_out || 0)
+  }, 0)
 
   return {
     total,
@@ -90,6 +138,7 @@ export async function fetchPaymentScheduleRules() {
     .order('title', { ascending: true })
 
   if (error) throw new Error(error.message || 'Errore caricamento scadenziario')
+
   return data || []
 }
 
@@ -109,6 +158,7 @@ export async function createPaymentScheduleRule(payload) {
     .single()
 
   if (error) throw new Error(error.message || 'Errore creazione scadenza')
+
   return data
 }
 
@@ -121,6 +171,7 @@ export async function updatePaymentScheduleRule(id, payload) {
     .single()
 
   if (error) throw new Error(error.message || 'Errore modifica scadenza')
+
   return data
 }
 
@@ -142,6 +193,7 @@ export async function fetchPaymentScheduleSkips(month) {
     .eq('skip_month', monthDate)
 
   if (error) throw new Error(error.message || 'Errore caricamento mesi saltati')
+
   return data || []
 }
 
@@ -168,6 +220,7 @@ export async function skipPaymentScheduleMonth({ ruleId, month, reason = '' }) {
     .single()
 
   if (error) throw new Error(error.message || 'Errore annullamento mensilità')
+
   return data
 }
 
@@ -203,20 +256,52 @@ export function buildScheduleRows(rules = [], skips = [], month = '') {
 }
 
 export function mapEntryToPaymentCategory(entry) {
+  const code = String(entry?.account_code || '').trim().toUpperCase()
+
+  if (ACCOUNT_CODE_CATEGORY_MAP[code]) {
+    return ACCOUNT_CODE_CATEGORY_MAP[code]
+  }
+
   const text = `${entry?.description || ''} ${entry?.note || ''}`.toLowerCase()
 
-  if (text.includes('affitto')) return 'Affitto'
+  if (text.includes('affitto')) {
+    return 'Affitto'
+  }
+
   if (
     text.includes('pulizia') ||
     text.includes('pulizie') ||
-    text.includes('impresa di pulizie')
+    text.includes('impresa di pulizie') ||
+    text.includes('liam service')
   ) {
     return 'Pulizie'
   }
-  if (text.includes('luce') || text.includes('gas') || text.includes('acqua')) {
+
+  if (text.includes('siae') || text.includes('diritti d autore')) {
+    return 'SIAE'
+  }
+
+  if (
+    text.includes('luce') ||
+    text.includes('gas') ||
+    text.includes('acqua') ||
+    text.includes('corrente') ||
+    text.includes('energia')
+  ) {
     return 'Utenze'
   }
-  if (text.includes('fornit')) return 'Fornitori'
+
+  if (
+    text.includes('fornit') ||
+    text.includes('tosano') ||
+    text.includes("forno d'asolo") ||
+    text.includes('bevande') ||
+    text.includes('bomboloni') ||
+    text.includes('prodotti bar') ||
+    text.includes('acquisto merce')
+  ) {
+    return 'Fornitori'
+  }
 
   return 'Varie'
 }

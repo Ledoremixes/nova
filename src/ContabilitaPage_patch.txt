@@ -1,0 +1,32 @@
+
+In `ContabilitaPage.jsx` aggiorna i due pulsanti export così:
+
+onClick={() =>
+  exportRendicontoExcel({
+    periodLabel,
+    rendiconto,
+  })
+}
+
+onClick={() =>
+  exportRendicontoPdf({
+    periodLabel,
+    rendiconto,
+    organization: {
+      name: 'Associazione Sportiva Dilettantistica Nexum',
+      address: 'Gradengio 10',
+      city: '35131 Padova',
+      email: 'info@example.com',
+      taxCode: '',
+      vatNumber: '',
+    },
+  })
+}
+
+Se vuoi mostrare anche il criterio usato nel gestionale, sotto il blocco rendiconto puoi aggiungere:
+<p className="contabilita-note">
+  {rendiconto?.meta?.criteriaNote}
+</p>
+
+Dipendenze richieste se non le hai già:
+npm install jspdf jspdf-autotable xlsx
