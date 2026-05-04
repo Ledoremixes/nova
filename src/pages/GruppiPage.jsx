@@ -82,25 +82,25 @@ export default function GruppiPage() {
     }, [groups, search])
 
     const availableToAdd = useMemo(() => {
-        const linkedIds = new Set(groupAthletes.map((item) => item.tesserato_id))
-        const term = athleteSearch.trim().toLowerCase()
+    const linkedIds = new Set(groupAthletes.map((item) => item.atleta_id))
+    const term = athleteSearch.trim().toLowerCase()
 
-        return athletes.filter((athlete) => {
-            if (linkedIds.has(athlete.id)) return false
+    return athletes.filter((athlete) => {
+        if (linkedIds.has(athlete.id)) return false
 
-            if (!term) return true
+        if (!term) return true
 
-            return [
-                athlete.nome,
-                athlete.cognome,
-                athlete.cod_fiscale,
-                athlete.email,
-                athlete.cellulare,
-            ]
-                .filter(Boolean)
-                .some((value) => value.toLowerCase().includes(term))
-        })
-    }, [athletes, groupAthletes, athleteSearch])
+        return [
+            athlete.nome,
+            athlete.cognome,
+            athlete.cod_fiscale,
+            athlete.email,
+            athlete.cellulare,
+        ]
+            .filter(Boolean)
+            .some((value) => value.toLowerCase().includes(term))
+    })
+}, [athletes, groupAthletes, athleteSearch])
 
     useEffect(() => {
         if (!selectedAthlete) return
@@ -288,14 +288,14 @@ export default function GruppiPage() {
     }
 
     function handleAddAthlete() {
-        if (!selectedGroup?.id || !selectedAthlete?.id || !user?.id) return
+    if (!selectedGroup?.id || !selectedAthlete?.id || !user?.id) return
 
-        addAthleteMutation.mutate({
-            user_id: user.id,
-            gruppo_id: selectedGroup.id,
-            tesserato_id: selectedAthlete.id,
-        })
-    }
+    addAthleteMutation.mutate({
+        user_id: user.id,
+        gruppo_id: selectedGroup.id,
+        atleta_id: selectedAthlete.id,
+    })
+}
 
     function handleRemoveAthlete(linkId, athleteName) {
         const ok = window.confirm(`Vuoi rimuovere ${athleteName} da questo gruppo?`)

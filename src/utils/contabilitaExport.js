@@ -41,7 +41,31 @@ function saveWorkbook(workbook, filename) {
   )
 }
 
+function sectionCodeFromBucket(value) {
+  const code = String(value || '').trim().toUpperCase()
+
+  if (code.startsWith('A_')) return 'A'
+  if (code.startsWith('B_')) return 'B'
+  if (code.startsWith('C_')) return 'C'
+  if (code.startsWith('D_')) return 'D'
+  if (code.startsWith('E_')) return 'E'
+  if (code.startsWith('Z_')) return 'Z'
+
+  return code || 'Z'
+}
+
+function bucketSide(value) {
+  const code = String(value || '').trim().toUpperCase()
+
+  if (code.includes('_ENTRATE_')) return 'in'
+  if (code.includes('_USCITE_')) return 'out'
+
+  return 'mixed'
+}
+
 function sectionLabel(code, isIncome) {
+  const normalizedCode = sectionCodeFromBucket(code)
+
   const map = {
     A: isIncome ? 'A) Entrate da attività istituzionali' : 'A) Uscite da attività istituzionali',
     B: isIncome
@@ -54,8 +78,10 @@ function sectionLabel(code, isIncome) {
       ? 'D) Entrate da attività finanziarie e patrimoniali'
       : 'D) Uscite da attività finanziarie e patrimoniali',
     E: isIncome ? 'E) Entrate di supporto generale' : 'E) Uscite di supporto generale',
+    Z: 'Z) Voci da classificare',
   }
-  return map[code] || code
+
+  return map[normalizedCode] || normalizedCode
 }
 
 function normalizeStatementSide(rendiconto, side) {
@@ -63,23 +89,39 @@ function normalizeStatementSide(rendiconto, side) {
   const wantsIncome = side === 'in'
 
   if (rendiconto?.statement?.[side]?.length) {
-    return rendiconto.statement[side]
+    return rendiconto.statement[side].map((line) => ({
+      ...line,
+      section: sectionCodeFromBucket(line.section),
+    }))
   }
 
   const rows = []
 
   for (const section of fallbackSections) {
+    const currentBucket = section.sectionCode || section.code || ''
+    const currentSide = section.side || bucketSide(currentBucket)
+
+    // FIX: nella tabella USCITE non entrano bucket ENTRATE e viceversa.
+    // Le voci mixed/da classificare entrano solo se hanno importo coerente col lato.
+    if (currentSide !== side && currentSide !== 'mixed') continue
+
     for (const item of section.rows || []) {
+      const amount = wantsIncome
+        ? Number(item.totalIn || 0)
+        : Number(item.totalOut || 0)
+
+      if (amount === 0) continue
+
       rows.push({
-        section: section.sectionCode || section.code || 'A',
+        section: sectionCodeFromBucket(currentBucket),
         code: item.rowCode || '',
         label: item.label || '',
-        amount: wantsIncome ? Number(item.totalIn || 0) : Number(item.totalOut || 0),
+        amount,
       })
     }
   }
 
-  return rows.filter((row) => Number(row.amount || 0) !== 0)
+  return rows
 }
 
 function buildStatementTableRows(rendiconto, side) {
@@ -125,12 +167,14 @@ function buildStatementTableRows(rendiconto, side) {
 }
 
 function statementSectionTotal(lines, comparisonLines, sectionCode) {
+  const normalizedSection = sectionCodeFromBucket(sectionCode)
+
   const current = (lines || [])
-    .filter((line) => line.section === sectionCode)
+    .filter((line) => sectionCodeFromBucket(line.section) === normalizedSection)
     .reduce((acc, line) => acc + Number(line.amount || 0), 0)
 
   const comparison = (comparisonLines || [])
-    .filter((line) => line.section === sectionCode)
+    .filter((line) => sectionCodeFromBucket(line.section) === normalizedSection)
     .reduce((acc, line) => acc + Number(line.amount || 0), 0)
 
   return { current, comparison }
