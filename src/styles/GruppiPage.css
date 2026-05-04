@@ -700,3 +700,161 @@
     border-radius: 16px;
   }
 }
+
+/* ================================
+   MODALE GESTIONE ATLETI - SCROLL SOLO LISTA
+================================ */
+
+.gruppi-modal-overlay {
+  overflow: hidden;
+}
+
+.gruppi-modal.large {
+  width: min(1100px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.gruppi-modal.large .gruppi-modal-header {
+  flex-shrink: 0;
+}
+
+.group-athletes-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 18px;
+  overflow: hidden;
+}
+
+.group-athletes-box {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.group-athletes-box h3 {
+  flex-shrink: 0;
+}
+
+.group-athletes-box .gruppi-search,
+.group-athletes-box .athlete-results,
+.group-athletes-box .selected-athlete-box,
+.group-athletes-box .add-athlete-btn {
+  flex-shrink: 0;
+}
+
+/* Questa è la parte importante: scroll solo sulla lista iscritti */
+.athletes-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+/* Scrollbar più pulita */
+.athletes-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.athletes-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.athletes-list::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.18);
+  border-radius: 999px;
+}
+
+.athletes-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.32);
+}
+
+@media (max-width: 768px) {
+  .gruppi-modal.large {
+    width: calc(100vw - 18px);
+    max-height: calc(100vh - 18px);
+  }
+
+  .group-athletes-layout {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .group-athletes-layout .group-athletes-box .gruppi-search.small {
+    height: 46px !important;
+    min-height: 46px !important;
+    max-height: 46px !important;
+    flex-basis: 46px !important;
+    margin: 8px 0 12px;
+  }
+
+  .group-athletes-layout .athlete-results {
+    max-height: 180px;
+  }
+
+  .athletes-list {
+    max-height: 420px;
+  }
+}
+
+/* ================================
+   FIX SEARCH GESTISCI ATLETI
+   Evita barra ricerca gigante
+================================ */
+
+.group-athletes-layout .group-athletes-box .gruppi-search.small {
+  flex: 0 0 48px !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
+  width: 100%;
+  padding: 0 14px;
+  margin: 8px 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 16px;
+  box-sizing: border-box;
+}
+
+.group-athletes-layout .group-athletes-box .gruppi-search.small svg {
+  flex: 0 0 auto;
+}
+
+.group-athletes-layout .group-athletes-box .gruppi-search.small input {
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  flex: 1;
+  background: transparent;
+}
+
+/* Box risultati sotto la ricerca: non deve allargare la search */
+.group-athletes-layout .athlete-results {
+  flex: 0 0 auto;
+  min-height: auto;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+/* Stato vuoto sotto la ricerca */
+.group-athletes-layout .athlete-results-empty {
+  min-height: 48px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Bottone sempre normale */
+.group-athletes-layout .add-athlete-btn {
+  flex: 0 0 auto;
+  min-height: 46px;
+}

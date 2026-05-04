@@ -1,56 +1,50 @@
 import { supabase } from './supabase'
 
-function getPersonFromAthleteRow(row) {
-    return row?.tesserato || row?.tesserati || null
-}
-
 function normalizeAvailableAthlete(row) {
-    const person = getPersonFromAthleteRow(row)
+    const person = row.tesserato || row.tesserati || {}
 
     return {
-        id: row.id, // IMPORTANTISSIMO: questo è atleti.id, NON tesserati.id
+        id: row.id, // questo è atleti.id
         atleta_id: row.id,
         tesserato_id: row.tesserato_id,
         numero_tessera: row.numero_tessera,
         is_active: row.is_active,
-        tesserati: person,
 
-        // campi flat per non dover riscrivere tutta GruppiPage
-        nome: person?.nome ?? '',
-        cognome: person?.cognome ?? '',
-        cod_fiscale: person?.cod_fiscale ?? '',
-        cellulare: person?.cellulare ?? '',
-        email: person?.email ?? '',
+        nome: person.nome || '',
+        cognome: person.cognome || '',
+        cod_fiscale: person.cod_fiscale || '',
+        cellulare: person.cellulare || '',
+        email: person.email || '',
+        tesserati: person,
     }
 }
 
-function normalizeGroupAthleteLink(row) {
-    const atleta = row.atleta || row.atleti || null
-    const person = getPersonFromAthleteRow(atleta)
+function normalizeGroupAthlete(row) {
+    const atleta = row.atleta || {}
+    const person = atleta.tesserato || atleta.tesserati || {}
 
     return {
-        id: row.id, // id della tabella ponte atleti_gruppi
+        id: row.id, // questo è atleti_gruppi.id
         gruppo_id: row.gruppo_id,
         atleta_id: row.atleta_id,
-        tesserato_id: atleta?.tesserato_id ?? person?.id ?? null,
-        numero_tessera: atleta?.numero_tessera ?? null,
-        atleta,
-        tesserati: person,
+        tesserato_id: atleta.tesserato_id || null,
+        numero_tessera: atleta.numero_tessera || null,
 
-        // campi flat opzionali
-        nome: person?.nome ?? '',
-        cognome: person?.cognome ?? '',
-        cod_fiscale: person?.cod_fiscale ?? '',
-        cellulare: person?.cellulare ?? '',
-        email: person?.email ?? '',
+        nome: person.nome || '',
+        cognome: person.cognome || '',
+        cod_fiscale: person.cod_fiscale || '',
+        cellulare: person.cellulare || '',
+        email: person.email || '',
+        tesserati: person,
+        atleta,
     }
 }
 
 function sortByName(list) {
     return [...list].sort((a, b) => {
-        const aName = `${a.cognome || ''} ${a.nome || ''}`.trim().toLowerCase()
-        const bName = `${b.cognome || ''} ${b.nome || ''}`.trim().toLowerCase()
-        return aName.localeCompare(bName, 'it')
+        const nameA = `${a.cognome || ''} ${a.nome || ''}`.trim().toLowerCase()
+        const nameB = `${b.cognome || ''} ${b.nome || ''}`.trim().toLowerCase()
+        return nameA.localeCompare(nameB, 'it')
     })
 }
 
@@ -155,8 +149,8 @@ export async function fetchAthletesForGroup(userId, gruppoId) {
     }
 
     const rows = (data ?? [])
-        .filter((row) => row.atleta?.user_id === userId)
-        .map(normalizeGroupAthleteLink)
+        .filter((item) => item.atleta?.user_id === userId)
+        .map(normalizeGroupAthlete)
 
     return sortByName(rows)
 }
@@ -192,7 +186,7 @@ export async function fetchAvailableAthletes(userId) {
 
 export async function addAthleteToGroup(payload) {
     if (!payload?.gruppo_id || !payload?.atleta_id) {
-        throw new Error('Dati mancanti: gruppo o atleta non valido.')
+        throw new Error('Seleziona un atleta valido.')
     }
 
     const { data: existing, error: existingError } = await supabase
@@ -203,49 +197,24 @@ export async function addAthleteToGroup(payload) {
         .maybeSingle()
 
     if (existingError) {
-        console.error('Errore controllo atleta già nel gruppo:', existingError)
-        throw new Error(existingError.message || 'Errore nel controllo iscrizione atleta.')
+        console.error('Errore controllo iscrizione:', existingError)
+        throw new Error(existingError.message || 'Errore nel controllo iscrizione.')
     }
 
     if (existing) {
         throw new Error('Questo atleta è già associato a questo gruppo.')
     }
 
-    const basePayload = {
+    const insertPayload = {
         gruppo_id: payload.gruppo_id,
         atleta_id: payload.atleta_id,
     }
 
-    const payloadWithUser = payload.user_id
-        ? {
-            ...basePayload,
-            user_id: payload.user_id,
-        }
-        : basePayload
-
-    let { data, error } = await supabase
+    const { data, error } = await supabase
         .from('atleti_gruppi')
-        .insert([payloadWithUser])
+        .insert([insertPayload])
         .select('id, gruppo_id, atleta_id')
         .single()
-
-    // Fallback nel caso in cui atleti_gruppi NON abbia la colonna user_id
-    if (
-        error &&
-        (
-            error.code === 'PGRST204' ||
-            error.message?.toLowerCase().includes('user_id')
-        )
-    ) {
-        const retry = await supabase
-            .from('atleti_gruppi')
-            .insert([basePayload])
-            .select('id, gruppo_id, atleta_id')
-            .single()
-
-        data = retry.data
-        error = retry.error
-    }
 
     if (error) {
         console.error('Errore aggiunta atleta al gruppo:', error)
