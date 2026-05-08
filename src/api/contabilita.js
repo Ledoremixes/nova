@@ -642,57 +642,423 @@ export async function fetchRendicontoGestionale({ fromDate, toDate }) {
   }
 }
 
-export async function fetchIvaSummary({ fromDate, toDate }) {
-  let query = supabase
-    .from('entries')
-    .select(`
-      id,
-      date,
-      operation_datetime,
-      description,
-      amount_in,
-      amount_out,
-      account_code,
-      nature,
-      vat_rate,
-      vat_amount,
-      vat_side,
-      id_key
-    `)
-    .gt('vat_amount', 0)
+function getIvaReferenceDate(row) {
+  return row?.date || row?.operation_datetime || null
+}
 
-  if (fromDate) {
-    query = query.gte('operation_datetime', `${fromDate}T00:00:00`)
+function isDateInSelectedRange(value, fromDate, toDate) {
+  const d = dayjs(value)
+
+  if (!d.isValid()) return false
+  if (fromDate && d.isBefore(dayjs(fromDate), 'day')) return false
+  if (toDate && d.isAfter(dayjs(toDate), 'day')) return false
+
+  return true
+}
+
+function normalizeVatRate(value) {
+  const raw = String(value ?? '')
+    .replace('%', '')
+    .replace(',', '.')
+    .trim()
+
+  const n = Number(raw || 0)
+  return Number.isFinite(n) ? n : 0
+}
+
+function calculateCommercialVat(row) {
+  const explicitVat = normalizeNumber(row.vat_amount)
+  const side = normalizeText(row.vat_side)
+
+  if (explicitVat > 0 && (side === 'debito' || !side)) {
+    return explicitVat
   }
 
-  if (toDate) {
-    query = query.lte('operation_datetime', `${toDate}T23:59:59`)
+  const amountIn = normalizeNumber(row.amount_in)
+  const rate = normalizeVatRate(row.vat_rate)
+
+  if (amountIn > 0 && rate > 0) {
+    return amountIn - amountIn / (1 + rate / 100)
   }
 
-  const { data, error } = await query
-  if (error) throw error
+  return 0
+}
 
-  const rows = (data || []).map((row) => ({
-    ...row,
-    vat_amount: normalizeNumber(row.vat_amount),
-    amount_in: normalizeNumber(row.amount_in),
-    amount_out: normalizeNumber(row.amount_out),
-    dateLabel: formatDateLabel(row.operation_datetime || row.date),
-  }))
+function calculateCommercialTaxable(row) {
+  const amountIn = normalizeNumber(row.amount_in)
+  const vat = calculateCommercialVat(row)
 
-  const vatDebit = rows
-    .filter((row) => String(row.vat_side || '').trim().toLowerCase() === 'debito')
-    .reduce((acc, row) => acc + row.vat_amount, 0)
+  return Math.max(amountIn - vat, 0)
+}
 
-  const vatCredit = rows
-    .filter((row) => String(row.vat_side || '').trim().toLowerCase() === 'credito')
-    .reduce((acc, row) => acc + row.vat_amount, 0)
+function classifyCommercialIncomeType(row) {
+  const description = normalizeText(row.description)
+  const note = normalizeText(row.note)
+  const source = normalizeText(row.source)
+  const text = `${description} ${note} ${source}`
+  const accountCode = String(row.account_code || '').trim().toUpperCase()
+
+  if (
+    containsAny(text, [
+      'sponsor',
+      'sponsorizzazione',
+      'sponsorizzazioni',
+      'pubblicità',
+      'pubblicita',
+      'banner',
+      'partner',
+    ])
+  ) {
+    return { key: 'sponsorizzazioni', label: 'Sponsorizzazioni' }
+  }
+
+  if (
+    containsAny(text, [
+      'maglietta',
+      'magliette',
+      't-shirt',
+      'tshirt',
+      'felpa',
+      'felpe',
+      'abbigliamento',
+      'gadget',
+      'merch',
+      'merchandising',
+      'materiale',
+      'vendita materiale',
+    ])
+  ) {
+    return { key: 'vendita_materiale', label: 'Vendita materiale' }
+  }
+
+  if (
+    accountCode === 'C' ||
+    accountCode === 'CB1' ||
+    accountCode === 'CB2' ||
+    containsAny(text, COMMERCIAL_PRODUCT_KEYWORDS) ||
+    containsAny(text, [
+      'bar',
+      'cassa bar',
+      'sumup bar',
+      'incasso bar',
+      'bevuta',
+      'bevute',
+      'cocktail',
+      'analcolico',
+      'acqua',
+      'bibita',
+      'bibite',
+    ])
+  ) {
+    return { key: 'entrate_bar', label: 'Entrate bar' }
+  }
+
+  if (
+    containsAny(text, [
+      'biglietto',
+      'biglietti',
+      'ticket',
+      'prevendita',
+      'ingresso evento',
+      'serata',
+      'evento',
+    ])
+  ) {
+    return { key: 'biglietteria_eventi', label: 'Biglietteria / eventi commerciali' }
+  }
+
+  return { key: 'altre_entrate_commerciali', label: 'Altre entrate commerciali' }
+}
+
+function isCommercialIncomeRow(row) {
+  const amountIn = normalizeNumber(row.amount_in)
+  if (amountIn <= 0) return false
+
+  const report = classifyReportEntry(row)
+
+  // IMPORTANTE:
+  // Per evitare differenze tra Rendiconto gestionale e PDF IVA,
+  // consideriamo commerciali solo le righe che la stessa logica
+  // del rendiconto classifica come commerciali.
+  return report.bucket === 'commerciale'
+}
+
+function normalizeIvaReportRow(row) {
+  const referenceDate = getIvaReferenceDate(row)
+  const commercialType = classifyCommercialIncomeType(row)
+  const vatAmount = calculateCommercialVat(row)
+  const taxableAmount = calculateCommercialTaxable(row)
 
   return {
-    rows,
+    ...row,
+    reference_date: referenceDate,
+    dateLabel: formatDateLabel(referenceDate),
+    amount_in: normalizeNumber(row.amount_in),
+    amount_out: normalizeNumber(row.amount_out),
+    vat_amount: normalizeNumber(row.vat_amount),
+    commercial_vat_amount: vatAmount,
+    commercial_taxable_amount: taxableAmount,
+    commercial_type_key: commercialType.key,
+    commercial_type_label: commercialType.label,
+  }
+}
+
+async function fetchIvaCandidateRowsPaged() {
+  const pageSize = 1000
+  let from = 0
+  let keepLoading = true
+  const allRows = []
+
+  while (keepLoading) {
+    const { data, error } = await supabase
+      .from('entries')
+      .select(`
+        id,
+        date,
+        operation_datetime,
+        description,
+        amount_in,
+        amount_out,
+        account_code,
+        method,
+        center,
+        note,
+        source,
+        nature,
+        vat_rate,
+        vat_amount,
+        vat_side,
+        id_key
+      `)
+      .or('amount_in.gt.0,vat_amount.gt.0')
+      .order('date', { ascending: true, nullsFirst: false })
+      .order('operation_datetime', { ascending: true, nullsFirst: false })
+      .order('id_key', { ascending: true })
+      .range(from, from + pageSize - 1)
+
+    if (error) throw error
+
+    const chunk = data || []
+    allRows.push(...chunk)
+
+    if (chunk.length < pageSize) {
+      keepLoading = false
+    } else {
+      from += pageSize
+    }
+  }
+
+  return allRows
+}
+
+function monthNameFromNumber(monthNumber) {
+  const months = [
+    'Gennaio',
+    'Febbraio',
+    'Marzo',
+    'Aprile',
+    'Maggio',
+    'Giugno',
+    'Luglio',
+    'Agosto',
+    'Settembre',
+    'Ottobre',
+    'Novembre',
+    'Dicembre',
+  ]
+
+  return months[monthNumber - 1] || ''
+}
+
+function monthKeyFromDate(value) {
+  const d = dayjs(value)
+  return `${d.year()}-${String(d.month() + 1).padStart(2, '0')}`
+}
+
+function monthLabelFromKey(key) {
+  const [year, month] = String(key).split('-')
+  return `${monthNameFromNumber(Number(month))} ${year}`
+}
+
+function periodKeyFromDate(value, periodicity) {
+  const d = dayjs(value)
+
+  if (periodicity === 'monthly') {
+    return monthKeyFromDate(value)
+  }
+
+  return `${d.year()}-Q${Math.floor(d.month() / 3) + 1}`
+}
+
+function periodLabelFromDate(value, periodicity) {
+  const d = dayjs(value)
+
+  if (periodicity === 'monthly') {
+    return d.format('MM/YYYY')
+  }
+
+  return `Q${Math.floor(d.month() / 3) + 1} ${d.year()}`
+}
+
+function buildMonthKeysInRange(fromDate, toDate) {
+  if (!fromDate || !toDate) return []
+
+  const start = dayjs(fromDate).startOf('month')
+  const end = dayjs(toDate).startOf('month')
+  const months = []
+
+  if (!start.isValid() || !end.isValid()) return months
+
+  let cursor = start
+
+  while (cursor.isBefore(end) || cursor.isSame(end, 'month')) {
+    months.push(`${cursor.year()}-${String(cursor.month() + 1).padStart(2, '0')}`)
+    cursor = cursor.add(1, 'month')
+  }
+
+  return months
+}
+
+function createIvaAggregate({ key, label, monthKeys = [] }) {
+  return {
+    key,
+    label,
+    vatDebit: 0,
+    vatCredit: 0,
+    balance: 0,
+    grossCommercialIncome: 0,
+    taxableCommercialIncome: 0,
+    commercialRowsCount: 0,
+    rows: [],
+    months: monthKeys.map((monthKey) => ({
+      key: monthKey,
+      label: monthLabelFromKey(monthKey),
+      vatDebit: 0,
+      vatCredit: 0,
+      balance: 0,
+      grossCommercialIncome: 0,
+      taxableCommercialIncome: 0,
+      commercialRowsCount: 0,
+      rows: [],
+      types: [],
+      _typeMap: new Map(),
+    })),
+    types: [],
+    _typeMap: new Map(),
+  }
+}
+
+function ensureTypeAggregate(target, row) {
+  const key = row.commercial_type_key || 'altre_entrate_commerciali'
+  const label = row.commercial_type_label || 'Altre entrate commerciali'
+
+  if (!target._typeMap) target._typeMap = new Map()
+
+  if (!target._typeMap.has(key)) {
+    const item = {
+      key,
+      label,
+      vatDebit: 0,
+      vatCredit: 0,
+      balance: 0,
+      grossCommercialIncome: 0,
+      taxableCommercialIncome: 0,
+      commercialRowsCount: 0,
+      rows: [],
+    }
+
+    target._typeMap.set(key, item)
+    target.types.push(item)
+  }
+
+  return target._typeMap.get(key)
+}
+
+function addCommercialRowToAggregate(target, row) {
+  const vat = normalizeNumber(row.commercial_vat_amount)
+  const taxable = normalizeNumber(row.commercial_taxable_amount)
+  const gross = normalizeNumber(row.amount_in)
+
+  target.vatDebit += vat
+  target.balance = target.vatDebit - target.vatCredit
+  target.grossCommercialIncome += gross
+  target.taxableCommercialIncome += taxable
+  target.commercialRowsCount += 1
+  target.rows.push(row)
+
+  const typeTarget = ensureTypeAggregate(target, row)
+  typeTarget.vatDebit += vat
+  typeTarget.balance = typeTarget.vatDebit - typeTarget.vatCredit
+  typeTarget.grossCommercialIncome += gross
+  typeTarget.taxableCommercialIncome += taxable
+  typeTarget.commercialRowsCount += 1
+  typeTarget.rows.push(row)
+}
+
+function addCreditVatToAggregate(target, row) {
+  const creditVat = normalizeNumber(row.vat_amount)
+
+  target.vatCredit += creditVat
+  target.balance = target.vatDebit - target.vatCredit
+}
+
+function cleanupIvaAggregate(target) {
+  target.balance = target.vatDebit - target.vatCredit
+  target.types = (target.types || []).sort((a, b) => a.label.localeCompare(b.label))
+  delete target._typeMap
+
+  target.months = (target.months || []).map((month) => {
+    month.balance = month.vatDebit - month.vatCredit
+    month.types = (month.types || []).sort((a, b) => a.label.localeCompare(b.label))
+    delete month._typeMap
+    return month
+  })
+
+  return target
+}
+
+export async function fetchIvaSummary({ fromDate, toDate }) {
+  const rows = await fetchIvaCandidateRowsPaged()
+
+  const rowsInPeriod = rows
+    .filter((row) => isDateInSelectedRange(getIvaReferenceDate(row), fromDate, toDate))
+    .map(normalizeIvaReportRow)
+
+  const commercialRows = rowsInPeriod.filter(isCommercialIncomeRow)
+
+  const creditRows = rowsInPeriod.filter((row) => {
+    return normalizeText(row.vat_side) === 'credito' && normalizeNumber(row.vat_amount) > 0
+  })
+
+  const vatDebit = commercialRows.reduce(
+    (acc, row) => acc + normalizeNumber(row.commercial_vat_amount),
+    0
+  )
+
+  const vatCredit = creditRows.reduce(
+    (acc, row) => acc + normalizeNumber(row.vat_amount),
+    0
+  )
+
+  const grossCommercialIncome = commercialRows.reduce(
+    (acc, row) => acc + normalizeNumber(row.amount_in),
+    0
+  )
+
+  const taxableCommercialIncome = commercialRows.reduce(
+    (acc, row) => acc + normalizeNumber(row.commercial_taxable_amount),
+    0
+  )
+
+  return {
+    rows: commercialRows,
+    commercialRows,
+    creditRows,
     vatDebit,
     vatCredit,
     balance: vatDebit - vatCredit,
+    grossCommercialIncome,
+    taxableCommercialIncome,
   }
 }
 
@@ -706,47 +1072,100 @@ export async function fetchIvaScadenziario({
     toDate,
   })
 
+  const monthKeys = buildMonthKeysInRange(fromDate, toDate)
   const buckets = new Map()
 
-  for (const row of iva.rows) {
-    const refDate = row.operation_datetime || row.date
-    const d = dayjs(refDate)
+  for (const monthKey of monthKeys) {
+    const refDate = `${monthKey}-01`
+    const periodKey = periodKeyFromDate(refDate, periodicity)
+    const periodLabel = periodLabelFromDate(refDate, periodicity)
 
-    const key =
-      periodicity === 'monthly'
-        ? `${d.year()}-${String(d.month() + 1).padStart(2, '0')}`
-        : `${d.year()}-Q${Math.floor(d.month() / 3) + 1}`
-
-    const label =
-      periodicity === 'monthly'
-        ? d.format('MM/YYYY')
-        : `Q${Math.floor(d.month() / 3) + 1} ${d.year()}`
-
-    if (!buckets.has(key)) {
-      buckets.set(key, {
-        key,
-        label,
-        vatDebit: 0,
-        vatCredit: 0,
-        balance: 0,
-        rows: [],
+    if (!buckets.has(periodKey)) {
+      const monthsForPeriod = monthKeys.filter((currentMonthKey) => {
+        return periodKeyFromDate(`${currentMonthKey}-01`, periodicity) === periodKey
       })
+
+      buckets.set(
+        periodKey,
+        createIvaAggregate({
+          key: periodKey,
+          label: periodLabel,
+          monthKeys: monthsForPeriod,
+        })
+      )
+    }
+  }
+
+  for (const row of iva.commercialRows || []) {
+    const refDate = row.reference_date || getIvaReferenceDate(row)
+    const periodKey = periodKeyFromDate(refDate, periodicity)
+    const periodLabel = periodLabelFromDate(refDate, periodicity)
+    const monthKey = monthKeyFromDate(refDate)
+
+    if (!buckets.has(periodKey)) {
+      buckets.set(
+        periodKey,
+        createIvaAggregate({
+          key: periodKey,
+          label: periodLabel,
+          monthKeys: [monthKey],
+        })
+      )
     }
 
-    const item = buckets.get(key)
-    const side = String(row.vat_side || '').trim().toLowerCase()
+    const period = buckets.get(periodKey)
+    addCommercialRowToAggregate(period, row)
 
-    if (side === 'debito') item.vatDebit += row.vat_amount
-    if (side === 'credito') item.vatCredit += row.vat_amount
+    let month = period.months.find((item) => item.key === monthKey)
 
-    item.rows.push(row)
+    if (!month) {
+      month = createIvaAggregate({
+        key: monthKey,
+        label: monthLabelFromKey(monthKey),
+        monthKeys: [],
+      })
+      period.months.push(month)
+    }
+
+    addCommercialRowToAggregate(month, row)
+  }
+
+  for (const row of iva.creditRows || []) {
+    const refDate = row.reference_date || getIvaReferenceDate(row)
+    const periodKey = periodKeyFromDate(refDate, periodicity)
+    const periodLabel = periodLabelFromDate(refDate, periodicity)
+    const monthKey = monthKeyFromDate(refDate)
+
+    if (!buckets.has(periodKey)) {
+      buckets.set(
+        periodKey,
+        createIvaAggregate({
+          key: periodKey,
+          label: periodLabel,
+          monthKeys: [monthKey],
+        })
+      )
+    }
+
+    const period = buckets.get(periodKey)
+    addCreditVatToAggregate(period, row)
+
+    let month = period.months.find((item) => item.key === monthKey)
+
+    if (!month) {
+      month = createIvaAggregate({
+        key: monthKey,
+        label: monthLabelFromKey(monthKey),
+        monthKeys: [],
+      })
+      period.months.push(month)
+    }
+
+    addCreditVatToAggregate(month, row)
   }
 
   const periods = Array.from(buckets.values())
-    .map((item) => ({
-      ...item,
-      balance: item.vatDebit - item.vatCredit,
-    }))
+    .map(cleanupIvaAggregate)
     .sort((a, b) => a.key.localeCompare(b.key))
 
   return {
@@ -756,6 +1175,18 @@ export async function fetchIvaScadenziario({
       vatDebit: periods.reduce((acc, item) => acc + item.vatDebit, 0),
       vatCredit: periods.reduce((acc, item) => acc + item.vatCredit, 0),
       balance: periods.reduce((acc, item) => acc + item.balance, 0),
+      grossCommercialIncome: periods.reduce(
+        (acc, item) => acc + item.grossCommercialIncome,
+        0
+      ),
+      taxableCommercialIncome: periods.reduce(
+        (acc, item) => acc + item.taxableCommercialIncome,
+        0
+      ),
+      commercialRowsCount: periods.reduce(
+        (acc, item) => acc + item.commercialRowsCount,
+        0
+      ),
     },
   }
 }
