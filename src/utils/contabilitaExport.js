@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx'
+gitimport * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import dayjs from 'dayjs'
@@ -84,6 +84,7 @@ function sectionLabel(code, isIncome) {
     E: isIncome
       ? 'E) Entrate di supporto generale'
       : 'E) Uscite di supporto generale',
+    E: isIncome ? 'E) Entrate di supporto generale' : 'E) Uscite di supporto generale',
     Z: 'Z) Voci da classificare',
   }
 
@@ -107,6 +108,8 @@ function normalizeStatementSide(rendiconto, side) {
     const currentBucket = section.sectionCode || section.code || ''
     const currentSide = section.side || bucketSide(currentBucket)
 
+    // FIX: nella tabella USCITE non entrano bucket ENTRATE e viceversa.
+    // Le voci mixed/da classificare entrano solo se hanno importo coerente col lato.
     if (currentSide !== side && currentSide !== 'mixed') continue
 
     for (const item of section.rows || []) {

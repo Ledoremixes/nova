@@ -1162,6 +1162,10 @@ export async function fetchIvaScadenziario({
     }
 
     addCreditVatToAggregate(month, row)
+    if (side === 'debito') item.vatDebit += row.vat_amount
+    if (side === 'credito') item.vatCredit += row.vat_amount
+
+    item.rows.push(row)
   }
 
   const periods = Array.from(buckets.values())

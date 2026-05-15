@@ -24,28 +24,23 @@ function chunkArray(array, size) {
   return chunks
 }
 
-export async function fetchEntries({
-  search = '',
-  fromDate = '',
-  fromTime = '',
-  toDate = '',
-  toTime = '',
-  onlyWithoutAccount = false,
-  onlyWithoutNature = false,
-  accountCode = '',
-  ivaFilter = '',
-  page = 1,
-  pageSize = 1000,
-}) {
-  const fromIndex = (page - 1) * pageSize
-  const toIndex = fromIndex + pageSize - 1
+function cleanText(value) {
+  return String(value ?? '').trim()
+}
 
-  let query = supabase
-    .from('entries')
-    .select('*', { count: 'exact' })
-    .order('operation_datetime', { ascending: false, nullsFirst: false })
-    .order('id_key', { ascending: false })
-    .range(fromIndex, toIndex)
+function applyEntryFilters(query, filters = {}) {
+  const {
+    search = '',
+    fromDate = '',
+    fromTime = '',
+    toDate = '',
+    toTime = '',
+    onlyWithoutAccount = false,
+    onlyWithoutNature = false,
+    accountCode = '',
+    ivaFilter = '',
+    method = '',
+  } = filters
 
   if (fromDate) {
     const fromTs = `${fromDate}T${fromTime || '00:00'}:00`
@@ -75,14 +70,102 @@ export async function fetchEntries({
     query = query.or('vat_rate.is.null,vat_rate.eq.0')
   }
 
-  if (search.trim()) {
-    const q = search.trim()
-    query = query.or(`description.ilike.%${q}%,note.ilike.%${q}%,source.ilike.%${q}%`)
+  const methodValue = cleanText(method)
+
+  if (methodValue) {
+    query = query.ilike('method', `%${methodValue}%`)
   }
 
-  const { data, error, count } = await query
+  const searchValue = cleanText(search)
 
-  if (error) throw new Error(error.message || 'Errore caricamento movimenti')
+  if (searchValue) {
+    // La ricerca della pagina Prima nota è "Cerca per descrizione",
+    // quindi filtro solo la descrizione.
+    // Prima cercava anche in source/note e scrivendo "Sumup"
+    // poteva mostrare tutte le voci importate da SumUp.
+    query = query.ilike('description', `%${searchValue}%`)
+  }
+
+  return query
+}
+
+async function fetchAllFilteredRows(filters, selectColumns) {
+  const pageSize = 1000
+  let fromIndex = 0
+  const rows = []
+
+  while (true) {
+    let query = supabase.from('entries').select(selectColumns)
+
+    query = applyEntryFilters(query, filters)
+
+    const { data, error } = await query.range(
+      fromIndex,
+      fromIndex + pageSize - 1
+    )
+
+    if (error) {
+      throw new Error(error.message || 'Errore caricamento movimenti filtrati')
+    }
+
+    const chunk = data || []
+    rows.push(...chunk)
+
+    if (chunk.length < pageSize) break
+
+    fromIndex += pageSize
+  }
+
+  return rows
+}
+
+async function fetchFilteredEntryIds(filters) {
+  const rows = await fetchAllFilteredRows(filters, 'id')
+  return rows.map((row) => row.id).filter(Boolean)
+}
+
+export async function fetchEntries({
+  search = '',
+  fromDate = '',
+  fromTime = '',
+  toDate = '',
+  toTime = '',
+  onlyWithoutAccount = false,
+  onlyWithoutNature = false,
+  accountCode = '',
+  ivaFilter = '',
+  method = '',
+  page = 1,
+  pageSize = 1000,
+}) {
+  const fromIndex = (page - 1) * pageSize
+  const toIndex = fromIndex + pageSize - 1
+
+  let query = supabase
+    .from('entries')
+    .select('*', { count: 'exact' })
+
+  query = applyEntryFilters(query, {
+    search,
+    fromDate,
+    fromTime,
+    toDate,
+    toTime,
+    onlyWithoutAccount,
+    onlyWithoutNature,
+    accountCode,
+    ivaFilter,
+    method,
+  })
+
+  const { data, error, count } = await query
+    .order('operation_datetime', { ascending: false, nullsFirst: false })
+    .order('id_key', { ascending: false })
+    .range(fromIndex, toIndex)
+
+  if (error) {
+    throw new Error(error.message || 'Errore caricamento movimenti')
+  }
 
   return {
     rows: data || [],
@@ -127,12 +210,16 @@ export async function createEntry(payload) {
     .select()
     .single()
 
-  if (error) throw new Error(error.message || 'Errore creazione movimento')
+  if (error) {
+    throw new Error(error.message || 'Errore creazione movimento')
+  }
+
   return data
 }
 
 export async function updateEntry(id, payload) {
   const cleanPayload = { ...payload }
+
   delete cleanPayload.entry_key
   delete cleanPayload.id_key
   delete cleanPayload.import_group_key
@@ -146,7 +233,10 @@ export async function updateEntry(id, payload) {
     .select()
     .single()
 
-  if (error) throw new Error(error.message || 'Errore modifica movimento')
+  if (error) {
+    throw new Error(error.message || 'Errore modifica movimento')
+  }
+
   return data
 }
 
@@ -156,7 +246,9 @@ export async function deleteEntry(id) {
     .delete()
     .eq('id', id)
 
-  if (error) throw new Error(error.message || 'Errore eliminazione movimento')
+  if (error) {
+    throw new Error(error.message || 'Errore eliminazione movimento')
+  }
 }
 
 export async function createEntriesBatch(rows) {
@@ -167,7 +259,10 @@ export async function createEntriesBatch(rows) {
     .insert(preparedRows)
     .select('id,id_key')
 
-  if (error) throw new Error(error.message || 'Errore import batch movimenti')
+  if (error) {
+    throw new Error(error.message || 'Errore import batch movimenti')
+  }
+
   return data || []
 }
 
@@ -180,25 +275,37 @@ export function euro(value) {
 
 export function normalizeNumberInput(value) {
   if (value === '' || value === null || value === undefined) return null
+
   const parsed = Number(String(value).replace(',', '.'))
+
   return Number.isFinite(parsed) ? parsed : null
 }
 
 export async function fetchEntriesFilteredTotals(filters) {
-  const { data, error } = await supabase.rpc('entries_filtered_totals', {
-    p_search: filters.search || null,
-    p_from_date: filters.fromDate || null,
-    p_from_time: filters.fromTime || null,
-    p_to_date: filters.toDate || null,
-    p_to_time: filters.toTime || null,
-    p_only_without_account: filters.onlyWithoutAccount || false,
-    p_only_without_nature: filters.onlyWithoutNature || false,
-    p_account_code: filters.accountCode || null,
-    p_iva_filter: filters.ivaFilter || null,
-  })
+  const rows = await fetchAllFilteredRows(filters, 'amount_in,amount_out')
 
-  if (error) throw new Error(error.message || 'Errore caricamento totali filtrati')
-  return data?.[0] || { total_rows: 0, total_in: 0, total_out: 0, saldo: 0 }
+  const totals = rows.reduce(
+    (acc, row) => {
+      const amountIn = Number(row.amount_in || 0)
+      const amountOut = Number(row.amount_out || 0)
+
+      acc.total_rows += 1
+      acc.total_in += Number.isFinite(amountIn) ? amountIn : 0
+      acc.total_out += Number.isFinite(amountOut) ? amountOut : 0
+
+      return acc
+    },
+    {
+      total_rows: 0,
+      total_in: 0,
+      total_out: 0,
+      saldo: 0,
+    }
+  )
+
+  totals.saldo = totals.total_in - totals.total_out
+
+  return totals
 }
 
 export async function bulkUpdateEntries({
@@ -206,36 +313,59 @@ export async function bulkUpdateEntries({
   filters,
   updates,
 }) {
-  const { data, error } = await supabase.rpc('entries_bulk_update_filtered', {
-    p_ids: ids,
-    p_search: filters.search || null,
-    p_from_date: filters.fromDate || null,
-    p_from_time: filters.fromTime || null,
-    p_to_date: filters.toDate || null,
-    p_to_time: filters.toTime || null,
-    p_only_without_account: filters.onlyWithoutAccount || false,
-    p_only_without_nature: filters.onlyWithoutNature || false,
-    p_account_code: filters.accountCode || null,
-    p_iva_filter: filters.ivaFilter || null,
+  const targetIds = Array.isArray(ids)
+    ? ids
+    : await fetchFilteredEntryIds(filters)
 
-    p_set_date: updates.date ?? null,
-    p_set_operation_datetime: updates.operation_datetime ?? null,
-    p_set_description: updates.description ?? null,
-    p_set_amount_in: updates.amount_in ?? null,
-    p_set_amount_out: updates.amount_out ?? null,
-    p_set_account_code: updates.account_code ?? null,
-    p_set_nature: updates.nature ?? null,
-    p_set_method: updates.method ?? null,
-    p_set_center: updates.center ?? null,
-    p_set_note: updates.note ?? null,
-    p_set_vat_rate: updates.vat_rate ?? null,
-    p_set_vat_amount: updates.vat_amount ?? null,
-    p_set_vat_side: updates.vat_side ?? null,
-    p_set_source: updates.source ?? null,
-  })
+  if (!targetIds.length) {
+    return { updated_rows: 0 }
+  }
 
-  if (error) throw new Error(error.message || 'Errore modifica massiva movimenti')
-  return data?.[0] || { updated_rows: 0 }
+  const chunks = chunkArray(targetIds, 500)
+  let updatedRows = 0
+
+  for (const chunk of chunks) {
+    const { data, error } = await supabase.rpc('entries_bulk_update_filtered', {
+      // Passiamo sempre gli ID esatti da aggiornare.
+      // Così la modifica massiva rispetta anche Metodo e ricerca descrizione,
+      // senza dover modificare la funzione SQL su Supabase.
+      p_ids: chunk,
+
+      // Filtri neutralizzati: gli ID sono già stati calcolati sopra.
+      p_search: null,
+      p_from_date: null,
+      p_from_time: null,
+      p_to_date: null,
+      p_to_time: null,
+      p_only_without_account: false,
+      p_only_without_nature: false,
+      p_account_code: null,
+      p_iva_filter: null,
+
+      p_set_date: updates.date ?? null,
+      p_set_operation_datetime: updates.operation_datetime ?? null,
+      p_set_description: updates.description ?? null,
+      p_set_amount_in: updates.amount_in ?? null,
+      p_set_amount_out: updates.amount_out ?? null,
+      p_set_account_code: updates.account_code ?? null,
+      p_set_nature: updates.nature ?? null,
+      p_set_method: updates.method ?? null,
+      p_set_center: updates.center ?? null,
+      p_set_note: updates.note ?? null,
+      p_set_vat_rate: updates.vat_rate ?? null,
+      p_set_vat_amount: updates.vat_amount ?? null,
+      p_set_vat_side: updates.vat_side ?? null,
+      p_set_source: updates.source ?? null,
+    })
+
+    if (error) {
+      throw new Error(error.message || 'Errore modifica massiva movimenti')
+    }
+
+    updatedRows += Number(data?.[0]?.updated_rows || 0)
+  }
+
+  return { updated_rows: updatedRows }
 }
 
 export async function importSumupEntries({ userId, fileName, rows }) {
@@ -258,7 +388,7 @@ export async function importSumupEntries({ userId, fileName, rows }) {
     if (error) {
       throw new Error(
         error.message ||
-        `Errore import SumUp nel blocco ${i + 1} di ${chunks.length}`
+          `Errore import SumUp nel blocco ${i + 1} di ${chunks.length}`
       )
     }
 
@@ -289,6 +419,9 @@ export async function fetchLastSumupImport() {
     .limit(1)
     .maybeSingle()
 
-  if (error) throw new Error(error.message || 'Errore lettura ultimo import')
+  if (error) {
+    throw new Error(error.message || 'Errore lettura ultimo import')
+  }
+
   return data || null
 }
