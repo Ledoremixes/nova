@@ -40,6 +40,7 @@ function applyEntryFilters(query, filters = {}) {
     accountCode = '',
     ivaFilter = '',
     method = '',
+    nature = '',
   } = filters
 
   if (fromDate) {
@@ -59,8 +60,14 @@ function applyEntryFilters(query, filters = {}) {
   }
 
   if (onlyWithoutNature) {
-    query = query.or('nature.is.null,nature.eq.')
+  query = query.or('nature.is.null,nature.eq.')
+} else {
+  const natureValue = cleanText(nature)
+
+  if (natureValue) {
+    query = query.ilike('nature', natureValue)
   }
+}
 
   if (ivaFilter === 'with_vat') {
     query = query.gt('vat_rate', 0)
@@ -135,6 +142,7 @@ export async function fetchEntries({
   accountCode = '',
   ivaFilter = '',
   method = '',
+  nature = '',
   page = 1,
   pageSize = 1000,
 }) {
@@ -156,6 +164,7 @@ export async function fetchEntries({
     accountCode,
     ivaFilter,
     method,
+    nature,
   })
 
   const { data, error, count } = await query

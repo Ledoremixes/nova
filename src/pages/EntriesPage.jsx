@@ -132,6 +132,46 @@ function parseVatAmount(vatAmountRaw) {
   return Number.isNaN(parsedAmount) ? null : parsedAmount
 }
 
+function normalizeText(value) {
+  return String(value ?? '').trim().toLowerCase()
+}
+
+function matchesNatureFilter(row, activeFilters) {
+  const rowNature = normalizeText(row?.nature)
+
+  if (activeFilters.onlyWithoutNature) {
+    return rowNature === ''
+  }
+
+  if (!activeFilters.nature) {
+    return true
+  }
+
+  return rowNature === normalizeText(activeFilters.nature)
+}
+
+function calculateEntriesTotals(rows) {
+  return rows.reduce(
+    (acc, row) => {
+      const amountIn = Number(row.amount_in || 0)
+      const amountOut = Number(row.amount_out || 0)
+
+      acc.total_rows += 1
+      acc.total_in += Number.isNaN(amountIn) ? 0 : amountIn
+      acc.total_out += Number.isNaN(amountOut) ? 0 : amountOut
+      acc.saldo = acc.total_in - acc.total_out
+
+      return acc
+    },
+    {
+      total_rows: 0,
+      total_in: 0,
+      total_out: 0,
+      saldo: 0,
+    }
+  )
+}
+
 function buildEntriesFromWorkbook(workbook, userId) {
   const allEntries = []
 
@@ -215,6 +255,7 @@ export default function EntriesPage() {
   const [accountCodeDraft, setAccountCodeDraft] = useState('')
   const [ivaFilterDraft, setIvaFilterDraft] = useState('')
   const [methodDraft, setMethodDraft] = useState('')
+  const [natureDraft, setNatureDraft] = useState('')
   const [applyScope, setApplyScope] = useState('single')
 
   const [filters, setFilters] = useState({
@@ -228,6 +269,7 @@ export default function EntriesPage() {
     accountCode: '',
     ivaFilter: '',
     method: '',
+    nature: '',
   })
 
   const [lastImportedFile, setLastImportedFile] = useState('')
@@ -242,12 +284,22 @@ export default function EntriesPage() {
 
   const entriesQuery = useQuery({
     queryKey: ['entries', filters, page],
-    queryFn: () => fetchEntries({ ...filters, page, pageSize: PAGE_SIZE }),
+    queryFn: () =>
+      fetchEntries({
+        ...filters,
+        natureFilter: filters.nature,
+        page,
+        pageSize: PAGE_SIZE,
+      }),
   })
 
   const totalsQuery = useQuery({
     queryKey: ['entries-totals', filters],
-    queryFn: () => fetchEntriesFilteredTotals(filters),
+    queryFn: () =>
+      fetchEntriesFilteredTotals({
+        ...filters,
+        natureFilter: filters.nature,
+      }),
   })
 
   const accountsQuery = useQuery({
@@ -341,7 +393,11 @@ export default function EntriesPage() {
     saldo: 0,
   }
 
-  const entries = entriesData.rows || []
+  const apiEntries = entriesData.rows || []
+  const hasNatureFilter = Boolean(filters.nature || filters.onlyWithoutNature)
+  const entries = hasNatureFilter ? apiEntries.filter((row) => matchesNatureFilter(row, filters)) : apiEntries
+  const displayedTotals = hasNatureFilter ? calculateEntriesTotals(entries) : totals
+  const displayedTotal = hasNatureFilter ? entries.length : entriesData.total
   const accounts = accountsQuery.data || []
 
   function applyFilters() {
@@ -357,6 +413,7 @@ export default function EntriesPage() {
       accountCode: onlyWithoutAccountDraft ? '' : accountCodeDraft,
       ivaFilter: ivaFilterDraft,
       method: methodDraft,
+      nature: onlyWithoutNatureDraft ? '' : natureDraft,
     })
   }
 
@@ -371,6 +428,7 @@ export default function EntriesPage() {
     setAccountCodeDraft('')
     setIvaFilterDraft('')
     setMethodDraft('')
+    setNatureDraft('')
     setPage(1)
 
     setFilters({
@@ -384,6 +442,7 @@ export default function EntriesPage() {
       accountCode: '',
       ivaFilter: '',
       method: '',
+      nature: '',
     })
   }
 
@@ -561,11 +620,19 @@ export default function EntriesPage() {
 
     if (applyScope === 'page') {
       const pageIds = entries.map((row) => row.id)
-      bulkUpdateMutation.mutate({ ids: pageIds, filters, updates: changedPayload })
+      bulkUpdateMutation.mutate({
+        ids: pageIds,
+        filters: { ...filters, natureFilter: filters.nature },
+        updates: changedPayload,
+      })
       return
     }
 
-    bulkUpdateMutation.mutate({ ids: null, filters, updates: changedPayload })
+    bulkUpdateMutation.mutate({
+      ids: null,
+      filters: { ...filters, natureFilter: filters.nature },
+      updates: changedPayload,
+    })
   }
 
   return (
@@ -684,6 +751,22 @@ export default function EntriesPage() {
           </div>
 
           <div className="entries-field">
+            <label>Natura</label>
+            <select
+              value={natureDraft}
+              onChange={(e) => setNatureDraft(e.target.value)}
+              disabled={onlyWithoutNatureDraft}
+            >
+              <option value="">Tutte</option>
+              {NATURE_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="entries-field">
             <label>IVA</label>
             <select value={ivaFilterDraft} onChange={(e) => setIvaFilterDraft(e.target.value)}>
               <option value="">Tutte</option>
@@ -718,8 +801,8 @@ export default function EntriesPage() {
           <strong>Ultimo import Excel:</strong>{' '}
           {lastImportQuery.data
             ? `${lastImportQuery.data.file_name || 'file senza nome'} · ${new Date(
-                lastImportQuery.data.created_at
-              ).toLocaleString('it-IT')} · importate ${lastImportQuery.data.imported_rows} · duplicate saltate ${lastImportQuery.data.skipped_rows}`
+              lastImportQuery.data.created_at
+            ).toLocaleString('it-IT')} · importate ${lastImportQuery.data.imported_rows} · duplicate saltate ${lastImportQuery.data.skipped_rows}`
             : '—'}
         </div>
 
@@ -736,7 +819,7 @@ export default function EntriesPage() {
           <div>
             <h2>Movimenti</h2>
             <p>
-              Elenco risultati filtrati. Totale: <strong>{entriesData.total}</strong>
+              Elenco risultati filtrati. Totale: <strong>{displayedTotal}</strong>
             </p>
           </div>
 
@@ -768,19 +851,19 @@ export default function EntriesPage() {
         <div className="stats-grid">
           <div className="stat-card stat-card--accent">
             <div className="stat-card__title">Entrate filtrate</div>
-            <div className="stat-card__value">{euro(totals.total_in)}</div>
+            <div className="stat-card__value">{euro(displayedTotals.total_in)}</div>
           </div>
           <div className="stat-card">
             <div className="stat-card__title">Uscite filtrate</div>
-            <div className="stat-card__value">{euro(totals.total_out)}</div>
+            <div className="stat-card__value">{euro(displayedTotals.total_out)}</div>
           </div>
           <div className="stat-card">
             <div className="stat-card__title">Saldo filtrato</div>
-            <div className="stat-card__value">{euro(totals.saldo)}</div>
+            <div className="stat-card__value">{euro(displayedTotals.saldo)}</div>
           </div>
           <div className="stat-card">
             <div className="stat-card__title">Movimenti</div>
-            <div className="stat-card__value">{totals.total_rows}</div>
+            <div className="stat-card__value">{displayedTotals.total_rows}</div>
           </div>
         </div>
 
