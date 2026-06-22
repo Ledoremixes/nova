@@ -3,304 +3,612 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthProvider'
 import {
   fetchTesserati,
-  createTesserato,
+  fetchTesseratoDetails,
   updateTesserato,
-  deleteTesserato,
+  toggleCorsista,
+  generateMembershipNumber,
+  generateMissingMembershipNumbers,
 } from '../api/tesserati'
+import { hasCustomMembershipNumber, membershipCode } from '../lib/membership'
+import { getOrchideaConfigStatus } from '../api/orchideaSupabase'
+import '../styles/TesseratiPage.css'
 
-const emptyForm = {
+const emptyStudentForm = {
   nome: '',
   cognome: '',
-  cod_fiscale: '',
-  cellulare: '',
-  indirizzo: '',
-  citta: '',
   email: '',
-  tipo: 'Tesserato',
-  anno: '25/26',
-  pagamento: '',
-  note: '',
+  telefono: '',
+  cf: '',
+  nascita: '',
+  luogo: '',
+  residenza: '',
+  numero_tessera: '',
+  stagione: '2026/2027',
+  status: 'pending_payment',
+  payment_status: 'unpaid',
+  tessera_attiva: true,
+  is_corsista: false,
+}
+
+function fullName(student) {
+  return `${student?.nome || ''} ${student?.cognome || ''}`.trim() || 'Senza nome'
+}
+
+function initials(student) {
+  const first = String(student?.nome || '').trim().charAt(0)
+  const last = String(student?.cognome || '').trim().charAt(0)
+  return `${first}${last}`.trim().toUpperCase() || 'OR'
+}
+
+function buildStudentForm(student) {
+  if (!student) return emptyStudentForm
+
+  return {
+    nome: student.nome || '',
+    cognome: student.cognome || '',
+    email: student.email || '',
+    telefono: student.telefono || '',
+    cf: student.cf || '',
+    nascita: student.nascita || '',
+    luogo: student.luogo || '',
+    residenza: student.residenza || '',
+    numero_tessera: student.numero_tessera || '',
+    stagione: student.stagione || '2026/2027',
+    status: student.status || 'pending_payment',
+    payment_status: student.payment_status || 'unpaid',
+    tessera_attiva: student.tessera_attiva !== false,
+    is_corsista: Boolean(student.is_corsista),
+  }
+}
+
+function searchText(student) {
+  return [
+    student?.nome,
+    student?.cognome,
+    student?.email,
+    student?.cf,
+    student?.telefono,
+    student?.residenza,
+    student?.numero_tessera,
+    membershipCode(student),
+    student?.qr_token,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+}
+
+function statusLabel(value) {
+  const labels = {
+    active: 'Attiva',
+    pending_payment: 'In attesa pagamento',
+    inactive: 'Non attiva',
+    blocked: 'Bloccata',
+  }
+  return labels[value] || value || '—'
+}
+
+function paymentStatusLabel(value) {
+  const labels = {
+    paid: 'Pagato',
+    unpaid: 'Non pagato',
+    pending: 'In attesa',
+    refunded: 'Rimborsato',
+    pagato: 'Pagato',
+    da_pagare: 'Da pagare',
+    in_attesa: 'In attesa',
+  }
+  return labels[value] || value || '—'
+}
+
+function statusClass(value) {
+  if (value === 'active' || value === 'paid' || value === 'pagato') return 'nova-pill nova-pill--ok'
+  if (value === 'pending_payment' || value === 'pending' || value === 'unpaid' || value === 'da_pagare' || value === 'in_attesa') return 'nova-pill nova-pill--warn'
+  return 'nova-pill nova-pill--neutral'
+}
+
+function formatDate(value) {
+  if (!value) return '—'
+  return new Date(value).toLocaleDateString('it-IT')
+}
+
+function formatTime(value) {
+  if (!value) return ''
+  return String(value).slice(0, 5)
+}
+
+function formatMoney(value) {
+  return new Intl.NumberFormat('it-IT', {
+    style: 'currency',
+    currency: 'EUR',
+  }).format(Number(value || 0))
+}
+
+function billingLabel(value) {
+  const labels = {
+    mensile: 'Mensile',
+    trimestrale: 'Trimestrale',
+    annuale: 'Annuale',
+    all_you_can_dance: 'All You Can Dance',
+  }
+  return labels[value] || value || 'Mensile'
 }
 
 export default function TesseratiPage() {
-  const { role, user } = useAuth()
+  const { role } = useAuth()
   const isAdmin = role === 'admin'
   const queryClient = useQueryClient()
 
   const [search, setSearch] = useState('')
-  const [anno, setAnno] = useState('')
-  const [tipo, setTipo] = useState('')
-  const [isOpen, setIsOpen] = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState(emptyForm)
+  const [stagione, setStagione] = useState('')
+  const [status, setStatus] = useState('')
+  const [roleFilter, setRoleFilter] = useState('')
+  const [selectedStudent, setSelectedStudent] = useState(null)
+  const [studentForm, setStudentForm] = useState(emptyStudentForm)
 
-  const { data = [], isLoading, error } = useQuery({
-    queryKey: ['tesserati', search, anno, tipo],
-    queryFn: () => fetchTesserati({ search, anno, tipo }),
+  const { data: students = [], isLoading, error } = useQuery({
+    queryKey: ['tesseramenti-orchidea'],
+    queryFn: fetchTesserati,
   })
 
-  const anniDisponibili = useMemo(() => {
-    const set = new Set(data.map((row) => row.anno).filter(Boolean))
+  const detailsQuery = useQuery({
+    queryKey: ['tesseramento-details', selectedStudent?.id],
+    queryFn: () => fetchTesseratoDetails(selectedStudent.id),
+    enabled: Boolean(selectedStudent?.id),
+  })
+
+  const stagioniDisponibili = useMemo(() => {
+    const set = new Set(students.map((student) => student.stagione).filter(Boolean))
     return Array.from(set).sort((a, b) => String(b).localeCompare(String(a)))
-  }, [data])
+  }, [students])
 
-  const tipiDisponibili = useMemo(() => {
-    const set = new Set(data.map((row) => row.tipo).filter(Boolean))
-    return Array.from(set).sort((a, b) => String(a).localeCompare(String(b)))
-  }, [data])
+  const filteredStudents = useMemo(() => {
+    const needle = search.trim().toLowerCase()
 
-  const createMutation = useMutation({
-    mutationFn: createTesserato,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tesserati'] })
-      closeModal()
-    },
-  })
+    return students.filter((student) => {
+      const matchesSearch = !needle || searchText(student).includes(needle)
+      const matchesSeason = !stagione || student.stagione === stagione
+      const matchesStatus = !status || student.status === status
+      const matchesRole =
+        !roleFilter ||
+        (roleFilter === 'corsista' && student.is_corsista) ||
+        (roleFilter === 'tesserato' && !student.is_corsista) ||
+        (roleFilter === 'attiva' && student.tessera_attiva !== false) ||
+        (roleFilter === 'non_attiva' && student.tessera_attiva === false)
+
+      return matchesSearch && matchesSeason && matchesStatus && matchesRole
+    })
+  }, [students, search, stagione, status, roleFilter])
+
+  const stats = useMemo(() => {
+    return {
+      total: students.length,
+      active: students.filter((student) => student.tessera_attiva !== false).length,
+      corsisti: students.filter((student) => student.is_corsista).length,
+      missingNumbers: students.filter((student) => !hasCustomMembershipNumber(student)).length,
+    }
+  }, [students])
 
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }) => updateTesserato(id, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tesserati'] })
-      closeModal()
+    onSuccess: (updated) => {
+      setSelectedStudent(updated)
+      setStudentForm(buildStudentForm(updated))
+      queryClient.invalidateQueries({ queryKey: ['tesseramenti-orchidea'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-registry'] })
     },
   })
 
-  const deleteMutation = useMutation({
-    mutationFn: deleteTesserato,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tesserati'] })
+  const toggleCorsistaMutation = useMutation({
+    mutationFn: toggleCorsista,
+    onSuccess: (updated) => {
+      if (selectedStudent?.id === updated.id) {
+        setSelectedStudent(updated)
+        setStudentForm(buildStudentForm(updated))
+      }
+      queryClient.invalidateQueries({ queryKey: ['tesseramenti-orchidea'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-registry'] })
     },
   })
 
-  function openCreate() {
-    setEditing(null)
-    setForm(emptyForm)
-    setIsOpen(true)
+  const generateNumberMutation = useMutation({
+    mutationFn: generateMembershipNumber,
+    onSuccess: (updated) => {
+      if (selectedStudent?.id === updated.id) {
+        setSelectedStudent(updated)
+        setStudentForm(buildStudentForm(updated))
+      }
+      queryClient.invalidateQueries({ queryKey: ['tesseramenti-orchidea'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-registry'] })
+    },
+  })
+
+  const generateMissingMutation = useMutation({
+    mutationFn: generateMissingMembershipNumbers,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tesseramenti-orchidea'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-registry'] })
+    },
+  })
+
+  function openStudentDetail(student) {
+    setSelectedStudent(student)
+    setStudentForm(buildStudentForm(student))
   }
 
-  function openEdit(row) {
-    setEditing(row)
-    setForm({
-      nome: row.nome || '',
-      cognome: row.cognome || '',
-      cod_fiscale: row.cod_fiscale || '',
-      cellulare: row.cellulare || '',
-      indirizzo: row.indirizzo || '',
-      citta: row.citta || '',
-      email: row.email || '',
-      tipo: row.tipo || 'Tesserato',
-      anno: row.anno || '25/26',
-      pagamento: row.pagamento || '',
-      note: row.note || '',
-    })
-    setIsOpen(true)
+  function closeStudentDetail() {
+    setSelectedStudent(null)
+    setStudentForm(emptyStudentForm)
   }
 
-  function closeModal() {
-    setIsOpen(false)
-    setEditing(null)
-    setForm(emptyForm)
-  }
-
-  function onChange(e) {
-    const { name, value } = e.target
-    setForm((prev) => ({ ...prev, [name]: value }))
+  function handleChange(field, value) {
+    setStudentForm((current) => ({ ...current, [field]: value }))
   }
 
   function handleSubmit(e) {
     e.preventDefault()
+    if (!selectedStudent || !isAdmin) return
 
-    const payload = {
-      ...form,
-      user_id: editing?.user_id || user.id,
-    }
-
-    if (editing) {
-      updateMutation.mutate({ id: editing.id, payload })
-    } else {
-      createMutation.mutate(payload)
-    }
+    updateMutation.mutate({ id: selectedStudent.id, payload: studentForm })
   }
 
-  function handleDelete(row) {
-    const ok = window.confirm(`Eliminare ${row.nome || ''} ${row.cognome || ''}?`)
-    if (!ok) return
-    deleteMutation.mutate(row.id)
-  }
+  const details = detailsQuery.data || { enrollments: [], payments: [] }
+  const configStatus = getOrchideaConfigStatus()
+  const isLegacySource = students.sourceTable === 'tesserati'
+  const sourceLabel = students.sourceLabel || (isLegacySource ? 'Nova legacy' : 'Orchidea Allievi')
 
   return (
     <section className="page">
+      <div className="dashboard-hero tesserati-hero">
+        <div>
+          <div className="dashboard-hero__eyebrow">Tesserati Orchidea</div>
+          <h2 className="dashboard-hero__title">Archivio tesserati corretto</h2>
+          <p className="dashboard-hero__text">
+            Questa sezione legge la tabella ufficiale <strong>tesseramenti</strong> usata dal sito e da orchidea-allievi, senza creare doppioni.
+          </p>
+        </div>
+      </div>
+
+      <div className={`nova-source-alert ${isLegacySource ? 'nova-source-alert--warn' : 'nova-source-alert--ok'}`}>
+        <strong>Sorgente dati:</strong> {sourceLabel}.{' '}
+        {isLegacySource ? configStatus.message : 'Collegamento tesserati Orchidea attivo.'}
+      </div>
+
+      <div className="stats-grid">
+        <div className="page-card tesserati-stat-card">
+          <span>Totale tesserati</span>
+          <strong>{stats.total}</strong>
+        </div>
+        <div className="page-card tesserati-stat-card">
+          <span>Tessere attive</span>
+          <strong>{stats.active}</strong>
+        </div>
+        <div className="page-card tesserati-stat-card">
+          <span>Corsisti</span>
+          <strong>{stats.corsisti}</strong>
+        </div>
+        <div className="page-card tesserati-stat-card">
+          <span>Senza numero progressivo</span>
+          <strong>{stats.missingNumbers}</strong>
+        </div>
+      </div>
+
       <div className="page-card">
         <div className="section-head">
           <div>
             <h2>Tesserati</h2>
-            <p>Archivio tesserati completo</p>
+            <p>Anagrafiche sincronizzate con orchidea-allievi e portale tesserati.</p>
           </div>
 
           {isAdmin ? (
-            <button className="topbar__button topbar__button--primary" onClick={openCreate}>
-              Nuovo tesserato
+            <button
+              className="topbar__button topbar__button--primary"
+              type="button"
+              onClick={() => generateMissingMutation.mutate()}
+              disabled={generateMissingMutation.isPending || stats.missingNumbers === 0}
+            >
+              {generateMissingMutation.isPending ? 'Genero numeri…' : 'Genera numeri mancanti'}
             </button>
           ) : null}
         </div>
 
-        <div className="toolbar">
+        <div className="toolbar toolbar--wrap tesserati-toolbar">
           <input
             className="searchInput"
             type="text"
-            placeholder="Cerca per nome, cognome, email, codice fiscale o cellulare"
+            placeholder="Cerca nome, cognome, email, codice fiscale, telefono o tessera"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
 
-          <select className="filterSelect" value={anno} onChange={(e) => setAnno(e.target.value)}>
-            <option value="">Tutti gli anni</option>
-            {anniDisponibili.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
+          <select className="filterSelect" value={stagione} onChange={(e) => setStagione(e.target.value)}>
+            <option value="">Tutte le stagioni</option>
+            {stagioniDisponibili.map((item) => (
+              <option key={item} value={item}>{item}</option>
             ))}
           </select>
 
-          <select className="filterSelect" value={tipo} onChange={(e) => setTipo(e.target.value)}>
-            <option value="">Tutti i tipi</option>
-            {tipiDisponibili.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
+          <select className="filterSelect" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">Tutti gli stati</option>
+            <option value="pending_payment">In attesa pagamento</option>
+            <option value="active">Attiva</option>
+            <option value="inactive">Non attiva</option>
+            <option value="blocked">Bloccata</option>
+          </select>
+
+          <select className="filterSelect" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+            <option value="">Tutti i ruoli</option>
+            <option value="corsista">Solo corsisti</option>
+            <option value="tesserato">Solo tesserati</option>
+            <option value="attiva">Tessera attiva</option>
+            <option value="non_attiva">Tessera non attiva</option>
           </select>
         </div>
 
         {isLoading ? <p>Caricamento tesserati...</p> : null}
-        {error ? <p>Errore: {error.message}</p> : null}
+        {error ? <p className="form-error">Errore: {error.message}</p> : null}
+        {updateMutation.error ? <p className="form-error">Errore salvataggio: {updateMutation.error.message}</p> : null}
+        {generateNumberMutation.error ? <p className="form-error">Errore numero tessera: {generateNumberMutation.error.message}</p> : null}
+        {generateMissingMutation.error ? <p className="form-error">Errore numeri mancanti: {generateMissingMutation.error.message}</p> : null}
+        {toggleCorsistaMutation.error ? <p className="form-error">Errore ruolo corsista: {toggleCorsistaMutation.error.message}</p> : null}
 
         {!isLoading && !error ? (
-          <div className="tableWrap">
-            <table className="dataTable">
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Cognome</th>
-                  <th>Tipo</th>
-                  <th>Anno</th>
-                  <th>Pagamento</th>
-                  <th>Email</th>
-                  <th>Cellulare</th>
-                  <th>Cod. fiscale</th>
-                  <th>Azioni</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.length === 0 ? (
-                  <tr>
-                    <td colSpan="9">Nessun tesserato trovato.</td>
-                  </tr>
-                ) : (
-                  data.map((row) => (
-                    <tr key={row.id}>
-                      <td>{row.nome || '-'}</td>
-                      <td>{row.cognome || '-'}</td>
-                      <td>{row.tipo || '-'}</td>
-                      <td>{row.anno || '-'}</td>
-                      <td>{row.pagamento || '-'}</td>
-                      <td>{row.email || '-'}</td>
-                      <td>{row.cellulare || '-'}</td>
-                      <td>{row.cod_fiscale || '-'}</td>
-                      <td>
-                        {isAdmin ? (
-                          <div className="rowActions">
-                            <button className="actionBtn" onClick={() => openEdit(row)}>
-                              Modifica
-                            </button>
-                            <button
-                              className="actionBtn actionBtn--danger"
-                              onClick={() => handleDelete(row)}
-                            >
-                              Elimina
-                            </button>
-                          </div>
-                        ) : (
-                          '-'
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-      </div>
-
-      {isOpen ? (
-        <div className="modalOverlay" onClick={closeModal}>
-          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-            <div className="section-head">
+          <>
+            <div className="student-list-toolbar">
               <div>
-                <h3>{editing ? 'Modifica tesserato' : 'Nuovo tesserato'}</h3>
-                <p>Compila i dati principali del tesserato.</p>
+                <strong>{filteredStudents.length} tesserati trovati</strong>
+                <small>Fonte dati: {sourceLabel}</small>
               </div>
             </div>
 
-            <form className="formGrid" onSubmit={handleSubmit}>
-              <input name="nome" placeholder="Nome" value={form.nome} onChange={onChange} required />
-              <input
-                name="cognome"
-                placeholder="Cognome"
-                value={form.cognome}
-                onChange={onChange}
-                required
-              />
-              <input
-                name="cod_fiscale"
-                placeholder="Codice fiscale"
-                value={form.cod_fiscale}
-                onChange={onChange}
-              />
-              <input
-                name="cellulare"
-                placeholder="Cellulare"
-                value={form.cellulare}
-                onChange={onChange}
-              />
-              <input
-                name="indirizzo"
-                placeholder="Indirizzo"
-                value={form.indirizzo}
-                onChange={onChange}
-              />
-              <input name="citta" placeholder="Città" value={form.citta} onChange={onChange} />
-              <input name="email" placeholder="Email" value={form.email} onChange={onChange} />
-              <input name="tipo" placeholder="Tipo" value={form.tipo} onChange={onChange} />
-              <input name="anno" placeholder="Anno" value={form.anno} onChange={onChange} />
-              <input
-                name="pagamento"
-                placeholder="Pagamento"
-                value={form.pagamento}
-                onChange={onChange}
-              />
-              <textarea
-                className="formTextarea"
-                name="note"
-                placeholder="Note"
-                value={form.note}
-                onChange={onChange}
-              />
+            <div className="tableWrap">
+              <table className="dataTable tesserati-table">
+                <thead>
+                  <tr>
+                    <th>Allievo</th>
+                    <th>Email</th>
+                    <th>Telefono</th>
+                    <th>Cod. fiscale</th>
+                    <th>Tessera</th>
+                    <th>Stato</th>
+                    <th>Ruolo</th>
+                    <th>Azioni</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStudents.length === 0 ? (
+                    <tr>
+                      <td colSpan="8">Nessun tesserato trovato.</td>
+                    </tr>
+                  ) : (
+                    filteredStudents.map((student) => (
+                      <tr key={student.id} className={selectedStudent?.id === student.id ? 'selected-table-row' : ''}>
+                        <td>
+                          <div className="tesserati-person-cell">
+                            <span className="tesserati-avatar">{initials(student)}</span>
+                            <div>
+                              <strong>{fullName(student)}</strong>
+                              <small>{student.stagione || 'Stagione non indicata'}</small>
+                            </div>
+                          </div>
+                        </td>
+                        <td>{student.email || '—'}</td>
+                        <td>{student.telefono || '—'}</td>
+                        <td>{student.cf || '—'}</td>
+                        <td>
+                          <span className={student.tessera_attiva !== false ? 'nova-pill nova-pill--ok' : 'nova-pill nova-pill--warn'}>
+                            {student.tessera_attiva !== false ? 'Attiva' : 'Non attiva'}
+                          </span>
+                          <small className="table-subtext">{membershipCode(student) || 'Senza numero'}</small>
+                        </td>
+                        <td>
+                          <span className={statusClass(student.status)}>{statusLabel(student.status)}</span>
+                          <small className="table-subtext">{paymentStatusLabel(student.payment_status)}</small>
+                        </td>
+                        <td>
+                          <span className={student.is_corsista ? 'nova-pill nova-pill--ok' : 'nova-pill nova-pill--neutral'}>
+                            {student.is_corsista ? 'Corsista' : 'Tesserato'}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="rowActions">
+                            <button className="actionBtn" type="button" onClick={() => openStudentDetail(student)}>
+                              Apri scheda
+                            </button>
+                            {isAdmin && !hasCustomMembershipNumber(student) ? (
+                              <button
+                                className="actionBtn"
+                                type="button"
+                                onClick={() => generateNumberMutation.mutate(student)}
+                                disabled={generateNumberMutation.isPending}
+                              >
+                                N. progr.
+                              </button>
+                            ) : null}
+                            {isAdmin ? (
+                              <button
+                                className="actionBtn"
+                                type="button"
+                                onClick={() => toggleCorsistaMutation.mutate(student)}
+                                disabled={toggleCorsistaMutation.isPending}
+                              >
+                                {student.is_corsista ? 'Rimuovi corsista' : 'Corsista'}
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
+      </div>
+
+      {selectedStudent ? (
+        <div className="modalOverlay" onClick={closeStudentDetail}>
+          <div className="modalCard tesserati-detail-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="section-head">
+              <div>
+                <div className="dashboard-hero__eyebrow">Scheda allievo</div>
+                <h3>{fullName(selectedStudent)}</h3>
+                <p>
+                  Tessera: <strong>{membershipCode(selectedStudent) || 'Senza numero'}</strong> · Auth collegato:{' '}
+                  <strong>{selectedStudent.auth_user_id ? 'Sì' : 'No'}</strong>
+                </p>
+              </div>
+              <button className="topbar__button" type="button" onClick={closeStudentDetail}>Chiudi</button>
+            </div>
+
+            <form className="formGrid tesserati-detail-form" onSubmit={handleSubmit}>
+              <label>Nome
+                <input value={studentForm.nome} onChange={(e) => handleChange('nome', e.target.value)} disabled={!isAdmin} required />
+              </label>
+              <label>Cognome
+                <input value={studentForm.cognome} onChange={(e) => handleChange('cognome', e.target.value)} disabled={!isAdmin} required />
+              </label>
+              <label>Email
+                <input type="email" value={studentForm.email} onChange={(e) => handleChange('email', e.target.value)} disabled={!isAdmin} />
+              </label>
+              <label>Telefono
+                <input value={studentForm.telefono} onChange={(e) => handleChange('telefono', e.target.value)} disabled={!isAdmin} />
+              </label>
+              <label>Codice fiscale
+                <input value={studentForm.cf} onChange={(e) => handleChange('cf', e.target.value)} disabled={!isAdmin} />
+              </label>
+              <label>Data nascita
+                <input type="date" value={studentForm.nascita || ''} onChange={(e) => handleChange('nascita', e.target.value)} disabled={!isAdmin} />
+              </label>
+              <label>Luogo nascita
+                <input value={studentForm.luogo} onChange={(e) => handleChange('luogo', e.target.value)} disabled={!isAdmin} />
+              </label>
+              <label>Residenza
+                <input value={studentForm.residenza} onChange={(e) => handleChange('residenza', e.target.value)} disabled={!isAdmin} />
+              </label>
+              <label>Numero tessera personalizzato
+                <input value={studentForm.numero_tessera} onChange={(e) => handleChange('numero_tessera', e.target.value)} disabled={!isAdmin} placeholder="Lascia vuoto per usare il codice TESS" />
+              </label>
+              <label>Stagione
+                <input value={studentForm.stagione} onChange={(e) => handleChange('stagione', e.target.value)} disabled={!isAdmin} />
+              </label>
+              <label>Stato tessera
+                <select value={studentForm.status || ''} onChange={(e) => handleChange('status', e.target.value)} disabled={!isAdmin}>
+                  <option value="pending_payment">In attesa pagamento</option>
+                  <option value="active">Attiva</option>
+                  <option value="inactive">Non attiva</option>
+                  <option value="blocked">Bloccata</option>
+                </select>
+              </label>
+              <label>Stato pagamento tessera
+                <select value={studentForm.payment_status || ''} onChange={(e) => handleChange('payment_status', e.target.value)} disabled={!isAdmin}>
+                  <option value="unpaid">Non pagato</option>
+                  <option value="paid">Pagato</option>
+                  <option value="pending">In attesa</option>
+                  <option value="refunded">Rimborsato</option>
+                </select>
+              </label>
+
+              <div className="tesserati-check-grid">
+                <label className="check-card">
+                  <input type="checkbox" checked={studentForm.tessera_attiva} onChange={(e) => handleChange('tessera_attiva', e.target.checked)} disabled={!isAdmin} />
+                  Tessera attiva
+                </label>
+                <label className="check-card">
+                  <input type="checkbox" checked={studentForm.is_corsista} onChange={(e) => handleChange('is_corsista', e.target.checked)} disabled={!isAdmin} />
+                  Corsista
+                </label>
+              </div>
+
+              {!studentForm.numero_tessera ? (
+                <div className="info-box compact-info">
+                  <strong>Codice tessera attuale: {membershipCode(selectedStudent) || '—'}</strong>
+                  <span>È lo stesso criterio di orchidea-allievi: numero progressivo se presente, altrimenti codice TESS basato sull’ID.</span>
+                </div>
+              ) : null}
 
               <div className="modalActions">
-                <button type="button" className="topbar__button" onClick={closeModal}>
-                  Annulla
-                </button>
-                <button
-                  type="submit"
-                  className="topbar__button topbar__button--primary"
-                  disabled={createMutation.isPending || updateMutation.isPending}
-                >
-                  {editing ? 'Salva modifiche' : 'Crea tesserato'}
-                </button>
+                {isAdmin ? (
+                  <button type="submit" className="topbar__button topbar__button--primary" disabled={updateMutation.isPending}>
+                    {updateMutation.isPending ? 'Salvataggio…' : 'Salva scheda allievo'}
+                  </button>
+                ) : null}
+                {isAdmin && !hasCustomMembershipNumber(selectedStudent) ? (
+                  <button
+                    type="button"
+                    className="topbar__button"
+                    onClick={() => generateNumberMutation.mutate(selectedStudent)}
+                    disabled={generateNumberMutation.isPending}
+                  >
+                    {generateNumberMutation.isPending ? 'Genero…' : 'Genera numero progressivo'}
+                  </button>
+                ) : null}
               </div>
             </form>
+
+            <div className="tesserati-detail-grid">
+              <div className="page-card tesserati-nested-card">
+                <div className="section-head section-head--compact">
+                  <div>
+                    <h3>Iscrizioni e prezzi</h3>
+                    <p>Corsi collegati alla scheda allievo.</p>
+                  </div>
+                  <span className="nova-pill nova-pill--neutral">{details.enrollments.length}</span>
+                </div>
+
+                {detailsQuery.isLoading ? <p>Caricamento corsi...</p> : null}
+                {details.enrollments.length === 0 && !detailsQuery.isLoading ? <p>Nessun corso collegato.</p> : null}
+
+                <div className="tesserati-mini-list">
+                  {details.enrollments.map((item) => (
+                    <div className="tesserati-mini-row" key={item.id}>
+                      <div>
+                        <strong>{item.corsi?.nome || 'Corso'}</strong>
+                        <small>
+                          {item.corsi?.livello || 'Livello non impostato'} · {billingLabel(item.tipo_pagamento)} · {formatMoney(item.tariffa_mensile ?? item.corsi?.prezzo_mensile)} / mese
+                        </small>
+                        {item.corsi?.giorno_settimana ? (
+                          <small>{item.corsi.giorno_settimana} {formatTime(item.corsi.ora_inizio)}-{formatTime(item.corsi.ora_fine)}</small>
+                        ) : null}
+                        {item.pacchetto_nome ? <small>Pacchetto: {item.pacchetto_nome}</small> : null}
+                      </div>
+                      <span className={item.stato === 'attivo' ? 'nova-pill nova-pill--ok' : 'nova-pill nova-pill--neutral'}>{item.stato || 'attivo'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="page-card tesserati-nested-card">
+                <div className="section-head section-head--compact">
+                  <div>
+                    <h3>Pagamenti</h3>
+                    <p>Ultime quote collegate.</p>
+                  </div>
+                  <span className="nova-pill nova-pill--neutral">{details.payments.length}</span>
+                </div>
+
+                {detailsQuery.isLoading ? <p>Caricamento pagamenti...</p> : null}
+                {details.payments.length === 0 && !detailsQuery.isLoading ? <p>Nessun pagamento creato.</p> : null}
+
+                <div className="tesserati-mini-list">
+                  {details.payments.map((payment) => (
+                    <div className="tesserati-mini-row" key={payment.id}>
+                      <div>
+                        <strong>{payment.descrizione || 'Pagamento'}</strong>
+                        <small>{payment.periodo || 'Periodo non indicato'} · scadenza {formatDate(payment.scadenza)}</small>
+                      </div>
+                      <div className="tesserati-payment-side">
+                        <strong>{formatMoney(payment.importo)}</strong>
+                        <span className={statusClass(payment.stato)}>{paymentStatusLabel(payment.stato)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {detailsQuery.error ? <p className="form-error">Errore scheda: {detailsQuery.error.message}</p> : null}
           </div>
         </div>
       ) : null}

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../api/supabase'
+import { orchideaSupabase, hasDedicatedOrchideaConfig } from '../api/orchideaSupabase'
 
 const AuthContext = createContext(null)
 
@@ -15,20 +16,54 @@ export function AuthProvider({ children }) {
       return null
     }
 
-    const { data, error } = await supabase
+    const { data: novaUser, error: novaError } = await supabase
       .from('users')
       .select('id, email, role, is_active')
       .eq('id', currentUser.id)
-      .single()
+      .maybeSingle()
 
-    if (error) {
-      console.error('Errore caricamento profilo:', error)
-      setProfile(null)
-      return null
+    if (novaUser && !novaError) {
+      setProfile(novaUser)
+      return novaUser
     }
 
-    setProfile(data)
-    return data
+    let orchideaProfile = null
+    let orchideaError = null
+
+    const profileByUser = await supabase
+      .from('profiles')
+      .select('user_id, email, role, is_active')
+      .eq('user_id', currentUser.id)
+      .maybeSingle()
+
+    orchideaProfile = profileByUser.data
+    orchideaError = profileByUser.error
+
+    if (!orchideaProfile && currentUser.email && !orchideaError) {
+      const profileByEmail = await supabase
+        .from('profiles')
+        .select('user_id, email, role, is_active')
+        .ilike('email', currentUser.email)
+        .maybeSingle()
+
+      orchideaProfile = profileByEmail.data
+      orchideaError = profileByEmail.error
+    }
+
+    if (orchideaProfile && !orchideaError) {
+      const profile = {
+        id: orchideaProfile.user_id || currentUser.id,
+        email: orchideaProfile.email || currentUser.email,
+        role: orchideaProfile.role,
+        is_active: orchideaProfile.is_active,
+      }
+      setProfile(profile)
+      return profile
+    }
+
+    console.error('Errore caricamento profilo:', novaError || orchideaError)
+    setProfile(null)
+    return null
   }
 
   useEffect(() => {
@@ -97,10 +132,25 @@ export function AuthProvider({ children }) {
       setLoading(false)
       throw error
     }
+
+    // Se è configurato anche il database di orchidea-allievi, proviamo ad aprire
+    // una seconda sessione separata. Così le policy RLS del portale allievi
+    // permettono a Nova di leggere/modificare tesseramenti, iscrizioni e pagamenti.
+    if (hasDedicatedOrchideaConfig) {
+      const { error: orchideaError } = await orchideaSupabase.auth.signInWithPassword({ email, password })
+      if (orchideaError) {
+        console.warn('Login database Orchidea Allievi non riuscito:', orchideaError.message)
+      }
+    }
   }
 
   async function signOut() {
     const { error } = await supabase.auth.signOut()
+    if (hasDedicatedOrchideaConfig) {
+      await orchideaSupabase.auth.signOut().catch((err) => {
+        console.warn('Logout database Orchidea Allievi non riuscito:', err?.message || err)
+      })
+    }
     if (error) throw error
   }
 

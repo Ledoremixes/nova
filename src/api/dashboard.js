@@ -1,4 +1,6 @@
 import { supabase } from './supabase'
+import { fetchTesserati } from './tesserati'
+import { membershipCode } from '../lib/membership'
 
 function normalizeNumber(value) {
   const n = Number(value || 0)
@@ -63,40 +65,35 @@ export async function fetchBarTopItems(userId) {
 }
 
 export async function fetchDashboardRegistry() {
-  const [tesseratiCountRes, teachersCountRes, ultimiTesseratiRes] = await Promise.all([
-    supabase
-      .from('tesserati')
-      .select('id', { count: 'exact', head: true }),
-
+  const [studentsResult, teachersCountRes] = await Promise.allSettled([
+    fetchTesserati(),
     supabase
       .from('teachers')
       .select('id', { count: 'exact', head: true }),
-
-    supabase
-      .from('tesserati')
-      .select('id, nome, cognome, tipo, anno, created_at')
-      .order('created_at', { ascending: false })
-      .limit(8),
   ])
 
-  const errors = [
-    tesseratiCountRes.error,
-    teachersCountRes.error,
-    ultimiTesseratiRes.error,
-  ].filter(Boolean)
-
-  if (errors.length > 0) {
-    throw new Error(errors[0].message || 'Errore caricamento dati anagrafici dashboard')
+  if (studentsResult.status === 'rejected') {
+    throw new Error(studentsResult.reason?.message || 'Errore caricamento dati tesserati')
   }
 
+  const students = studentsResult.value || []
+  const teachersCount = teachersCountRes.status === 'fulfilled' && !teachersCountRes.value.error
+    ? teachersCountRes.value.count || 0
+    : 0
+
+  const recentStudents = [...students]
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+    .slice(0, 8)
+
   return {
-    totalTesserati: tesseratiCountRes.count || 0,
-    totalInsegnanti: teachersCountRes.count || 0,
-    ultimiTesserati: (ultimiTesseratiRes.data || []).map((row) => ({
+    totalTesserati: students.length,
+    totalInsegnanti: teachersCount,
+    ultimiTesserati: recentStudents.map((row) => ({
       id: row.id,
       nomeCompleto: `${row.nome || ''} ${row.cognome || ''}`.trim(),
-      tipo: row.tipo || '-',
-      anno: row.anno || '-',
+      tipo: row.is_corsista ? 'Corsista' : (row.tessera_attiva === false ? 'Non attiva' : 'Tesserato'),
+      anno: row.stagione || '-',
+      numeroTessera: membershipCode(row),
       createdAt: row.created_at || null,
     })),
   }
