@@ -2,43 +2,52 @@
 
 ## Problema corretto
 
-L'errore `Could not find the table public.tesseramenti in the schema cache` succedeva perché Nova stava interrogando la tabella `tesseramenti` sul database Supabase di Nova, dove quella tabella non esiste.
+Nova e `orchidea-allievi` usano due database Supabase diversi.
 
-La contabilità deve continuare a usare il database Nova, mentre i tesserati corretti devono arrivare dal database del portale `orchidea-allievi`.
+Le variabili `VITE_ORCHIDEA_SUPABASE_URL` e `VITE_ORCHIDEA_SUPABASE_ANON_KEY` permettono a Nova di collegarsi al database corretto, ma non bastano da sole: se il client non ha anche una sessione Supabase valida su `orchidea-allievi`, le policy RLS possono restituire 0 tesserati senza mostrare un errore evidente.
+
+Nel caso visto a schermo, Nova diceva "collegamento attivo" perché il database era configurato, ma non stava verificando se l'utente fosse autenticato anche sul database allievi.
 
 ## Cosa è stato modificato
 
-- Aggiunto client Supabase separato per il database allievi: `src/api/orchideaSupabase.js`.
-- La sezione Tesserati ora prova a leggere `public.tesseramenti` dal database Orchidea Allievi.
-- Se il database allievi non è configurato, Nova non si rompe più: usa temporaneamente la vecchia tabella `tesserati` di Nova e mostra un avviso giallo nella pagina.
-- La dashboard non va più in errore se `tesseramenti` non esiste nel database Nova.
-- La grafica Nova della pagina tesserati è stata mantenuta.
-- È stata mantenuta la scheda allievo con apertura/modifica campi.
+- Aggiunto controllo reale della sessione su `orchidea-allievi`.
+- La pagina Tesserati ora mostra se la sessione allievi è attiva e con quale email.
+- Se manca la sessione allievi, la pagina non mostra più falsamente "collegamento attivo": avvisa di fare logout/login con l'account admin del portale allievi.
+- Il login prova ad autenticare l'utente sia sul database Nova sia sul database Orchidea Allievi.
+- Il login ora può funzionare anche se l'account admin esiste solo nel database di `orchidea-allievi`, usando il profilo admin da `profiles`.
+- La contabilità continua a usare il database Nova tramite `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`.
+- La sezione tesserati continua a leggere `public.tesseramenti` dal database di `orchidea-allievi`.
+- La grafica Nova e la scheda allievo con modifica campi sono state mantenute.
 
 ## Variabili da configurare su Vercel
 
-Nel progetto Nova su Vercel aggiungi queste variabili usando gli stessi valori del progetto `orchidea-allievi`:
-
-```env
-VITE_ORCHIDEA_SUPABASE_URL=...
-VITE_ORCHIDEA_SUPABASE_ANON_KEY=...
-```
-
-Le variabili già presenti di Nova devono restare uguali:
+Nel progetto Nova su Vercel devono restare le variabili Nova:
 
 ```env
 VITE_SUPABASE_URL=database Nova / contabilità
 VITE_SUPABASE_ANON_KEY=database Nova / contabilità
 ```
 
-## Nota login/admin
+E vanno aggiunte quelle di `orchidea-allievi`:
 
-Il database Orchidea Allievi usa le policy RLS di Supabase: per vedere e modificare tutti i tesserati, l'utente deve risultare admin attivo anche nel database allievi, nella tabella `profiles`.
+```env
+VITE_ORCHIDEA_SUPABASE_URL=database Orchidea Allievi
+VITE_ORCHIDEA_SUPABASE_ANON_KEY=anon key Orchidea Allievi
+```
 
-Dopo aver configurato le variabili su Vercel:
+## Dopo il deploy
 
-1. redeploy del progetto Nova;
-2. logout da Nova;
-3. nuovo login.
+1. Redeploy completo su Vercel.
+2. Logout da Nova.
+3. Login usando la stessa email/password admin che usi su `orchidea-allievi`.
 
-Se Nova e orchidea-allievi usano email/password admin diverse, conviene creare lo stesso account admin in entrambi i Supabase oppure usare la stessa email admin per entrambi, altrimenti il secondo login verso il database allievi non può aprire una sessione valida.
+Nel tuo caso, se l'admin del portale allievi è `manuelmia01385@gmail.com`, devi entrare con quello per far leggere i tesserati ufficiali. Se entri con `manuel@orchidea.it` e quell'utente non esiste/ non è admin nel database allievi, Supabase blocca la lettura per RLS e Nova vede 0 tesserati.
+
+## Consiglio pratico
+
+La soluzione più pulita è avere lo stesso account admin in entrambi i progetti Supabase:
+
+- Nova / contabilità
+- Orchidea Allievi / tesserati
+
+Così puoi usare una sola email/password e Nova apre correttamente entrambe le sessioni.

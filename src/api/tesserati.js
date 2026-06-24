@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { orchideaSupabase, getOrchideaConfigStatus, hasDedicatedOrchideaConfig } from './orchideaSupabase'
+import { orchideaSupabase, getOrchideaConfigStatus, hasDedicatedOrchideaConfig, getOrchideaAuthStatus } from './orchideaSupabase'
 
 const TESSERAMENTI_SELECT = `
   id,
@@ -38,6 +38,10 @@ function isMissingTableError(error) {
 function isMissingColumnError(error) {
   const text = `${error?.code || ''} ${error?.message || ''} ${error?.details || ''}`.toLowerCase()
   return text.includes('column') && (text.includes('does not exist') || text.includes('schema cache'))
+}
+
+function isOrchideaAuthRequired(error) {
+  return error?.code === 'ORCHIDEA_AUTH_REQUIRED'
 }
 
 function isPermissionError(error) {
@@ -163,6 +167,18 @@ function makeNextMembershipNumber(students) {
 
 async function fetchOrchideaTesseramenti() {
   const config = getOrchideaConfigStatus()
+
+  if (hasDedicatedOrchideaConfig) {
+    const authStatus = await getOrchideaAuthStatus()
+    if (!authStatus.authenticated) {
+      const authError = new Error(
+        'Il database Orchidea Allievi è configurato, ma non hai una sessione attiva su orchidea-allievi. Fai logout da Nova e accedi con la stessa email/password admin che usi nel portale allievi; se accedi con manuel@orchidea.it ma l’admin allievi è manuelmia01385@gmail.com, Supabase non può vedere i tesserati per via delle policy RLS.'
+      )
+      authError.code = 'ORCHIDEA_AUTH_REQUIRED'
+      throw authError
+    }
+  }
+
   const { data, error } = await orchideaSupabase
     .from('tesseramenti')
     .select(TESSERAMENTI_SELECT)
@@ -206,6 +222,10 @@ export async function fetchTesserati(filters = {}) {
   try {
     return await fetchOrchideaTesseramenti()
   } catch (error) {
+    if (isOrchideaAuthRequired(error)) {
+      throw error
+    }
+
     if (hasDedicatedOrchideaConfig && isPermissionError(error)) {
       throw new Error(
         'Accesso negato al database Orchidea Allievi. Verifica che l’account con cui accedi a Nova esista anche nel portale allievi come admin attivo, oppure accedi con la stessa email/password admin usata su orchidea-allievi.'
@@ -284,6 +304,10 @@ export async function updateTesserato(id, payload) {
     if (error) throw error
     return { ...data, _sourceTable: 'tesseramenti', _sourceLabel: 'Orchidea Allievi' }
   } catch (error) {
+    if (isOrchideaAuthRequired(error)) {
+      throw error
+    }
+
     if (hasDedicatedOrchideaConfig && isPermissionError(error)) {
       throw new Error('Non hai i permessi per modificare i tesserati sul database Orchidea Allievi.')
     }

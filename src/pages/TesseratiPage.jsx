@@ -10,7 +10,7 @@ import {
   generateMissingMembershipNumbers,
 } from '../api/tesserati'
 import { hasCustomMembershipNumber, membershipCode } from '../lib/membership'
-import { getOrchideaConfigStatus } from '../api/orchideaSupabase'
+import { getOrchideaConfigStatus, getOrchideaAuthStatus } from '../api/orchideaSupabase'
 import '../styles/TesseratiPage.css'
 
 const emptyStudentForm = {
@@ -135,7 +135,7 @@ function billingLabel(value) {
 }
 
 export default function TesseratiPage() {
-  const { role } = useAuth()
+  const { role, orchideaAuthWarning } = useAuth()
   const isAdmin = role === 'admin'
   const queryClient = useQueryClient()
 
@@ -145,6 +145,11 @@ export default function TesseratiPage() {
   const [roleFilter, setRoleFilter] = useState('')
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [studentForm, setStudentForm] = useState(emptyStudentForm)
+
+  const { data: authStatus } = useQuery({
+    queryKey: ['orchidea-auth-status'],
+    queryFn: getOrchideaAuthStatus,
+  })
 
   const { data: students = [], isLoading, error } = useQuery({
     queryKey: ['tesseramenti-orchidea'],
@@ -256,6 +261,17 @@ export default function TesseratiPage() {
   const configStatus = getOrchideaConfigStatus()
   const isLegacySource = students.sourceTable === 'tesserati'
   const sourceLabel = students.sourceLabel || (isLegacySource ? 'Nova legacy' : 'Orchidea Allievi')
+  const hasOrchideaAuthProblem = configStatus.mode === 'dedicated' && authStatus && !authStatus.authenticated
+  const sourceAlertClass = isLegacySource || hasOrchideaAuthProblem || orchideaAuthWarning
+    ? 'nova-source-alert nova-source-alert--warn'
+    : 'nova-source-alert nova-source-alert--ok'
+  const sourceMessage = isLegacySource
+    ? configStatus.message
+    : hasOrchideaAuthProblem
+      ? 'Database configurato, ma manca la sessione sul portale allievi: fai logout e rientra con l’account admin di orchidea-allievi.'
+      : authStatus?.authenticated
+        ? `Sessione allievi attiva${authStatus.email ? ` con ${authStatus.email}` : ''}.`
+        : configStatus.message
 
   return (
     <section className="page">
@@ -269,9 +285,9 @@ export default function TesseratiPage() {
         </div>
       </div>
 
-      <div className={`nova-source-alert ${isLegacySource ? 'nova-source-alert--warn' : 'nova-source-alert--ok'}`}>
-        <strong>Sorgente dati:</strong> {sourceLabel}.{' '}
-        {isLegacySource ? configStatus.message : 'Collegamento tesserati Orchidea attivo.'}
+      <div className={sourceAlertClass}>
+        <strong>Sorgente dati:</strong> {sourceLabel}. {sourceMessage}
+        {orchideaAuthWarning ? <span className="source-alert-detail"> {orchideaAuthWarning}</span> : null}
       </div>
 
       <div className="stats-grid">

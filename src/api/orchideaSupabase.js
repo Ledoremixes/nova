@@ -11,6 +11,9 @@ const hasDedicatedKey = Boolean(orchideaAnonKey && orchideaAnonKey !== novaAnonK
 
 export const hasDedicatedOrchideaConfig = Boolean(orchideaUrl && orchideaAnonKey && (hasDedicatedUrl || hasDedicatedKey))
 
+// Client separato per il database usato da orchidea-allievi.
+// Deve avere una propria sessione auth: le policy RLS del portale allievi
+// non leggono la sessione del database Nova.
 export const orchideaSupabase = hasDedicatedOrchideaConfig
   ? createClient(orchideaUrl, orchideaAnonKey, {
       auth: {
@@ -27,7 +30,8 @@ export function getOrchideaConfigStatus() {
     return {
       mode: 'dedicated',
       label: 'Database Orchidea Allievi',
-      message: 'La sezione tesserati usa il database separato di orchidea-allievi.',
+      message:
+        'Database Orchidea Allievi configurato. Per vedere i tesserati serve anche una sessione valida sul portale allievi.',
     }
   }
 
@@ -36,5 +40,34 @@ export function getOrchideaConfigStatus() {
     label: 'Database Nova',
     message:
       'La sezione tesserati sta usando il database Nova. Per leggere i tesserati reali del portale allievi configura VITE_ORCHIDEA_SUPABASE_URL e VITE_ORCHIDEA_SUPABASE_ANON_KEY.',
+  }
+}
+
+export async function getOrchideaSession() {
+  if (!hasDedicatedOrchideaConfig) {
+    const {
+      data: { session },
+      error,
+    } = await novaSupabase.auth.getSession()
+    return { session, error }
+  }
+
+  const {
+    data: { session },
+    error,
+  } = await orchideaSupabase.auth.getSession()
+
+  return { session, error }
+}
+
+export async function getOrchideaAuthStatus() {
+  const { session, error } = await getOrchideaSession()
+
+  return {
+    configured: hasDedicatedOrchideaConfig,
+    authenticated: Boolean(session?.user),
+    email: session?.user?.email || null,
+    userId: session?.user?.id || null,
+    error: error?.message || null,
   }
 }
