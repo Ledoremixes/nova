@@ -24,7 +24,7 @@ export default function ProtectedRoute({ children, roles = [] }) {
       <section className="page">
         <div className="page-card">
           <h2>Profilo non trovato</h2>
-          <p>Login riuscito, ma non riesco a leggere il profilo admin in public.users o public.profiles.</p>
+          <p>Login riuscito, ma non riesco a leggere la riga in public.users.</p>
         </div>
       </section>
     )

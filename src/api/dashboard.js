@@ -1,5 +1,4 @@
 import { supabase } from './supabase'
-import { fetchTesserati } from './tesserati'
 import { membershipCode } from '../lib/membership'
 
 function normalizeNumber(value) {
@@ -64,31 +63,52 @@ export async function fetchBarTopItems(userId) {
   }))
 }
 
+function normalizeLegacyStudent(row) {
+  return {
+    id: row.id,
+    nome: row.nome || '',
+    cognome: row.cognome || '',
+    stagione: row.stagione || row.anno || '-',
+    numero_tessera: row.numero_tessera || row.tessera_numero || row.codice_tessera || '',
+    qr_token: row.qr_token || row.codice_tessera || row.id,
+    tessera_attiva: row.tessera_attiva ?? true,
+    is_corsista: String(row.tipo || '').toLowerCase().includes('cors'),
+    created_at: row.created_at || row.createdAt || null,
+  }
+}
+
+// Dashboard lasciata sul database Nova originale: non deve dipendere dal DB Orchidea Allievi.
 export async function fetchDashboardRegistry() {
-  const [studentsResult, teachersCountRes] = await Promise.allSettled([
-    fetchTesserati(),
+  const [tesseratiCountRes, teachersCountRes, ultimiTesseratiRes] = await Promise.all([
+    supabase
+      .from('tesserati')
+      .select('id', { count: 'exact', head: true }),
+
     supabase
       .from('teachers')
       .select('id', { count: 'exact', head: true }),
+
+    supabase
+      .from('tesserati')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(8),
   ])
 
-  if (studentsResult.status === 'rejected') {
-    throw new Error(studentsResult.reason?.message || 'Errore caricamento dati tesserati')
+  const errors = [
+    tesseratiCountRes.error,
+    teachersCountRes.error,
+    ultimiTesseratiRes.error,
+  ].filter(Boolean)
+
+  if (errors.length > 0) {
+    throw new Error(errors[0].message || 'Errore caricamento dati anagrafici dashboard')
   }
 
-  const students = studentsResult.value || []
-  const teachersCount = teachersCountRes.status === 'fulfilled' && !teachersCountRes.value.error
-    ? teachersCountRes.value.count || 0
-    : 0
-
-  const recentStudents = [...students]
-    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
-    .slice(0, 8)
-
   return {
-    totalTesserati: students.length,
-    totalInsegnanti: teachersCount,
-    ultimiTesserati: recentStudents.map((row) => ({
+    totalTesserati: tesseratiCountRes.count || 0,
+    totalInsegnanti: teachersCountRes.count || 0,
+    ultimiTesserati: (ultimiTesseratiRes.data || []).map(normalizeLegacyStudent).map((row) => ({
       id: row.id,
       nomeCompleto: `${row.nome || ''} ${row.cognome || ''}`.trim(),
       tipo: row.is_corsista ? 'Corsista' : (row.tessera_attiva === false ? 'Non attiva' : 'Tesserato'),
