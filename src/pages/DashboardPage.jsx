@@ -21,24 +21,25 @@ function formatDate(value) {
 }
 
 export default function DashboardPage() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
+  const isAdmin = role === 'admin'
 
   const statsQuery = useQuery({
     queryKey: ['dashboard-stats', user?.id],
     queryFn: () => fetchDashboardStats(user.id),
-    enabled: !!user?.id,
+    enabled: !!user?.id && isAdmin,
   })
 
   const andamentoQuery = useQuery({
     queryKey: ['dashboard-andamento', user?.id],
     queryFn: () => fetchDashboardAndamentoMensile(user.id),
-    enabled: !!user?.id,
+    enabled: !!user?.id && isAdmin,
   })
 
   const barItemsQuery = useQuery({
     queryKey: ['dashboard-bar-items', user?.id],
     queryFn: () => fetchBarTopItems(user.id),
-    enabled: !!user?.id,
+    enabled: !!user?.id && isAdmin,
   })
 
   const registryQuery = useQuery({
@@ -81,7 +82,7 @@ export default function DashboardPage() {
     )
   }
 
-  const stats = statsQuery.data
+  const stats = statsQuery.data || { totalEntrate: 0, totalUscite: 0, saldo: 0, totalMovements: 0, byAccount: [] }
   const andamento = andamentoQuery.data || []
   const barItems = barItemsQuery.data || []
   const registry = registryQuery.data
@@ -98,20 +99,23 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="stats-grid">
-        <StatCard title="Entrate" value={euro(stats.totalEntrate)} hint="Totale entrate" accent />
-        <StatCard title="Uscite" value={euro(stats.totalUscite)} hint="Totale uscite" />
-        <StatCard title="Saldo" value={euro(stats.saldo)} hint="Entrate - uscite" />
-        <StatCard title="Movimenti" value={stats.totalMovements} hint="Prima nota" />
-      </div>
+      {isAdmin ? (
+        <div className="stats-grid">
+          <StatCard title="Entrate" value={euro(stats.totalEntrate)} hint="Totale entrate" accent />
+          <StatCard title="Uscite" value={euro(stats.totalUscite)} hint="Totale uscite" />
+          <StatCard title="Saldo" value={euro(stats.saldo)} hint="Entrate - uscite" />
+          <StatCard title="Movimenti" value={stats.totalMovements} hint="Prima nota" />
+        </div>
+      ) : null}
 
       <div className="stats-grid">
         <StatCard title="Tesserati" value={registry.totalTesserati} hint="Totale registrati" />
         <StatCard title="Insegnanti" value={registry.totalInsegnanti} hint="Totale insegnanti" />
-        <StatCard title="Conti usati" value={stats.byAccount.length} hint="Codici conto presenti" />
-        <StatCard title="Top articoli bar" value={barItems.length} hint="Elementi con incasso" />
+        <StatCard title="Corsi" value="Orchidea" hint="Gestione gruppi/corsi collegata" />
+        <StatCard title="Permessi" value={isAdmin ? 'Admin' : 'Utente'} hint={isAdmin ? 'Accesso completo' : 'Contabilità nascosta'} />
       </div>
 
+      {isAdmin ? (
       <div className="dashboard-grid">
         <div className="page-card">
           <div className="section-head">
@@ -167,6 +171,7 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+      ) : null}
 
       <div className="dashboard-grid">
         <div className="page-card">
@@ -196,6 +201,7 @@ export default function DashboardPage() {
           )}
         </div>
 
+        {isAdmin ? (
         <div className="page-card">
           <div className="section-head">
             <div>
@@ -224,6 +230,7 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+        ) : null}
       </div>
     </section>
   )

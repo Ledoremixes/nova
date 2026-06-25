@@ -309,3 +309,168 @@
   margin-top: 6px;
   font-size: 0.92rem;
 }
+
+/* Scheda allievo - restyling confortevole */
+.tesserati-detail-modal {
+  max-width: 1080px;
+  max-height: min(92vh, 920px);
+  overflow: auto;
+  padding: 0;
+  border-radius: 30px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8f7ff 100%);
+}
+
+.student-profile-hero {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px 24px;
+  border-bottom: 1px solid rgba(109, 74, 255, 0.14);
+  background: linear-gradient(135deg, rgba(109, 74, 255, 0.10), rgba(255, 255, 255, 0.96) 52%, rgba(139, 92, 246, 0.12));
+  backdrop-filter: blur(14px);
+}
+
+.student-profile-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.student-profile-avatar {
+  width: 74px;
+  height: 74px;
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  font-size: 22px;
+  font-weight: 950;
+  color: #fff;
+  background: linear-gradient(135deg, #6d4aff, #a855f7);
+  box-shadow: 0 18px 40px rgba(109, 74, 255, 0.28);
+}
+
+.student-profile-identity h3 {
+  margin: 3px 0 4px;
+  font-size: clamp(25px, 3vw, 36px);
+  line-height: 1.05;
+  color: var(--text);
+}
+
+.student-profile-identity p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.student-profile-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.student-profile-close {
+  border: 1px solid rgba(109, 74, 255, 0.18);
+  background: rgba(255, 255, 255, 0.86);
+  color: #35246f;
+  border-radius: 16px;
+  padding: 12px 16px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.student-editor-card,
+.tesserati-password-card,
+.tesserati-nested-card {
+  margin: 18px 24px 0;
+  border: 1px solid rgba(109, 74, 255, 0.12);
+  background: rgba(255, 255, 255, 0.90);
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.07);
+}
+
+.student-editor-card {
+  padding: 22px;
+  border-radius: 26px;
+}
+
+.student-form-title {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.student-form-title h3 {
+  margin: 0 0 5px;
+  font-size: 22px;
+}
+
+.student-form-title p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.tesserati-detail-form label {
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 18px;
+  padding: 12px;
+}
+
+.tesserati-detail-form label:focus-within {
+  border-color: rgba(109, 74, 255, 0.42);
+  box-shadow: 0 0 0 4px rgba(109, 74, 255, 0.08);
+}
+
+.tesserati-detail-form select,
+.tesserati-detail-form input {
+  border-color: rgba(15, 23, 42, 0.08);
+  background: #fbfdff;
+}
+
+.tesserati-password-card {
+  border-radius: 26px;
+  padding: 22px;
+  background: linear-gradient(135deg, rgba(109, 74, 255, 0.08), rgba(255,255,255,0.92) 54%, rgba(245, 158, 11, 0.08));
+}
+
+.tesserati-detail-grid {
+  padding: 0 24px 24px;
+}
+
+.tesserati-detail-grid .tesserati-nested-card {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .student-profile-hero,
+  .student-form-title {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .student-profile-identity {
+    align-items: flex-start;
+  }
+
+  .student-editor-card,
+  .tesserati-password-card,
+  .tesserati-detail-grid {
+    margin-left: 14px;
+    margin-right: 14px;
+  }
+
+  .tesserati-detail-grid {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}

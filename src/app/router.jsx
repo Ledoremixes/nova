@@ -5,11 +5,13 @@ import DashboardPage from '../pages/DashboardPage'
 import TesseratiPage from '../pages/TesseratiPage'
 import InsegnantiPage from '../pages/InsegnantiPage'
 import EntriesPage from '../pages/EntriesPage'
-import AccountsPage from '../pages/AccountsPage'
 import AdminUsersPage from '../pages/AdminUsersPage'
 import AuditPage from '../pages/AuditPage'
 import LoginPage from '../pages/LoginPage'
 import ComingSoonPage from '../pages/ComingSoonPage'
+import VisiteMedichePage from '../pages/VisiteMedichePage'
+import AccountPage from '../pages/AccountPage'
+import UtilitaPage from '../pages/UtilitaPage'
 import ForbiddenPage from '../pages/ForbiddenPage'
 import ContabilitaPage from '../pages/ContabilitaPage'
 import PagamentiPage from '../pages/PagamentiPage'
@@ -39,34 +41,23 @@ export const router = createBrowserRouter([
 
       { path: 'gruppi', element: <GruppiPage title="Gruppi" /> },
       { path: 'atleti', element: <AtletiPage /> },
-      { path: 'allenatori', element: <ComingSoonPage title="Allenatori" /> },
-      { path: 'visite-mediche', element: <ComingSoonPage title="Visite mediche" /> },
-      { path: 'calendario', element: <ComingSoonPage title="Calendario" /> },
-      { path: 'pagamenti', element: <PagamentiPage /> },
-      { path: 'fatturazione', element: <ComingSoonPage title="Fatturazione" /> },
-      { path: 'gestione-eventi', element: <ComingSoonPage title="Gestione eventi" /> },
-      { path: 'shop', element: <ComingSoonPage title="Shop" /> },
-      { path: 'marketing', element: <ComingSoonPage title="Marketing" /> },
-      { path: 'utilita', element: <ComingSoonPage title="Utilità" /> },
-      { path: 'app', element: <ComingSoonPage title="App" /> },
-      { path: 'iscrizioni-online', element: <ComingSoonPage title="Iscrizioni online" /> },
-      { path: 'account', element: <ComingSoonPage title="Account" /> },
-      { path: 'guida-tutorial', element: <ComingSoonPage title="Guida e tutorial" /> },
+      { path: 'visite-mediche', element: (<ProtectedRoute roles={['admin']}><VisiteMedichePage /></ProtectedRoute>) },
+      { path: 'calendario', element: (<ProtectedRoute roles={['admin']}><ComingSoonPage title="Calendario" /></ProtectedRoute>) },
+      { path: 'pagamenti', element: (<ProtectedRoute roles={['admin']}><PagamentiPage /></ProtectedRoute>) },
+      { path: 'gestione-eventi', element: (<ProtectedRoute roles={['admin']}><ComingSoonPage title="Gestione eventi" /></ProtectedRoute>) },
+      { path: 'shop', element: (<ProtectedRoute roles={['admin']}><ComingSoonPage title="Shop" /></ProtectedRoute>) },
+      { path: 'marketing', element: (<ProtectedRoute roles={['admin']}><ComingSoonPage title="Marketing" /></ProtectedRoute>) },
+      { path: 'utilita', element: (<ProtectedRoute roles={['admin']}><UtilitaPage /></ProtectedRoute>) },
+      { path: 'account', element: <AccountPage /> },
+      { path: 'guida-tutorial', element: (<ProtectedRoute roles={['admin']}><ComingSoonPage title="Guida e tutorial" /></ProtectedRoute>) },
 
       { path: 'tesserati', element: <TesseratiPage /> },
       { path: 'insegnanti', element: <InsegnantiPage /> },
-      { path: 'prima-nota', element: <EntriesPage /> },
-      { path: 'conti', element: <ContiPage /> },
-      { path: 'contabilita', element: <ContabilitaPage /> },
+      { path: 'prima-nota', element: (<ProtectedRoute roles={['admin']}><EntriesPage /></ProtectedRoute>) },
+      { path: 'conti', element: (<ProtectedRoute roles={['admin']}><ContiPage /></ProtectedRoute>) },
+      { path: 'contabilita', element: (<ProtectedRoute roles={['admin']}><ContabilitaPage /></ProtectedRoute>) },
 
-      {
-        path: 'amministrazione',
-        element: (
-          <ProtectedRoute roles={['admin']}>
-            <AdminUsersPage />
-          </ProtectedRoute>
-        ),
-      },
+      { path: 'amministrazione', element: <Navigate to="/utenti" replace /> },
       {
         path: 'utenti',
         element: (

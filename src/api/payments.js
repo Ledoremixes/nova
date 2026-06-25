@@ -63,7 +63,6 @@ export async function fetchRegisteredPayments({
     .from('entries')
     .select('*', { count: 'exact' })
     .gt('amount_out', 0)
-    .in('account_code', PAYMENT_ACCOUNT_CODES)
     .order('operation_datetime', { ascending: false, nullsFirst: false })
     .order('id_key', { ascending: false })
     .range(fromIndex, toIndex)
@@ -106,7 +105,6 @@ export async function fetchRegisteredPaymentsSummary({ month = '' } = {}) {
     .from('entries')
     .select('amount_out, description, note, source, date, account_code')
     .gt('amount_out', 0)
-    .in('account_code', PAYMENT_ACCOUNT_CODES)
 
   if (month) {
     const fromDate = `${month}-01`

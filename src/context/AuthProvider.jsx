@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../api/supabase'
+import { orchideaSupabase, hasDedicatedOrchideaConfig } from '../api/orchideaSupabase'
 
 const AuthContext = createContext(null)
 
@@ -24,6 +25,28 @@ export function AuthProvider({ children }) {
     if (novaUser && !novaError) {
       setProfile(novaUser)
       return novaUser
+    }
+
+    // Compatibilità con gli utenti creati prima della migrazione Auth:
+    // alcune righe in public.users possono avere un id diverso dall'UID Auth,
+    // ma la stessa email. In quel caso leggiamo il profilo per email.
+    if (!novaUser && currentUser.email && !novaError) {
+      const { data: novaUserByEmail, error: novaEmailError } = await supabase
+        .from('users')
+        .select('id, email, role, is_active')
+        .ilike('email', currentUser.email)
+        .maybeSingle()
+
+      if (novaUserByEmail && !novaEmailError) {
+        const normalizedProfile = {
+          id: currentUser.id,
+          email: novaUserByEmail.email || currentUser.email,
+          role: novaUserByEmail.role,
+          is_active: novaUserByEmail.is_active,
+        }
+        setProfile(normalizedProfile)
+        return normalizedProfile
+      }
     }
 
     let orchideaProfile = null
@@ -131,10 +154,22 @@ export function AuthProvider({ children }) {
       setLoading(false)
       throw error
     }
+
+    // Se il database Orchidea Allievi è separato, apro anche lì una sessione con le stesse credenziali.
+    // Così Tesserati/Corsi/Insegnanti leggono le tabelle del portale senza errori RLS.
+    if (hasDedicatedOrchideaConfig) {
+      const { error: orchideaError } = await orchideaSupabase.auth.signInWithPassword({ email, password })
+      if (orchideaError) {
+        console.warn('Login Orchidea Allievi non riuscito:', orchideaError.message)
+      }
+    }
   }
 
   async function signOut() {
     const { error } = await supabase.auth.signOut()
+    if (hasDedicatedOrchideaConfig) {
+      await orchideaSupabase.auth.signOut().catch(() => null)
+    }
     if (error) throw error
   }
 
@@ -147,7 +182,8 @@ export function AuthProvider({ children }) {
       signIn,
       signOut,
       isAuthenticated: !!user,
-      role: profile?.role || null,
+      role: String(profile?.role || '').trim().toLowerCase() || null,
+      isAdmin: String(profile?.role || '').trim().toLowerCase() === 'admin',
       isActive: profile?.is_active === true,
     }),
     [session, user, profile, loading]

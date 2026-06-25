@@ -871,3 +871,106 @@
     min-width: 760px;
   }
 }
+
+.cardsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+.course-cards-grid,
+.teacher-card-grid {
+  margin-top: 18px;
+}
+
+.course-card,
+.teacher-profile-card,
+.utility-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.course-meta-grid,
+.teacher-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.course-meta-grid span,
+.teacher-info-grid span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  font-size: 0.9rem;
+}
+
+.course-meta-grid strong,
+.teacher-info-grid strong {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: #64748b;
+  letter-spacing: 0.04em;
+}
+
+.large-modal {
+  width: min(1080px, 94vw);
+  max-height: 88vh;
+  overflow: auto;
+}
+
+.formFull {
+  grid-column: 1 / -1;
+}
+
+.inline-check {
+  width: auto;
+  min-height: 48px;
+}
+
+.teacher-profile-head {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.teacherAvatar--large {
+  width: 72px;
+  height: 72px;
+  border-radius: 22px;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+.tesserati-password-card {
+  margin: 18px 0;
+  background: linear-gradient(135deg, #ffffff, #f7f3ff);
+  border: 1px solid #ddd6fe;
+}
+
+.utility-card svg {
+  color: #6d5dfc;
+}
+
+.utility-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #475569;
+}
+
+.success-text {
+  color: #047857;
+  font-weight: 700;
+  margin: 10px 0;
+}
+
+@media (max-width: 720px) {
+  .teacher-profile-head {
+    flex-direction: column;
+  }
+}

@@ -71,13 +71,13 @@ export async function fetchLookupList(sectionKey, listKey, onlyActive = true) {
 }
 
 export async function createLookupOption(payload) {
-  const userId = await getCurrentUserId()
-
+  // Le lookup_options sono configurazioni globali del gestionale.
+  // Non vanno legate all'utente loggato, altrimenti ogni admin vede menu diversi.
   const { data, error } = await supabase
     .from('lookup_options')
     .insert([
       {
-        user_id: userId,
+        user_id: null,
         section_key: payload.section_key,
         list_key: payload.list_key,
         label: payload.label.trim(),

@@ -152,7 +152,6 @@ async function findOrCreateCorsoLookup({ userId, label }) {
     const { data, error } = await supabase
         .from('lookup_options')
         .select('id, label')
-        .eq('user_id', userId)
         .eq('section_key', 'sport')
         .eq('list_key', 'corsi')
 
@@ -168,7 +167,7 @@ async function findOrCreateCorsoLookup({ userId, label }) {
         .from('lookup_options')
         .insert([
             {
-                user_id: userId,
+                user_id: null,
                 section_key: 'sport',
                 list_key: 'corsi',
                 label: cleanLabel,
@@ -191,7 +190,6 @@ async function findOrCreateLivelloLookup({ userId, label }) {
     const { data, error } = await supabase
         .from('lookup_options')
         .select('id, label')
-        .eq('user_id', userId)
         .eq('section_key', 'sport')
         .eq('list_key', 'livelli_corso')
 
@@ -207,7 +205,7 @@ async function findOrCreateLivelloLookup({ userId, label }) {
         .from('lookup_options')
         .insert([
             {
-                user_id: userId,
+                user_id: null,
                 section_key: 'sport',
                 list_key: 'livelli_corso',
                 label: cleanLabel,

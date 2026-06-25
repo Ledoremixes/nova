@@ -11,6 +11,7 @@ import {
 } from '../api/tesserati'
 import { hasCustomMembershipNumber, membershipCode } from '../lib/membership'
 import { getOrchideaConfigStatus, getOrchideaAuthStatus } from '../api/orchideaSupabase'
+import { changeTesseratoPassword } from '../api/orchideaEntities'
 import '../styles/TesseratiPage.css'
 
 const emptyStudentForm = {
@@ -136,7 +137,7 @@ function billingLabel(value) {
 
 export default function TesseratiPage() {
   const { role, orchideaAuthWarning } = useAuth()
-  const isAdmin = role === 'admin'
+  const isAdmin = String(role || '').trim().toLowerCase() === 'admin'
   const queryClient = useQueryClient()
 
   const [search, setSearch] = useState('')
@@ -145,6 +146,7 @@ export default function TesseratiPage() {
   const [roleFilter, setRoleFilter] = useState('')
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [studentForm, setStudentForm] = useState(emptyStudentForm)
+  const [passwordForm, setPasswordForm] = useState({ password: '', password2: '' })
 
   const { data: authStatus } = useQuery({
     queryKey: ['orchidea-auth-status'],
@@ -204,6 +206,13 @@ export default function TesseratiPage() {
     },
   })
 
+  const passwordMutation = useMutation({
+    mutationFn: ({ student, newPassword }) => changeTesseratoPassword({ student, newPassword }),
+    onSuccess: () => {
+      setPasswordForm({ password: '', password2: '' })
+    },
+  })
+
   const toggleCorsistaMutation = useMutation({
     mutationFn: toggleCorsista,
     onSuccess: (updated) => {
@@ -239,11 +248,13 @@ export default function TesseratiPage() {
   function openStudentDetail(student) {
     setSelectedStudent(student)
     setStudentForm(buildStudentForm(student))
+    setPasswordForm({ password: '', password2: '' })
   }
 
   function closeStudentDetail() {
     setSelectedStudent(null)
     setStudentForm(emptyStudentForm)
+    setPasswordForm({ password: '', password2: '' })
   }
 
   function handleChange(field, value) {
@@ -257,7 +268,17 @@ export default function TesseratiPage() {
     updateMutation.mutate({ id: selectedStudent.id, payload: studentForm })
   }
 
+  function handlePasswordChange() {
+    if (!selectedStudent || !isAdmin) return
+    if (passwordForm.password !== passwordForm.password2) {
+      alert('Le password non coincidono.')
+      return
+    }
+    passwordMutation.mutate({ student: selectedStudent, newPassword: passwordForm.password })
+  }
+
   const details = detailsQuery.data || { enrollments: [], payments: [] }
+  const canResetSelectedPassword = Boolean(selectedStudent?.auth_user_id || selectedStudent?.email)
   const configStatus = getOrchideaConfigStatus()
   const isLegacySource = students.sourceTable === 'tesserati'
   const sourceLabel = students.sourceLabel || (isLegacySource ? 'Nova legacy' : 'Orchidea Allievi')
@@ -466,19 +487,35 @@ export default function TesseratiPage() {
       {selectedStudent ? (
         <div className="modalOverlay" onClick={closeStudentDetail}>
           <div className="modalCard tesserati-detail-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="section-head">
-              <div>
-                <div className="dashboard-hero__eyebrow">Scheda allievo</div>
-                <h3>{fullName(selectedStudent)}</h3>
-                <p>
-                  Tessera: <strong>{membershipCode(selectedStudent) || 'Senza numero'}</strong> · Auth collegato:{' '}
-                  <strong>{selectedStudent.auth_user_id ? 'Sì' : 'No'}</strong>
-                </p>
+            <div className="student-profile-hero">
+              <div className="student-profile-identity">
+                <span className="student-profile-avatar">{initials(selectedStudent)}</span>
+                <div>
+                  <div className="dashboard-hero__eyebrow">Scheda allievo</div>
+                  <h3>{fullName(selectedStudent)}</h3>
+                  <p>Profilo completo, tessera, corsi collegati e strumenti admin in un’unica vista.</p>
+                  <div className="student-profile-chips">
+                    <span className={selectedStudent.tessera_attiva !== false ? 'nova-pill nova-pill--ok' : 'nova-pill nova-pill--warn'}>
+                      {selectedStudent.tessera_attiva !== false ? 'Tessera attiva' : 'Tessera non attiva'}
+                    </span>
+                    <span className={selectedStudent.is_corsista ? 'nova-pill nova-pill--ok' : 'nova-pill nova-pill--neutral'}>
+                      {selectedStudent.is_corsista ? 'Corsista' : 'Tesserato'}
+                    </span>
+                    <span className="nova-pill nova-pill--neutral">{membershipCode(selectedStudent) || 'Senza numero'}</span>
+                  </div>
+                </div>
               </div>
-              <button className="topbar__button" type="button" onClick={closeStudentDetail}>Chiudi</button>
+              <button className="student-profile-close" type="button" onClick={closeStudentDetail}>Chiudi</button>
             </div>
 
-            <form className="formGrid tesserati-detail-form" onSubmit={handleSubmit}>
+            <form className="formGrid tesserati-detail-form student-editor-card" onSubmit={handleSubmit}>
+              <div className="student-form-title">
+                <div>
+                  <h3>Anagrafica e tessera</h3>
+                  <p>{isAdmin ? 'Puoi modificare i dati perché sei admin.' : 'Vista sola lettura: le modifiche sono riservate agli admin.'}</p>
+                </div>
+                <span className={isAdmin ? 'nova-pill nova-pill--ok' : 'nova-pill nova-pill--neutral'}>{isAdmin ? 'Admin attivo' : 'Sola lettura'}</span>
+              </div>
               <label>Nome
                 <input value={studentForm.nome} onChange={(e) => handleChange('nome', e.target.value)} disabled={!isAdmin} required />
               </label>
@@ -562,6 +599,33 @@ export default function TesseratiPage() {
                 ) : null}
               </div>
             </form>
+
+            {isAdmin ? (
+              <div className="page-card tesserati-password-card">
+                <div className="section-head section-head--compact">
+                  <div>
+                    <h3>Reset password allievo</h3>
+                    <p>Disponibile solo admin. Se manca auth_user_id, Nova prova a collegare l’allievo tramite email.</p>
+                  </div>
+                  <span className={canResetSelectedPassword ? 'nova-pill nova-pill--ok' : 'nova-pill nova-pill--warn'}>
+                    {selectedStudent.auth_user_id ? 'Auth collegato' : selectedStudent.email ? 'Reset via email' : 'Auth mancante'}
+                  </span>
+                </div>
+                <div className="formGrid">
+                  <label>Nuova password
+                    <input type="password" value={passwordForm.password} onChange={(e) => setPasswordForm({ ...passwordForm, password: e.target.value })} disabled={!canResetSelectedPassword} />
+                  </label>
+                  <label>Ripeti password
+                    <input type="password" value={passwordForm.password2} onChange={(e) => setPasswordForm({ ...passwordForm, password2: e.target.value })} disabled={!canResetSelectedPassword} />
+                  </label>
+                </div>
+                {passwordMutation.error ? <p className="form-error">{passwordMutation.error.message}</p> : null}
+                {passwordMutation.isSuccess ? <p className="success-text">Password aggiornata correttamente.</p> : null}
+                <button type="button" className="topbar__button" onClick={handlePasswordChange} disabled={!canResetSelectedPassword || passwordMutation.isPending}>
+                  {passwordMutation.isPending ? 'Aggiorno…' : 'Aggiorna password allievo'}
+                </button>
+              </div>
+            ) : null}
 
             <div className="tesserati-detail-grid">
               <div className="page-card tesserati-nested-card">
