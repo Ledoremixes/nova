@@ -15,6 +15,7 @@ import {
   importSumupEntries,
   fetchLastSumupImport,
 } from '../api/entries'
+import { fetchLookupList } from '../api/lookups'
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -27,26 +28,6 @@ const NATURE_OPTIONS = [
   'istituzionale',
   'Servizi',
   'Tesseramenti',
-]
-
-const METHOD_OPTIONS = [
-  'American Express',
-  'American Express - Carta di credito',
-  'Bonifico',
-  'Carta',
-  'Carta non assegnata',
-  'Contanti',
-  'Maestro - Carta di debito',
-  'Mastercard',
-  'Mastercard - Carta di credito',
-  'Mastercard - Carta di debito',
-  'Mastercard - Prepagata',
-  'POS',
-  'Visa',
-  'Visa - Carta di credito',
-  'Visa - Carta di debito',
-  'Visa - Prepagata',
-  'Visa V-Pay - Carta di debito',
 ]
 
 const CENTER_OPTIONS = ['Bar', 'Sheet0']
@@ -307,6 +288,11 @@ export default function EntriesPage() {
     queryFn: fetchAccounts,
   })
 
+  const methodsQuery = useQuery({
+    queryKey: ['lookup-metodi-pagamento'],
+    queryFn: () => fetchLookupList('pagamenti', 'metodi_pagamento'),
+  })
+
   const lastImportQuery = useQuery({
     queryKey: ['last-sumup-import'],
     queryFn: fetchLastSumupImport,
@@ -399,6 +385,10 @@ export default function EntriesPage() {
   const displayedTotals = hasNatureFilter ? calculateEntriesTotals(entries) : totals
   const displayedTotal = hasNatureFilter ? entries.length : entriesData.total
   const accounts = accountsQuery.data || []
+  const methodOptions = (methodsQuery.data || [])
+    .map((item) => item.label || item.value)
+    .filter(Boolean)
+
 
   function applyFilters() {
     setPage(1)
@@ -779,7 +769,7 @@ export default function EntriesPage() {
             <label>Metodo</label>
             <select value={methodDraft} onChange={(e) => setMethodDraft(e.target.value)}>
               <option value="">Tutti</option>
-              {METHOD_OPTIONS.map((m) => (
+              {methodOptions.map((m) => (
                 <option key={m} value={m}>
                   {m}
                 </option>
@@ -867,7 +857,7 @@ export default function EntriesPage() {
           </div>
         </div>
 
-        {entriesQuery.isLoading || accountsQuery.isLoading ? <p>Caricamento movimenti...</p> : null}
+        {entriesQuery.isLoading || accountsQuery.isLoading || methodsQuery.isLoading ? <p>Caricamento movimenti...</p> : null}
         {entriesQuery.error ? <p>Errore: {entriesQuery.error.message}</p> : null}
 
         {!entriesQuery.isLoading && !entriesQuery.error ? (
@@ -1069,7 +1059,7 @@ export default function EntriesPage() {
                     <label>Metodo</label>
                     <select name="method" value={form.method} onChange={onChange}>
                       <option value="">Seleziona metodo</option>
-                      {METHOD_OPTIONS.map((m) => (
+                      {methodOptions.map((m) => (
                         <option key={m} value={m}>
                           {m}
                         </option>
