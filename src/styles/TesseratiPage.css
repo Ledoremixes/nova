@@ -474,3 +474,179 @@
     padding-right: 0;
   }
 }
+
+/* Orchidea visual polish - scheda allievo */
+.student-editor-card {
+  background:
+    radial-gradient(circle at top left, rgba(236, 72, 153, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(251, 248, 255, 0.96));
+}
+
+.student-form-title {
+  padding: 16px 18px;
+  margin: -4px -4px 10px;
+  border: 1px solid rgba(236, 72, 153, 0.12);
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(250, 232, 255, 0.85), rgba(255, 255, 255, 0.96));
+}
+
+.student-form-title h3,
+.tesserati-password-card h3,
+.tesserati-nested-card h3 {
+  color: #20163a;
+}
+
+.tesserati-detail-form > label {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 900;
+  color: #d11e91;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.035);
+}
+
+.tesserati-detail-form > label input,
+.tesserati-detail-form > label select {
+  margin-top: 0;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: #1e2140;
+  text-transform: none;
+  letter-spacing: normal;
+  border-radius: 16px;
+}
+
+.tesserati-detail-form > label input::placeholder {
+  color: #a1a1aa;
+  font-weight: 500;
+}
+
+.tesserati-check-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.tesserati-check-grid .check-card {
+  min-height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px;
+  border-radius: 22px;
+  border: 1px solid rgba(236, 72, 153, 0.12);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(250, 244, 255, 0.95));
+  color: #241b3d;
+  font-size: 1.02rem;
+  font-weight: 800;
+}
+
+.tesserati-check-grid .check-card input {
+  width: 20px;
+  height: 20px;
+  accent-color: #d11e91;
+}
+
+.tesserati-password-card {
+  background:
+    radial-gradient(circle at top right, rgba(236, 72, 153, 0.10), transparent 26%),
+    linear-gradient(135deg, rgba(109, 74, 255, 0.08), rgba(255,255,255,0.95) 54%, rgba(245, 158, 11, 0.08));
+}
+
+.tesserati-password-card .section-head,
+.tesserati-nested-card .section-head {
+  align-items: flex-start;
+}
+
+.tesserati-password-card .section-head p,
+.tesserati-nested-card .section-head p {
+  color: #6b7280;
+}
+
+.tesserati-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.tesserati-detail-grid .tesserati-nested-card {
+  min-height: 220px;
+  border-radius: 24px;
+  padding: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 247, 255, 0.94));
+}
+
+.student-profile-close:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(109, 74, 255, 0.12);
+}
+
+.student-profile-avatar {
+  background: linear-gradient(135deg, #f03caf, #7c3aed);
+}
+
+@media (max-width: 900px) {
+  .tesserati-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.tesserati-password-button {
+  border: none;
+  color: #fff;
+  background: linear-gradient(135deg, #f03caf, #d11e91);
+  box-shadow: 0 12px 26px rgba(209, 30, 145, 0.22);
+}
+
+.tesserati-password-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 30px rgba(209, 30, 145, 0.28);
+}
+
+.tesserati-password-button:disabled {
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+
+/* Fix visibilità bottone reset password: fucsia Orchidea sempre leggibile */
+.tesserati-password-card .tesserati-password-button,
+.tesserati-password-button,
+button.tesserati-password-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: fit-content !important;
+  min-width: 232px !important;
+  min-height: 48px !important;
+  padding: 13px 20px !important;
+  border: 0 !important;
+  border-radius: 16px !important;
+  background: linear-gradient(135deg, #f03caf 0%, #d11e91 100%) !important;
+  color: #ffffff !important;
+  font-weight: 950 !important;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 14px 30px rgba(209, 30, 145, 0.30) !important;
+  opacity: 1 !important;
+}
+
+.tesserati-password-card .tesserati-password-button:hover:not(:disabled),
+button.tesserati-password-button:hover:not(:disabled) {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 18px 36px rgba(209, 30, 145, 0.36) !important;
+}
+
+.tesserati-password-card .tesserati-password-button:disabled,
+button.tesserati-password-button:disabled {
+  background: linear-gradient(135deg, #f6a8d9 0%, #df65b7 100%) !important;
+  color: #ffffff !important;
+  opacity: 0.82 !important;
+  cursor: not-allowed !important;
+  box-shadow: 0 10px 22px rgba(209, 30, 145, 0.18) !important;
+}

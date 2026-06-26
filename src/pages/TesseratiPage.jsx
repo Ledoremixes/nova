@@ -621,7 +621,7 @@ export default function TesseratiPage() {
                 </div>
                 {passwordMutation.error ? <p className="form-error">{passwordMutation.error.message}</p> : null}
                 {passwordMutation.isSuccess ? <p className="success-text">Password aggiornata correttamente.</p> : null}
-                <button type="button" className="topbar__button" onClick={handlePasswordChange} disabled={!canResetSelectedPassword || passwordMutation.isPending}>
+                <button type="button" className="topbar__button tesserati-password-button" onClick={handlePasswordChange} disabled={!canResetSelectedPassword || passwordMutation.isPending}>
                   {passwordMutation.isPending ? 'Aggiorno…' : 'Aggiorna password allievo'}
                 </button>
               </div>

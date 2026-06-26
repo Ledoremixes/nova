@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ShieldCheck, UserCog } from 'lucide-react'
+import { ShieldCheck, UserCog, Sparkles } from 'lucide-react'
 import { fetchGestionaleUsers, updateGestionaleUser } from '../api/usersManagement'
 
 export default function AdminUsersPage() {
@@ -60,18 +60,64 @@ export default function AdminUsersPage() {
 
       {editing ? (
         <div className="modalOverlay" onClick={() => setEditing(null)}>
-          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-            <div className="section-head"><div><h3>Permessi utente</h3><p>{editing.email}</p></div><ShieldCheck /></div>
-            <form className="formGrid" onSubmit={save}>
-              <label>Ruolo
+          <div className="modalCard admin-user-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-user-modal__hero">
+              <div className="admin-user-modal__identity">
+                <div className="admin-user-modal__icon">
+                  <ShieldCheck size={24} />
+                </div>
+                <div>
+                  <div className="dashboard-hero__eyebrow">Gestione permessi</div>
+                  <h3>Permessi utente</h3>
+                  <p>{editing.email}</p>
+                </div>
+              </div>
+              <div className="admin-user-modal__chips">
+                <span className={form.role === 'admin' ? 'nova-pill nova-pill--ok' : 'nova-pill nova-pill--neutral'}>
+                  {form.role === 'admin' ? 'Accesso admin' : 'Utente standard'}
+                </span>
+                <span className={form.is_active ? 'nova-pill nova-pill--ok' : 'nova-pill nova-pill--warn'}>
+                  {form.is_active ? 'Utente attivo' : 'Utente disattivato'}
+                </span>
+              </div>
+            </div>
+
+            <form className="formGrid admin-user-form" onSubmit={save}>
+              <div className="admin-user-form__intro">
+                <Sparkles size={18} />
+                <span>Gli utenti normali non vedono contabilità e cifre. Gli admin hanno accesso completo al gestionale.</span>
+              </div>
+
+              <label className="admin-user-field">Ruolo
                 <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                   <option value="admin">Admin</option>
                   <option value="user">Utente normale</option>
                 </select>
               </label>
-              <label className="check-card"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} /> Utente attivo</label>
+
+              <label className="check-card admin-user-check-card">
+                <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
+                <span>Utente attivo</span>
+                <small>Se disattivato non potrà accedere al gestionale.</small>
+              </label>
+
+              <div className="admin-user-permissions-summary">
+                <div className="admin-user-permissions-summary__card">
+                  <strong>Sezioni visibili</strong>
+                  <p>{form.role === 'admin' ? 'Tutte le sezioni del gestionale, contabilità inclusa.' : 'Dashboard senza cifre, tesserati, corsi e gruppi, atleti, insegnanti, account.'}</p>
+                </div>
+                <div className="admin-user-permissions-summary__card">
+                  <strong>Tipo profilo</strong>
+                  <p>{form.role === 'admin' ? 'Può gestire utenti, contabilità e funzioni amministrative.' : 'Può consultare e aggiornare le sezioni operative consentite.'}</p>
+                </div>
+              </div>
+
               {updateMutation.error ? <p className="form-error">{updateMutation.error.message}</p> : null}
-              <div className="modalActions"><button type="button" className="topbar__button" onClick={() => setEditing(null)}>Annulla</button><button className="topbar__button topbar__button--primary">Salva</button></div>
+
+              <div className="modalActions">
+                <button type="button" className="topbar__button" onClick={() => setEditing(null)}>Annulla</button>
+                <button className="topbar__button topbar__button--primary">Salva</button>
+              </div>
             </form>
           </div>
         </div>
