@@ -398,18 +398,28 @@ async function fetchAllEntriesPaged({
       })
       .range(from, from + pageSize - 1)
 
-    if (fromDate) {
-      query = query.gte('operation_datetime', `${fromDate}T00:00:00`)
-    }
-
-    if (toDate) {
-      query = query.lte('operation_datetime', `${toDate}T23:59:59`)
-    }
+    // Non filtriamo lato database solo su operation_datetime:
+    // alcune righe storiche hanno operation_datetime vuoto ma date valorizzata.
+    // Il filtro periodo viene applicato sotto usando operation_datetime || date,
+    // così i totali della Contabilità restano coerenti con la Prima nota.
 
     const { data, error } = await query
     if (error) throw error
 
-    const chunk = data || []
+    const rawChunk = data || []
+    let chunk = rawChunk
+
+    if (fromDate || toDate) {
+      chunk = rawChunk.filter((row) => {
+        const ref = row.operation_datetime || row.date
+        const date = dayjs(ref)
+        if (!date.isValid()) return false
+        if (fromDate && date.isBefore(dayjs(fromDate), 'day')) return false
+        if (toDate && date.isAfter(dayjs(toDate), 'day')) return false
+        return true
+      })
+    }
+
     allRows.push(...chunk)
 
     if (chunk.length < pageSize) {
@@ -443,7 +453,7 @@ function sumBalanceByMethod(rows, predicate) {
 async function fetchFinancialPositionUntilDate(toDate) {
   const rows = await fetchAllEntriesPaged({
     toDate,
-    select: 'method, amount_in, amount_out, id_key, operation_datetime',
+    select: 'method, amount_in, amount_out, id_key, operation_datetime, date',
   })
 
   const cashBalance = sumBalanceByMethod(rows, (method) => {
@@ -532,7 +542,7 @@ export async function fetchContabilitaOverview() {
       })
       .or('nature.is.null,nature.eq.'),
     fetchAllEntriesPaged({
-      select: 'method, amount_in, amount_out, id_key, operation_datetime',
+      select: 'method, amount_in, amount_out, id_key, operation_datetime, date',
     }),
     fetchLastSumupImport(),
   ])

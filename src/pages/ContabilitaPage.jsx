@@ -29,7 +29,6 @@ import {
     exportRendicontoExcel,
     exportRendicontoPdf,
 } from '../utils/contabilitaExport'
-import { fetchEntriesFilteredTotals } from '../api/entries'
 
 const today = dayjs().format('YYYY-MM-DD')
 const startYear = dayjs().startOf('year').format('YYYY-MM-DD')
@@ -137,23 +136,12 @@ export default function ContabilitaPage() {
                 rendicontoData,
                 ivaData,
                 ivaScadData,
-                totalsData,
             ] = await Promise.all([
                 fetchContabilitaOverview(),
                 fetchRecentAccountingEntries(8),
                 fetchRendicontoGestionale({ fromDate, toDate }),
                 fetchIvaSummary({ fromDate, toDate }),
                 fetchIvaScadenziario({ fromDate, toDate, periodicity }),
-                fetchEntriesFilteredTotals({
-                    search: '',
-                    fromDate,
-                    fromTime: '00:00',
-                    toDate,
-                    toTime: '23:59',
-                    onlyWithoutAccount: false,
-                    accountCode: '',
-                    ivaFilter: '',
-                }),
             ])
 
             setOverview(overviewData)
@@ -161,7 +149,12 @@ export default function ContabilitaPage() {
             setRendiconto(rendicontoData)
             setIvaSummary(ivaData)
             setIvaScadenziario(ivaScadData)
-            setFilteredTotals(totalsData)
+            setFilteredTotals({
+                total_in: rendicontoData?.summary?.totale?.totalIn || 0,
+                total_out: rendicontoData?.summary?.totale?.totalOut || 0,
+                saldo: rendicontoData?.summary?.totale?.saldo || 0,
+                total_rows: rendicontoData?.summary?.totale?.rowsCount || 0,
+            })
 
         } catch (err) {
             console.error(err)
@@ -229,7 +222,7 @@ export default function ContabilitaPage() {
                 <div className="contabilita-page__header">
                     <div>
                         <h1>Contabilità</h1>
-                        <p>Panoramica economica, IVA, conti e accesso rapido alle funzioni principali.</p>
+                        <p>Risultati economici ufficiali calcolati dalla Prima nota nel periodo selezionato.</p>
                     </div>
                 </div>
 
@@ -247,7 +240,7 @@ export default function ContabilitaPage() {
             <div className="contabilita-page__header">
                 <div>
                     <h1>Contabilità</h1>
-                    <p>Panoramica economica, IVA, conti e accesso rapido alle funzioni principali.</p>
+                    <p>Risultati economici ufficiali calcolati dalla Prima nota nel periodo selezionato.</p>
                 </div>
 
                 <button
@@ -280,7 +273,7 @@ export default function ContabilitaPage() {
 
             <div className="contabilita-stats-grid">
                 <StatCard
-                    title="Saldo periodo"
+                    title="Risultato economico"
                     value={euro(filteredTotals?.saldo || 0)}
                     icon={Wallet}
                     variant="primary"
@@ -291,14 +284,14 @@ export default function ContabilitaPage() {
                     value={euro(filteredTotals?.total_in || 0)}
                     icon={Banknote}
                     variant="success"
-                    subtitle="Stessa logica della prima nota"
+                    subtitle="Calcolate dal rendiconto del periodo"
                 />
                 <StatCard
                     title="Uscite periodo"
                     value={euro(filteredTotals?.total_out || 0)}
                     icon={Receipt}
                     variant="danger"
-                    subtitle="Stessa logica della prima nota"
+                    subtitle="Calcolate dal rendiconto del periodo"
                 />
                 <StatCard
                     title="IVA a debito"

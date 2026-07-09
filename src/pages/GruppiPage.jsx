@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Search, Users, X } from 'lucide-react'
 import { useAuth } from '../context/AuthProvider'
-import { fetchCourseParticipants, fetchOrchideaCourses, updateOrchideaCourse } from '../api/orchideaEntities'
+import { addCourseParticipant, fetchCourseParticipants, fetchOrchideaCourses, fetchOrchideaStudents, removeCourseParticipant, updateOrchideaCourse } from '../api/orchideaEntities'
 import '../styles/GruppiPage.css'
 
 const emptyForm = {
@@ -31,7 +31,9 @@ function time(value) {
 
 export default function GruppiPage() {
   const { role } = useAuth()
-  const isAdmin = role === 'admin'
+  const currentRole = String(role || '').trim().toLowerCase()
+  const isAdmin = currentRole === 'admin'
+  const canManageCourses = isAdmin || currentRole === 'user'
   const queryClient = useQueryClient()
 
   const [search, setSearch] = useState('')
@@ -39,6 +41,8 @@ export default function GruppiPage() {
   const [form, setForm] = useState(emptyForm)
   const [selectedCourse, setSelectedCourse] = useState(null)
   const [participantSearch, setParticipantSearch] = useState('')
+  const [studentToAdd, setStudentToAdd] = useState('')
+  const [studentPickerSearch, setStudentPickerSearch] = useState('')
 
   const coursesQuery = useQuery({
     queryKey: ['orchidea-corsi'],
@@ -51,11 +55,35 @@ export default function GruppiPage() {
     enabled: Boolean(selectedCourse?.id),
   })
 
+  const studentsQuery = useQuery({
+    queryKey: ['orchidea-students-for-course-picker'],
+    queryFn: () => fetchOrchideaStudents(),
+    enabled: Boolean(selectedCourse?.id),
+  })
+
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }) => updateOrchideaCourse(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orchidea-corsi'] })
       setEditing(null)
+    },
+  })
+
+  const addParticipantMutation = useMutation({
+    mutationFn: ({ courseId, studentId, tariffaMensile }) => addCourseParticipant({ courseId, studentId, tariffaMensile }),
+    onSuccess: () => {
+      setStudentToAdd('')
+      setStudentPickerSearch('')
+      queryClient.invalidateQueries({ queryKey: ['orchidea-corso-partecipanti', selectedCourse?.id] })
+      queryClient.invalidateQueries({ queryKey: ['orchidea-corsi'] })
+    },
+  })
+
+  const removeParticipantMutation = useMutation({
+    mutationFn: removeCourseParticipant,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orchidea-corso-partecipanti', selectedCourse?.id] })
+      queryClient.invalidateQueries({ queryKey: ['orchidea-corsi'] })
     },
   })
 
@@ -87,6 +115,25 @@ export default function GruppiPage() {
     ].some((value) => String(value || '').toLowerCase().includes(term)))
   }, [participants, participantSearch])
 
+  const availableStudents = useMemo(() => {
+    const alreadyEnrolled = new Set(participants.map((row) => row.tesseramento_id).filter(Boolean))
+    const term = studentPickerSearch.trim().toLowerCase()
+    return (studentsQuery.data || [])
+      .filter((student) => !alreadyEnrolled.has(student.id))
+      .filter((student) => {
+        if (!term) return true
+        return [
+          student.nome,
+          student.cognome,
+          student.email,
+          student.telefono,
+          student.cf,
+          student.numero_tessera,
+        ].some((value) => String(value || '').toLowerCase().includes(term))
+      })
+      .slice(0, 80)
+  }, [studentsQuery.data, participants, studentPickerSearch])
+
   function openEdit(course) {
     setEditing(course)
     setForm({
@@ -107,8 +154,18 @@ export default function GruppiPage() {
 
   function handleSubmit(e) {
     e.preventDefault()
-    if (!editing?.id) return
+    if (!editing?.id || !canManageCourses) return
     updateMutation.mutate({ id: editing.id, payload: form })
+  }
+
+  function handleAddParticipant(e) {
+    e.preventDefault()
+    if (!selectedCourse?.id || !studentToAdd || !canManageCourses) return
+    addParticipantMutation.mutate({
+      courseId: selectedCourse.id,
+      studentId: studentToAdd,
+      tariffaMensile: selectedCourse.prezzo_mensile,
+    })
   }
 
   return (
@@ -158,7 +215,7 @@ export default function GruppiPage() {
               <p className="simple-list__meta">{course.descrizione || 'Nessuna descrizione.'}</p>
               <div className="rowActions">
                 <button className="actionBtn" onClick={() => setSelectedCourse(course)}><Users size={15} /> Partecipanti</button>
-                {isAdmin ? <button className="actionBtn" onClick={() => openEdit(course)}><Pencil size={15} /> Modifica</button> : null}
+                {canManageCourses ? <button className="actionBtn" onClick={() => openEdit(course)}><Pencil size={15} /> Modifica</button> : null}
               </div>
             </article>
           ))}
@@ -175,14 +232,37 @@ export default function GruppiPage() {
               </div>
               <button className="topbar__button" onClick={() => setSelectedCourse(null)}><X size={16} /> Chiudi</button>
             </div>
+            {canManageCourses ? (
+              <form className="course-enroll-box" onSubmit={handleAddParticipant}>
+                <div>
+                  <strong>Aggiungi allievo al corso</strong>
+                  <p>Seleziona un tesserato/corsista dal database Orchidea Allievi.</p>
+                </div>
+                <input className="searchInput" value={studentPickerSearch} onChange={(e) => setStudentPickerSearch(e.target.value)} placeholder="Cerca allievo da aggiungere…" />
+                <select className="filterSelect" value={studentToAdd} onChange={(e) => setStudentToAdd(e.target.value)}>
+                  <option value="">— Seleziona allievo —</option>
+                  {availableStudents.map((student) => (
+                    <option key={student.id} value={student.id}>
+                      {student.nomeCompleto || `${student.nome || ''} ${student.cognome || ''}`.trim() || student.email || 'Senza nome'}{student.email ? ` · ${student.email}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <button className="topbar__button topbar__button--primary" disabled={!studentToAdd || addParticipantMutation.isPending}>
+                  {addParticipantMutation.isPending ? 'Aggiungo…' : 'Aggiungi al corso'}
+                </button>
+                {studentsQuery.error ? <p className="form-error">Errore allievi: {studentsQuery.error.message}</p> : null}
+                {addParticipantMutation.error ? <p className="form-error">Errore iscrizione: {addParticipantMutation.error.message}</p> : null}
+              </form>
+            ) : null}
+
             <input className="searchInput" value={participantSearch} onChange={(e) => setParticipantSearch(e.target.value)} placeholder="Cerca partecipante…" />
             {participantsQuery.isLoading ? <p>Caricamento partecipanti…</p> : null}
             {participantsQuery.error ? <p className="form-error">Errore: {participantsQuery.error.message}</p> : null}
             <div className="tableWrap">
               <table className="dataTable">
-                <thead><tr><th>Allievo</th><th>Email</th><th>Telefono</th><th>Tessera</th><th>Stato iscrizione</th><th>Tariffa</th></tr></thead>
+                <thead><tr><th>Allievo</th><th>Email</th><th>Telefono</th><th>Tessera</th><th>Stato iscrizione</th><th>Tariffa</th><th>Azioni</th></tr></thead>
                 <tbody>
-                  {filteredParticipants.length === 0 ? <tr><td colSpan="6">Nessun partecipante.</td></tr> : filteredParticipants.map((row) => (
+                  {filteredParticipants.length === 0 ? <tr><td colSpan="7">Nessun partecipante.</td></tr> : filteredParticipants.map((row) => (
                     <tr key={row.id}>
                       <td><strong>{row.student?.nomeCompleto || 'Senza nome'}</strong><br /><small>{row.student?.cf || 'Codice fiscale non indicato'}</small></td>
                       <td>{row.student?.email || '—'}</td>
@@ -190,6 +270,18 @@ export default function GruppiPage() {
                       <td>{row.student?.numero_tessera || '—'}</td>
                       <td><span className="nova-pill nova-pill--neutral">{row.stato || 'attivo'}</span></td>
                       <td>{money(row.tariffa_mensile)}</td>
+                      <td>
+                        {canManageCourses ? (
+                          <button
+                            className="actionBtn actionBtn--danger"
+                            type="button"
+                            onClick={() => removeParticipantMutation.mutate(row.id)}
+                            disabled={removeParticipantMutation.isPending}
+                          >
+                            Rimuovi
+                          </button>
+                        ) : '—'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

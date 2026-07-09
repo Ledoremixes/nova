@@ -653,3 +653,472 @@
     padding: 13px 12px;
   }
 }
+
+/* Pagamenti allievi - stile Orchidea Allievi dentro Nova */
+.payments-students-page {
+  --pay-dark: #13051c;
+  --pay-panel: rgba(38, 14, 45, 0.92);
+  --pay-border: rgba(244, 114, 182, 0.30);
+  --pay-gold: #f7d77c;
+  --pay-fuchsia: #d11e91;
+}
+
+.payments-students-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px 26px;
+  border-radius: 26px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 10% 10%, rgba(209, 30, 145, 0.42), transparent 30%),
+    linear-gradient(135deg, #24052f 0%, #120319 54%, #09020d 100%);
+  border: 1px solid rgba(209, 30, 145, 0.30);
+  box-shadow: 0 24px 60px rgba(17, 3, 26, 0.28);
+}
+
+.payments-students-eyebrow {
+  color: var(--pay-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.78rem;
+  font-weight: 950;
+  margin-bottom: 8px;
+}
+
+.payments-students-hero h1 {
+  color: #fff;
+  margin: 0;
+  font-size: clamp(1.7rem, 3vw, 2.4rem);
+  font-weight: 950;
+}
+
+.payments-students-hero p {
+  max-width: 820px;
+  margin-top: 10px;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.55;
+}
+
+.payments-students-hero-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 170px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  font-weight: 950;
+  color: #2a1608;
+  background: linear-gradient(135deg, #ffe89c, #b08a65);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.38);
+}
+
+.payments-student-summary-grid .payments-summary-card {
+  background:
+    radial-gradient(circle at top right, rgba(209, 30, 145, 0.12), transparent 30%),
+    linear-gradient(135deg, rgba(39, 15, 47, 0.96), rgba(15, 6, 24, 0.97));
+  border-color: rgba(209, 30, 145, 0.24);
+  color: #fff;
+}
+
+.payments-student-summary-grid .payments-summary-label,
+.payments-student-summary-grid small {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.payments-student-summary-grid strong {
+  color: #fff;
+  font-size: 1.7rem;
+}
+
+.payments-student-summary-card--gold {
+  border-color: rgba(247, 215, 124, 0.40) !important;
+  background:
+    radial-gradient(circle at top right, rgba(247, 215, 124, 0.22), transparent 34%),
+    linear-gradient(135deg, rgba(68, 42, 40, 0.96), rgba(27, 13, 25, 0.98)) !important;
+}
+
+.payments-student-filters {
+  grid-template-columns: minmax(160px, .55fr) minmax(210px, .9fr) minmax(150px, .55fr) minmax(300px, 1.25fr) minmax(160px, .55fr);
+  background: rgba(255,255,255,0.92);
+}
+
+.payments-student-list {
+  display: grid;
+  gap: 18px;
+}
+
+.payments-student-card {
+  overflow: hidden;
+  border-radius: 28px;
+  padding: 22px;
+  color: #fff;
+  border: 1px solid rgba(209, 30, 145, 0.32);
+  background:
+    radial-gradient(circle at top left, rgba(209, 30, 145, 0.28), transparent 28%),
+    linear-gradient(135deg, rgba(40, 17, 48, 0.97), rgba(13, 5, 20, 0.98));
+  box-shadow: 0 26px 70px rgba(17, 3, 26, 0.26);
+}
+
+.payments-student-card--pagato {
+  border-color: rgba(45, 212, 191, 0.32);
+}
+
+.payments-student-card--sospeso {
+  border-color: rgba(148, 163, 184, 0.34);
+  opacity: 0.9;
+}
+
+.payments-student-card__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.payments-student-person {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.payments-student-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  color: #1f1230;
+  font-weight: 950;
+  background: linear-gradient(135deg, #ffe89c, #f7d77c);
+}
+
+.payments-student-person h3 {
+  margin: 0 0 4px;
+  color: #fff;
+  font-size: 1.28rem;
+}
+
+.payments-student-person p {
+  color: rgba(255,255,255,0.68);
+}
+
+.payments-student-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.payments-package-pill,
+.payments-student-status {
+  display: inline-flex;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: .82rem;
+}
+
+.payments-package-pill {
+  color: #2b190b;
+  background: linear-gradient(135deg, #ffe89c, #c6a16f);
+}
+
+.payments-student-status--due {
+  color: #fff7ed;
+  background: rgba(245, 158, 11, 0.20);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.payments-student-status--paid {
+  color: #d1fae5;
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid rgba(16, 185, 129, 0.32);
+}
+
+.payments-student-status--paused {
+  color: #e5e7eb;
+  background: rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.payments-student-alert {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  margin: 18px 0 16px;
+  padding: 13px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(247, 215, 124, 0.38);
+  color: var(--pay-gold);
+  background: rgba(247, 215, 124, 0.08);
+}
+
+.payments-student-alert span {
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: .78rem;
+  font-weight: 950;
+  color: rgba(255,255,255,.72);
+}
+
+.payments-student-info-grid {
+  display: grid;
+  grid-template-columns: 1.35fr repeat(4, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.payments-student-info-grid > div {
+  min-height: 116px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.payments-student-info-grid span {
+  display: block;
+  color: rgba(255,255,255,0.60);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: .72rem;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.payments-student-info-grid strong {
+  display: block;
+  color: #fff;
+  font-size: 1.02rem;
+}
+
+.payments-student-info-grid small {
+  display: block;
+  margin-top: 6px;
+  color: rgba(255,255,255,0.70);
+  line-height: 1.4;
+}
+
+.payments-course-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.payments-course-chips em {
+  font-style: normal;
+  padding: 6px 9px;
+  border-radius: 999px;
+  color: #2b190b;
+  background: rgba(247, 215, 124, 0.90);
+  font-size: .78rem;
+  font-weight: 900;
+}
+
+.payments-student-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.payments-student-actions .payments-primary-btn {
+  background: linear-gradient(135deg, #f7d77c, #d0a45f);
+  color: #2b190b;
+  box-shadow: none;
+}
+
+.payments-student-actions .payments-secondary-btn {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+.payments-secondary-btn--muted {
+  color: rgba(255,255,255,0.78) !important;
+}
+
+.payments-student-empty {
+  border-radius: 24px;
+  background: rgba(255,255,255,0.82);
+}
+
+@media (max-width: 1200px) {
+  .payments-student-filters,
+  .payments-student-info-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .payments-students-hero,
+  .payments-student-card__top,
+  .payments-student-alert {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .payments-students-hero-pill {
+    width: fit-content;
+  }
+
+  .payments-student-filters,
+  .payments-student-info-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Nova light theme override for allievi payments */
+.payments-students-page {
+  --pay-dark: #ffffff;
+  --pay-panel: #ffffff;
+  --pay-border: rgba(124, 58, 237, 0.14);
+  --pay-gold: #7c3aed;
+  --pay-fuchsia: #d11e91;
+}
+
+.payments-students-hero {
+  color: #10172a;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(209, 30, 145, 0.12), transparent 30%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 245, 255, 0.98) 60%, rgba(237, 233, 254, 0.92) 100%);
+  border: 1px solid rgba(124, 58, 237, 0.16);
+  box-shadow: 0 22px 55px rgba(15, 23, 42, 0.08);
+}
+
+.payments-students-eyebrow {
+  color: #d11e91;
+}
+
+.payments-students-hero h1 {
+  color: #0f172a;
+}
+
+.payments-students-hero p {
+  color: #64748b;
+}
+
+.payments-students-hero-pill {
+  color: #4c1d95;
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.12), rgba(124, 58, 237, 0.12));
+  border: 1px solid rgba(124, 58, 237, 0.16);
+  box-shadow: none;
+}
+
+.payments-student-summary-grid .payments-summary-card,
+.payments-student-summary-grid .payments-summary-card.payments-student-summary-card--gold {
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.92) !important;
+  border-color: rgba(124, 58, 237, 0.12) !important;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.07);
+}
+
+.payments-student-summary-grid .payments-summary-label,
+.payments-student-summary-grid small {
+  color: #64748b;
+}
+
+.payments-student-summary-grid strong {
+  color: #0f172a;
+}
+
+.payments-student-summary-grid .payments-summary-icon {
+  color: #7c3aed;
+  background: linear-gradient(135deg, rgba(124,58,237,0.12), rgba(209,30,145,0.10));
+}
+
+.payments-student-card,
+.payments-student-card--pagato,
+.payments-student-card--sospeso {
+  color: #0f172a;
+  background:
+    radial-gradient(circle at top left, rgba(209, 30, 145, 0.08), transparent 28%),
+    linear-gradient(135deg, rgba(255,255,255,0.98), rgba(250,248,255,0.96));
+  border: 1px solid rgba(124, 58, 237, 0.14);
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.08);
+  opacity: 1;
+}
+
+.payments-student-person h3,
+.payments-student-info-grid strong {
+  color: #0f172a;
+}
+
+.payments-student-person p,
+.payments-student-info-grid small,
+.payments-student-info-grid span {
+  color: #64748b;
+}
+
+.payments-student-avatar {
+  color: #fff;
+  background: linear-gradient(135deg, #d11e91, #7c3aed);
+  box-shadow: 0 14px 30px rgba(209, 30, 145, 0.20);
+}
+
+.payments-package-pill {
+  color: #6b21a8;
+  background: rgba(124, 58, 237, 0.10);
+  border: 1px solid rgba(124, 58, 237, 0.16);
+}
+
+.payments-student-status--due {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.24);
+}
+
+.payments-student-status--paid {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+}
+
+.payments-student-status--paused {
+  color: #475569;
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.payments-student-alert {
+  color: #7c2d12;
+  background: rgba(255, 247, 237, 0.90);
+  border: 1px solid rgba(245, 158, 11, 0.22);
+}
+
+.payments-student-alert span {
+  color: #d11e91;
+}
+
+.payments-student-info-grid > div {
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.04);
+}
+
+.payments-course-chips em {
+  color: #7c2d12;
+  background: rgba(251, 191, 36, 0.20);
+  border: 1px solid rgba(251, 191, 36, 0.24);
+}
+
+.payments-student-actions .payments-primary-btn {
+  color: #fff;
+  background: linear-gradient(135deg, #d11e91, #7c3aed);
+  box-shadow: 0 14px 30px rgba(124, 58, 237, 0.20);
+}
+
+.payments-student-actions .payments-secondary-btn {
+  background: #f5f3ff;
+  color: #5b21b6;
+  border: 1px solid rgba(124, 58, 237, 0.14);
+}
+
+.payments-student-actions .payments-secondary-btn--muted {
+  color: #64748b !important;
+  background: #f8fafc;
+}

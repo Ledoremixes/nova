@@ -918,6 +918,28 @@
   letter-spacing: 0.04em;
 }
 
+.teacher-info-grid--fixed {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.teacher-info-grid span {
+  min-width: 0;
+}
+
+.teacher-info-grid em {
+  font-style: normal;
+  color: #111827;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.teacher-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .large-modal {
   width: min(1080px, 94vw);
   max-height: 88vh;
@@ -937,6 +959,11 @@
   display: flex;
   gap: 16px;
   align-items: flex-start;
+}
+
+.teacher-profile-head > div {
+  min-width: 0;
+  flex: 1;
 }
 
 .teacherAvatar--large {
@@ -1133,5 +1160,508 @@
 
   .admin-user-permissions-summary {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Dashboard operativa: niente importi, solo scuola/allievi */
+.nova-dashboard-page .dashboard-hero {
+  align-items: flex-start;
+}
+
+.nova-dashboard-ops-grid .page-card {
+  min-height: 320px;
+}
+
+.nova-dashboard-bars {
+  display: grid;
+  gap: 14px;
+}
+
+.nova-dashboard-bars__row {
+  padding: 14px 16px;
+  border: 1px solid rgba(109, 74, 255, 0.10);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fff, #fbf8ff);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.035);
+}
+
+.nova-dashboard-bars__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.nova-dashboard-bars__head strong {
+  color: #20163a;
+  font-size: 0.96rem;
+}
+
+.nova-dashboard-bars__head span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: #d11e91;
+  background: rgba(236, 72, 153, 0.10);
+  font-weight: 900;
+}
+
+.nova-dashboard-bars__row small {
+  display: block;
+  color: #6b7280;
+  margin-bottom: 10px;
+}
+
+.nova-dashboard-bars__track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.10);
+}
+
+.nova-dashboard-bars__track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f03caf, #7c3aed);
+  box-shadow: 0 10px 22px rgba(209, 30, 145, 0.18);
+}
+
+.teacher-month-filter {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.teacher-month-filter label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #d11e91;
+}
+
+.teacher-month-filter input {
+  height: 42px;
+  border: 1px solid #dbe1ea;
+  border-radius: 14px;
+  padding: 0 12px;
+  background: #fff;
+  color: #111827;
+  font-weight: 800;
+}
+
+.teacher-payout-card-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid rgba(209, 30, 145, 0.14);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(250, 232, 255, 0.78), rgba(255,255,255,0.96));
+}
+
+.teacher-payout-card-inline svg {
+  width: 40px;
+  height: 40px;
+  padding: 10px;
+  border-radius: 14px;
+  color: #d11e91;
+  background: rgba(209, 30, 145, 0.1);
+}
+
+.teacher-payout-card-inline span,
+.teacher-payout-card-inline small {
+  display: block;
+  color: #667085;
+}
+
+.teacher-payout-card-inline strong {
+  display: block;
+  color: #111827;
+  font-size: 1.35rem;
+}
+
+.teacher-payout-detail > strong {
+  display: block;
+  margin: 10px 0 4px;
+  color: #111827;
+  font-size: 1.7rem;
+}
+
+.teacher-payout-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.teacher-payout-list span {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #e7eaf3;
+}
+
+.teacher-payout-list em,
+.teacher-payout-list b {
+  font-style: normal;
+  color: #475467;
+}
+
+.teacher-payout-list strong {
+  color: #d11e91;
+}
+
+/* Teacher course assignment */
+.teacher-detail-modal {
+  width: min(1120px, 94vw);
+  max-height: 90vh;
+  overflow: auto;
+  padding: 0;
+  border-radius: 30px;
+}
+
+.teacher-detail-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 26px;
+  border-bottom: 1px solid rgba(209, 30, 145, 0.14);
+  background: linear-gradient(135deg, rgba(250, 232, 255, 0.72), rgba(255,255,255,0.98) 46%, rgba(124, 58, 237, 0.08));
+}
+
+.teacher-detail-hero h3 {
+  margin: 6px 0 8px;
+  font-size: 2rem;
+  color: #16172f;
+}
+
+.teacher-detail-hero p {
+  margin: 0;
+  color: #667085;
+}
+
+.teacher-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.8fr);
+  gap: 18px;
+  padding: 24px 26px 0;
+}
+
+.teacher-panel {
+  padding: 20px;
+  border: 1px solid #e7eaf3;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #fff, #fbf8ff);
+}
+
+.teacher-panel h3 {
+  margin: 0 0 12px;
+  color: #1f2241;
+}
+
+.teacher-panel p {
+  margin: 8px 0;
+  color: #667085;
+}
+
+.teacher-panel strong {
+  color: #1f2241;
+}
+
+.teacher-payout-panel svg {
+  color: #d11e91;
+}
+
+.teacher-courses-manager {
+  margin: 20px 26px 26px;
+  padding: 22px;
+  border-radius: 26px;
+  border: 1px solid rgba(209, 30, 145, 0.16);
+  background: radial-gradient(circle at top left, rgba(209, 30, 145, 0.08), transparent 34%), linear-gradient(180deg, #fff, #fcf9ff);
+}
+
+.teacher-courses-manager__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.teacher-courses-manager__head h3 {
+  margin: 4px 0 6px;
+  color: #1f2241;
+}
+
+.teacher-courses-manager__head p {
+  margin: 0;
+  color: #667085;
+}
+
+.teacher-courses-manager__head svg {
+  color: #d11e91;
+}
+
+.teacher-assign-course-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.teacher-assign-course-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #d11e91;
+}
+
+.teacher-assign-course-form select {
+  height: 52px;
+  border: 1px solid #dbe1ea;
+  border-radius: 16px;
+  padding: 0 14px;
+  background: #fff;
+  color: #111827;
+  font-size: 0.98rem;
+  font-weight: 800;
+}
+
+.teacher-course-list {
+  display: grid;
+  gap: 12px;
+}
+
+.teacher-course-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #e7eaf3;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.teacher-course-row strong {
+  display: block;
+  color: #1f2241;
+  font-size: 1rem;
+}
+
+.teacher-course-row small {
+  display: block;
+  margin-top: 4px;
+  color: #667085;
+  overflow-wrap: anywhere;
+}
+
+.teacher-empty-courses {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 150px;
+  padding: 24px;
+  border: 1px dashed rgba(209, 30, 145, 0.28);
+  border-radius: 22px;
+  text-align: center;
+  background: rgba(250, 232, 255, 0.32);
+}
+
+.teacher-empty-courses svg {
+  color: #d11e91;
+}
+
+.teacher-empty-courses strong {
+  color: #1f2241;
+}
+
+.teacher-empty-courses p {
+  margin: 0;
+  color: #667085;
+}
+
+@media (max-width: 860px) {
+  .teacher-detail-hero,
+  .teacher-courses-manager__head {
+    flex-direction: column;
+  }
+
+  .teacher-detail-grid,
+  .teacher-assign-course-form,
+  .teacher-info-grid--fixed {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* Restyling forte modal modifica insegnante */
+.teachers-page .modalCard.large-modal {
+  width: min(1040px, 94vw) !important;
+  max-height: 90vh;
+  overflow: auto;
+  padding: 0 !important;
+  border-radius: 34px !important;
+  border: 1px solid rgba(209, 30, 145, 0.18) !important;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(240, 60, 175, 0.13), transparent 34%),
+    linear-gradient(180deg, #ffffff 0%, #fff9ff 100%) !important;
+  box-shadow: 0 34px 90px rgba(25, 20, 52, 0.24) !important;
+}
+
+.teachers-page .modalCard.large-modal .section-head {
+  margin: 0 !important;
+  padding: 28px 30px 24px !important;
+  border-bottom: 1px solid rgba(209, 30, 145, 0.14);
+  background:
+    radial-gradient(circle at 14% 10%, rgba(240, 60, 175, 0.18), transparent 28%),
+    linear-gradient(135deg, rgba(250, 232, 255, 0.78), rgba(255,255,255,0.98) 48%, rgba(124, 58, 237, 0.09));
+}
+
+.teachers-page .modalCard.large-modal .section-head h3 {
+  margin: 0 0 8px !important;
+  font-size: clamp(1.65rem, 2vw, 2.25rem) !important;
+  letter-spacing: -0.04em;
+  color: #17172f !important;
+}
+
+.teachers-page .modalCard.large-modal .section-head p {
+  max-width: 760px;
+  margin: 0 !important;
+  color: #667085 !important;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.teachers-page .modalCard.large-modal .formGrid {
+  padding: 26px 30px 30px !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 16px !important;
+}
+
+.teachers-page .modalCard.large-modal .formGrid > label:not(.check-card) {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  min-width: 0 !important;
+  padding: 16px !important;
+  border: 1px solid rgba(209, 30, 145, 0.14) !important;
+  border-radius: 22px !important;
+  background: linear-gradient(180deg, #ffffff, #fffafe) !important;
+  color: #d11e91 !important;
+  font-size: 0.76rem !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.08em !important;
+  line-height: 1.15 !important;
+  text-transform: uppercase !important;
+  box-shadow: 0 14px 30px rgba(17, 24, 39, 0.035);
+}
+
+.teachers-page .modalCard.large-modal .formGrid input,
+.teachers-page .modalCard.large-modal .formGrid select,
+.teachers-page .modalCard.large-modal .formGrid textarea {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 54px !important;
+  margin: 0 !important;
+  padding: 0 16px !important;
+  border: 1px solid #e3e7ef !important;
+  border-radius: 18px !important;
+  background: #fbfdff !important;
+  color: #172033 !important;
+  font-size: 1rem !important;
+  font-weight: 800 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+}
+
+.teachers-page .modalCard.large-modal .formGrid select {
+  appearance: auto !important;
+  cursor: pointer;
+}
+
+.teachers-page .modalCard.large-modal .formGrid input:focus,
+.teachers-page .modalCard.large-modal .formGrid select:focus,
+.teachers-page .modalCard.large-modal .formGrid textarea:focus {
+  outline: none !important;
+  border-color: rgba(209, 30, 145, 0.48) !important;
+  box-shadow: 0 0 0 4px rgba(209, 30, 145, 0.10) !important;
+}
+
+.teachers-page .modalCard.large-modal .formGrid textarea,
+.teachers-page .modalCard.large-modal .formTextarea {
+  height: 150px !important;
+  min-height: 150px !important;
+  padding: 14px 16px !important;
+  resize: vertical;
+}
+
+.teachers-page .modalCard.large-modal .check-card {
+  min-height: 94px !important;
+  padding: 16px 18px !important;
+  border: 1px solid rgba(124, 58, 237, 0.18) !important;
+  border-radius: 24px !important;
+  background: linear-gradient(135deg, #ffffff, #faf5ff) !important;
+  color: #17172f !important;
+  font-size: 1.05rem !important;
+  font-weight: 950 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 14px !important;
+}
+
+.teachers-page .modalCard.large-modal .check-card input {
+  width: 18px !important;
+  height: 18px !important;
+  accent-color: #d11e91;
+}
+
+.teachers-page .modalCard.large-modal .modalActions {
+  grid-column: 1 / -1 !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 12px !important;
+  padding-top: 8px !important;
+}
+
+.teachers-page .modalCard.large-modal .modalActions .topbar__button--primary {
+  min-width: 130px;
+  background: linear-gradient(135deg, #f03caf, #7c3aed) !important;
+  box-shadow: 0 18px 34px rgba(209, 30, 145, 0.22) !important;
+}
+
+@media (max-width: 760px) {
+  .teachers-page .modalCard.large-modal .formGrid {
+    grid-template-columns: 1fr !important;
+    padding: 22px !important;
+  }
+
+  .teachers-page .modalCard.large-modal .section-head {
+    padding: 24px 22px !important;
   }
 }

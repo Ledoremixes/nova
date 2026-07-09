@@ -1,46 +1,44 @@
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthProvider'
-import {
-  fetchDashboardStats,
-  fetchDashboardAndamentoMensile,
-  fetchBarTopItems,
-  fetchDashboardRegistry,
-} from '../api/dashboard'
+import { fetchDashboardRegistry } from '../api/dashboard'
 import StatCard from '../components/ui/StatCard'
-
-function euro(value) {
-  return new Intl.NumberFormat('it-IT', {
-    style: 'currency',
-    currency: 'EUR',
-  }).format(Number(value || 0))
-}
 
 function formatDate(value) {
   if (!value) return '-'
   return new Date(value).toLocaleDateString('it-IT')
 }
 
+function maxValue(rows, key = 'count') {
+  return Math.max(1, ...rows.map((row) => Number(row[key] || 0)))
+}
+
+function MiniBarList({ rows = [], valueKey = 'count', empty = 'Nessun dato disponibile.' }) {
+  const max = maxValue(rows, valueKey)
+  if (!rows.length) return <div className="empty-box">{empty}</div>
+
+  return (
+    <div className="nova-dashboard-bars">
+      {rows.map((row) => {
+        const value = Number(row[valueKey] || 0)
+        const width = Math.max(6, Math.round((value / max) * 100))
+        return (
+          <div className="nova-dashboard-bars__row" key={row.key || row.label}>
+            <div className="nova-dashboard-bars__head">
+              <strong>{row.label}</strong>
+              <span>{value}</span>
+            </div>
+            {row.meta ? <small>{row.meta}</small> : null}
+            <div className="nova-dashboard-bars__track"><i style={{ width: `${width}%` }} /></div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const { user, role } = useAuth()
   const isAdmin = role === 'admin'
-
-  const statsQuery = useQuery({
-    queryKey: ['dashboard-stats', user?.id],
-    queryFn: () => fetchDashboardStats(user.id),
-    enabled: !!user?.id && isAdmin,
-  })
-
-  const andamentoQuery = useQuery({
-    queryKey: ['dashboard-andamento', user?.id],
-    queryFn: () => fetchDashboardAndamentoMensile(user.id),
-    enabled: !!user?.id && isAdmin,
-  })
-
-  const barItemsQuery = useQuery({
-    queryKey: ['dashboard-bar-items', user?.id],
-    queryFn: () => fetchBarTopItems(user.id),
-    enabled: !!user?.id && isAdmin,
-  })
 
   const registryQuery = useQuery({
     queryKey: ['dashboard-registry', user?.id],
@@ -48,137 +46,101 @@ export default function DashboardPage() {
     enabled: !!user?.id,
   })
 
-  const isLoading =
-    statsQuery.isLoading ||
-    andamentoQuery.isLoading ||
-    barItemsQuery.isLoading ||
-    registryQuery.isLoading
-
-  const error =
-    statsQuery.error ||
-    andamentoQuery.error ||
-    barItemsQuery.error ||
-    registryQuery.error
-
-  if (isLoading) {
+  if (registryQuery.isLoading) {
     return (
       <section className="page">
         <div className="page-card">
           <h2>Dashboard</h2>
-          <p>Caricamento dati in corso...</p>
+          <p>Caricamento dati operativi in corso...</p>
         </div>
       </section>
     )
   }
 
-  if (error) {
+  if (registryQuery.error) {
     return (
       <section className="page">
         <div className="page-card">
           <h2>Dashboard</h2>
-          <p>Errore: {error.message}</p>
+          <p>Errore: {registryQuery.error.message}</p>
         </div>
       </section>
     )
   }
 
-  const stats = statsQuery.data || { totalEntrate: 0, totalUscite: 0, saldo: 0, totalMovements: 0, byAccount: [] }
-  const andamento = andamentoQuery.data || []
-  const barItems = barItemsQuery.data || []
-  const registry = registryQuery.data
+  const registry = registryQuery.data || {
+    totalTesserati: 0,
+    totalTessereAttive: 0,
+    totalCorsisti: 0,
+    totalInsegnanti: 0,
+    totalCorsi: 0,
+    totalInAttesaPagamento: 0,
+    registrationsByMonth: [],
+    statusDistribution: [],
+    topCourses: [],
+    ultimiTesserati: [],
+  }
 
   return (
-    <section className="page">
+    <section className="page nova-dashboard-page">
       <div className="dashboard-hero">
         <div>
-          <div className="dashboard-hero__eyebrow">Panoramica</div>
-          <h2 className="dashboard-hero__title">Benvenuto nel nuovo gestionale Nova</h2>
+          <div className="dashboard-hero__eyebrow">Panoramica operativa</div>
+          <h2 className="dashboard-hero__title">Nova Orchidea</h2>
           <p className="dashboard-hero__text">
-            Dashboard completa con statistiche, andamento mensile, top articoli bar e ultimi tesserati.
+            Qui trovi solo dati operativi: allievi, corsi, tesseramenti e attività della scuola. I valori economici sono spostati nella sezione Contabilità.
           </p>
         </div>
+        <span className="nova-pill nova-pill--neutral">{isAdmin ? 'Vista admin' : 'Vista operatore'}</span>
       </div>
-
-      {isAdmin ? (
-        <div className="stats-grid">
-          <StatCard title="Entrate" value={euro(stats.totalEntrate)} hint="Totale entrate" accent />
-          <StatCard title="Uscite" value={euro(stats.totalUscite)} hint="Totale uscite" />
-          <StatCard title="Saldo" value={euro(stats.saldo)} hint="Entrate - uscite" />
-          <StatCard title="Movimenti" value={stats.totalMovements} hint="Prima nota" />
-        </div>
-      ) : null}
 
       <div className="stats-grid">
-        <StatCard title="Tesserati" value={registry.totalTesserati} hint="Totale registrati" />
-        <StatCard title="Insegnanti" value={registry.totalInsegnanti} hint="Totale insegnanti" />
-        <StatCard title="Corsi" value="Orchidea" hint="Gestione gruppi/corsi collegata" />
-        <StatCard title="Permessi" value={isAdmin ? 'Admin' : 'Utente'} hint={isAdmin ? 'Accesso completo' : 'Contabilità nascosta'} />
+        <StatCard title="Tesserati" value={registry.totalTesserati} hint="Anagrafiche totali" accent />
+        <StatCard title="Corsisti" value={registry.totalCorsisti} hint="Allievi collegati ai corsi" />
+        <StatCard title="Tessere attive" value={registry.totalTessereAttive} hint="Tessere valide" />
+        <StatCard title="Corsi" value={registry.totalCorsi} hint="Corsi configurati" />
+        <StatCard title="Insegnanti" value={registry.totalInsegnanti} hint="Team didattico" />
+        <StatCard title="Da verificare" value={registry.totalInAttesaPagamento} hint="Tessere/quote in attesa" />
       </div>
 
-      {isAdmin ? (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid nova-dashboard-ops-grid">
         <div className="page-card">
           <div className="section-head">
             <div>
-              <h3>Andamento mensile</h3>
-              <p>Entrate e uscite raggruppate per mese</p>
+              <h3>Nuovi tesserati</h3>
+              <p>Andamento degli ultimi 6 mesi.</p>
             </div>
           </div>
-
-          {andamento.length === 0 ? (
-            <div className="empty-box">Nessun dato disponibile.</div>
-          ) : (
-            <div className="simple-list">
-              {andamento.map((item) => (
-                <div className="simple-list__row" key={item.month}>
-                  <div>
-                    <div className="simple-list__title">{item.month}</div>
-                    <div className="simple-list__meta">
-                      Entrate: {euro(item.entrate)} · Uscite: {euro(item.uscite)}
-                    </div>
-                  </div>
-                  <div className="status-badge">
-                    {euro(item.entrate - item.uscite)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <MiniBarList rows={registry.registrationsByMonth} />
         </div>
 
         <div className="page-card">
           <div className="section-head">
             <div>
-              <h3>Top articoli bar</h3>
-              <p>I prodotti con maggior incasso</p>
+              <h3>Stato allievi</h3>
+              <p>Distribuzione tra corsisti, tesserati e situazioni da controllare.</p>
             </div>
           </div>
-
-          {barItems.length === 0 ? (
-            <div className="empty-box">Nessun articolo bar disponibile.</div>
-          ) : (
-            <div className="simple-list">
-              {barItems.map((item, index) => (
-                <div className="simple-list__row" key={`${item.label}-${index}`}>
-                  <div>
-                    <div className="simple-list__title">{item.label}</div>
-                    <div className="simple-list__meta">{item.count} movimenti</div>
-                  </div>
-                  <div className="status-badge">{euro(item.amount)}</div>
-                </div>
-              ))}
-            </div>
-          )}
+          <MiniBarList rows={registry.statusDistribution} valueKey="value" />
         </div>
       </div>
-      ) : null}
 
-      <div className="dashboard-grid">
+      <div className="dashboard-grid nova-dashboard-ops-grid">
+        <div className="page-card">
+          <div className="section-head">
+            <div>
+              <h3>Corsi più popolati</h3>
+              <p>Partecipanti collegati ai corsi del portale allievi.</p>
+            </div>
+          </div>
+          <MiniBarList rows={registry.topCourses} valueKey="value" empty="Nessun corso con partecipanti collegati." />
+        </div>
+
         <div className="page-card">
           <div className="section-head">
             <div>
               <h3>Ultimi tesserati</h3>
-              <p>Ultimi inserimenti anagrafici</p>
+              <p>Ultimi inserimenti anagrafici.</p>
             </div>
           </div>
 
@@ -191,7 +153,7 @@ export default function DashboardPage() {
                   <div>
                     <div className="simple-list__title">{item.nomeCompleto || 'Senza nome'}</div>
                     <div className="simple-list__meta">
-                      {formatDate(item.createdAt)} · Anno {item.anno}
+                      {formatDate(item.createdAt)} · {item.numeroTessera || 'Senza tessera'} · Anno {item.anno}
                     </div>
                   </div>
                   <div className="status-badge">{item.tipo}</div>
@@ -200,37 +162,6 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
-
-        {isAdmin ? (
-        <div className="page-card">
-          <div className="section-head">
-            <div>
-              <h3>Ripartizione per conto</h3>
-              <p>Entrate e uscite per account code</p>
-            </div>
-          </div>
-
-          {stats.byAccount.length === 0 ? (
-            <div className="empty-box">Nessun conto disponibile.</div>
-          ) : (
-            <div className="simple-list">
-              {stats.byAccount.map((item, index) => (
-                <div className="simple-list__row" key={`${item.code}-${index}`}>
-                  <div>
-                    <div className="simple-list__title">{item.code}</div>
-                    <div className="simple-list__meta">
-                      Entrate: {euro(item.entrate)} · Uscite: {euro(item.uscite)}
-                    </div>
-                  </div>
-                  <div className="status-badge">
-                    {euro(Number(item.entrate || 0) - Number(item.uscite || 0))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        ) : null}
       </div>
     </section>
   )

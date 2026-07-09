@@ -137,7 +137,9 @@ function billingLabel(value) {
 
 export default function TesseratiPage() {
   const { role, orchideaAuthWarning } = useAuth()
-  const isAdmin = String(role || '').trim().toLowerCase() === 'admin'
+  const currentRole = String(role || '').trim().toLowerCase()
+  const isAdmin = currentRole === 'admin'
+  const canEditStudent = isAdmin || currentRole === 'user'
   const queryClient = useQueryClient()
 
   const [search, setSearch] = useState('')
@@ -263,7 +265,7 @@ export default function TesseratiPage() {
 
   function handleSubmit(e) {
     e.preventDefault()
-    if (!selectedStudent || !isAdmin) return
+    if (!selectedStudent || !canEditStudent) return
 
     updateMutation.mutate({ id: selectedStudent.id, payload: studentForm })
   }
@@ -462,7 +464,7 @@ export default function TesseratiPage() {
                                 N. progr.
                               </button>
                             ) : null}
-                            {isAdmin ? (
+                            {canEditStudent ? (
                               <button
                                 className="actionBtn"
                                 type="button"
@@ -512,42 +514,42 @@ export default function TesseratiPage() {
               <div className="student-form-title">
                 <div>
                   <h3>Anagrafica e tessera</h3>
-                  <p>{isAdmin ? 'Puoi modificare i dati perché sei admin.' : 'Vista sola lettura: le modifiche sono riservate agli admin.'}</p>
+                  <p>{canEditStudent ? 'Puoi modificare i dati anagrafici e operativi consentiti.' : 'Vista sola lettura: le modifiche sono riservate agli operatori autorizzati.'}</p>
                 </div>
-                <span className={isAdmin ? 'nova-pill nova-pill--ok' : 'nova-pill nova-pill--neutral'}>{isAdmin ? 'Admin attivo' : 'Sola lettura'}</span>
+                <span className={isAdmin ? 'nova-pill nova-pill--ok' : 'nova-pill nova-pill--neutral'}>{isAdmin ? 'Admin attivo' : canEditStudent ? 'Operatore attivo' : 'Sola lettura'}</span>
               </div>
               <label>Nome
-                <input value={studentForm.nome} onChange={(e) => handleChange('nome', e.target.value)} disabled={!isAdmin} required />
+                <input value={studentForm.nome} onChange={(e) => handleChange('nome', e.target.value)} disabled={!canEditStudent} required />
               </label>
               <label>Cognome
-                <input value={studentForm.cognome} onChange={(e) => handleChange('cognome', e.target.value)} disabled={!isAdmin} required />
+                <input value={studentForm.cognome} onChange={(e) => handleChange('cognome', e.target.value)} disabled={!canEditStudent} required />
               </label>
               <label>Email
-                <input type="email" value={studentForm.email} onChange={(e) => handleChange('email', e.target.value)} disabled={!isAdmin} />
+                <input type="email" value={studentForm.email} onChange={(e) => handleChange('email', e.target.value)} disabled={!canEditStudent} />
               </label>
               <label>Telefono
-                <input value={studentForm.telefono} onChange={(e) => handleChange('telefono', e.target.value)} disabled={!isAdmin} />
+                <input value={studentForm.telefono} onChange={(e) => handleChange('telefono', e.target.value)} disabled={!canEditStudent} />
               </label>
               <label>Codice fiscale
-                <input value={studentForm.cf} onChange={(e) => handleChange('cf', e.target.value)} disabled={!isAdmin} />
+                <input value={studentForm.cf} onChange={(e) => handleChange('cf', e.target.value)} disabled={!canEditStudent} />
               </label>
               <label>Data nascita
-                <input type="date" value={studentForm.nascita || ''} onChange={(e) => handleChange('nascita', e.target.value)} disabled={!isAdmin} />
+                <input type="date" value={studentForm.nascita || ''} onChange={(e) => handleChange('nascita', e.target.value)} disabled={!canEditStudent} />
               </label>
               <label>Luogo nascita
-                <input value={studentForm.luogo} onChange={(e) => handleChange('luogo', e.target.value)} disabled={!isAdmin} />
+                <input value={studentForm.luogo} onChange={(e) => handleChange('luogo', e.target.value)} disabled={!canEditStudent} />
               </label>
               <label>Residenza
-                <input value={studentForm.residenza} onChange={(e) => handleChange('residenza', e.target.value)} disabled={!isAdmin} />
+                <input value={studentForm.residenza} onChange={(e) => handleChange('residenza', e.target.value)} disabled={!canEditStudent} />
               </label>
               <label>Numero tessera personalizzato
-                <input value={studentForm.numero_tessera} onChange={(e) => handleChange('numero_tessera', e.target.value)} disabled={!isAdmin} placeholder="Lascia vuoto per usare il codice TESS" />
+                <input value={studentForm.numero_tessera} onChange={(e) => handleChange('numero_tessera', e.target.value)} disabled={!canEditStudent} placeholder="Lascia vuoto per usare il codice TESS" />
               </label>
               <label>Stagione
-                <input value={studentForm.stagione} onChange={(e) => handleChange('stagione', e.target.value)} disabled={!isAdmin} />
+                <input value={studentForm.stagione} onChange={(e) => handleChange('stagione', e.target.value)} disabled={!canEditStudent} />
               </label>
               <label>Stato tessera
-                <select value={studentForm.status || ''} onChange={(e) => handleChange('status', e.target.value)} disabled={!isAdmin}>
+                <select value={studentForm.status || ''} onChange={(e) => handleChange('status', e.target.value)} disabled={!canEditStudent}>
                   <option value="pending_payment">In attesa pagamento</option>
                   <option value="active">Attiva</option>
                   <option value="inactive">Non attiva</option>
@@ -555,7 +557,7 @@ export default function TesseratiPage() {
                 </select>
               </label>
               <label>Stato pagamento tessera
-                <select value={studentForm.payment_status || ''} onChange={(e) => handleChange('payment_status', e.target.value)} disabled={!isAdmin}>
+                <select value={studentForm.payment_status || ''} onChange={(e) => handleChange('payment_status', e.target.value)} disabled={!canEditStudent}>
                   <option value="unpaid">Non pagato</option>
                   <option value="paid">Pagato</option>
                   <option value="pending">In attesa</option>
@@ -565,11 +567,11 @@ export default function TesseratiPage() {
 
               <div className="tesserati-check-grid">
                 <label className="check-card">
-                  <input type="checkbox" checked={studentForm.tessera_attiva} onChange={(e) => handleChange('tessera_attiva', e.target.checked)} disabled={!isAdmin} />
+                  <input type="checkbox" checked={studentForm.tessera_attiva} onChange={(e) => handleChange('tessera_attiva', e.target.checked)} disabled={!canEditStudent} />
                   Tessera attiva
                 </label>
                 <label className="check-card">
-                  <input type="checkbox" checked={studentForm.is_corsista} onChange={(e) => handleChange('is_corsista', e.target.checked)} disabled={!isAdmin} />
+                  <input type="checkbox" checked={studentForm.is_corsista} onChange={(e) => handleChange('is_corsista', e.target.checked)} disabled={!canEditStudent} />
                   Corsista
                 </label>
               </div>
@@ -582,7 +584,7 @@ export default function TesseratiPage() {
               ) : null}
 
               <div className="modalActions">
-                {isAdmin ? (
+                {canEditStudent ? (
                   <button type="submit" className="topbar__button topbar__button--primary" disabled={updateMutation.isPending}>
                     {updateMutation.isPending ? 'Salvataggio…' : 'Salva scheda allievo'}
                   </button>

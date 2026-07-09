@@ -18,6 +18,7 @@ import PagamentiPage from '../pages/PagamentiPage'
 import AtletiPage from '../pages/AtletiPage'
 import ContiPage from '../pages/ContiPage'
 import GruppiPage from '../pages/GruppiPage'
+import PacchettiPage from '../pages/PacchettiPage'
 
 export const router = createBrowserRouter([
   {
@@ -43,7 +44,8 @@ export const router = createBrowserRouter([
       { path: 'atleti', element: <AtletiPage /> },
       { path: 'visite-mediche', element: (<ProtectedRoute roles={['admin']}><VisiteMedichePage /></ProtectedRoute>) },
       { path: 'calendario', element: (<ProtectedRoute roles={['admin']}><ComingSoonPage title="Calendario" /></ProtectedRoute>) },
-      { path: 'pagamenti', element: (<ProtectedRoute roles={['admin']}><PagamentiPage /></ProtectedRoute>) },
+      { path: 'pagamenti', element: <PagamentiPage /> },
+      { path: 'pacchetti', element: <PacchettiPage /> },
       { path: 'gestione-eventi', element: (<ProtectedRoute roles={['admin']}><ComingSoonPage title="Gestione eventi" /></ProtectedRoute>) },
       { path: 'shop', element: (<ProtectedRoute roles={['admin']}><ComingSoonPage title="Shop" /></ProtectedRoute>) },
       { path: 'marketing', element: (<ProtectedRoute roles={['admin']}><ComingSoonPage title="Marketing" /></ProtectedRoute>) },

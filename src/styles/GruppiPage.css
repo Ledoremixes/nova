@@ -858,3 +858,36 @@
   flex: 0 0 auto;
   min-height: 46px;
 }
+.course-enroll-box {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr auto;
+  gap: 12px;
+  align-items: end;
+  margin: 14px 0;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(209, 30, 145, 0.16);
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.08), rgba(124, 58, 237, 0.08), rgba(255,255,255,0.92));
+}
+
+.course-enroll-box strong {
+  color: #20163a;
+  font-size: 1rem;
+}
+
+.course-enroll-box p {
+  color: #6b7280;
+  margin-top: 4px;
+  font-size: 0.92rem;
+}
+
+.course-enroll-box .form-error {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (max-width: 980px) {
+  .course-enroll-box {
+    grid-template-columns: 1fr;
+  }
+}

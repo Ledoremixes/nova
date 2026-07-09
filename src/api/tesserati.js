@@ -165,17 +165,62 @@ function makeNextMembershipNumber(students) {
   return `${prefix}${String(max + 1).padStart(6, '0')}`
 }
 
+
+function parseRpcJsonArray(data) {
+  if (!data) return []
+  if (Array.isArray(data)) return data
+  if (typeof data === 'string') {
+    try {
+      const parsed = JSON.parse(data)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+  return Array.isArray(data?.items) ? data.items : []
+}
+
+async function fetchOrchideaTesseramentiViaBridge(config) {
+  const { data, error } = await orchideaSupabase.rpc('nova_tesseramenti_list')
+  if (error) throw error
+  return withSource(parseRpcJsonArray(data), 'tesseramenti', 'Orchidea Allievi', config.mode)
+}
+
+async function updateOrchideaTesseramentoViaBridge(id, payload) {
+  const { data, error } = await orchideaSupabase.rpc('nova_update_tesseramento', {
+    p_id: id,
+    p_payload: cleanStudentPayload(payload),
+  })
+  if (error) throw error
+  const row = Array.isArray(data) ? data[0] : data
+  return { ...(row || {}), _sourceTable: 'tesseramenti', _sourceLabel: 'Orchidea Allievi' }
+}
+
+async function fetchTesseratoDetailsViaBridge(id) {
+  const { data, error } = await orchideaSupabase.rpc('nova_tesseramento_details', { p_tesseramento_id: id })
+  if (error) throw error
+  return {
+    enrollments: Array.isArray(data?.enrollments) ? data.enrollments : [],
+    payments: Array.isArray(data?.payments) ? data.payments : [],
+  }
+}
+
 async function fetchOrchideaTesseramenti() {
   const config = getOrchideaConfigStatus()
 
   if (hasDedicatedOrchideaConfig) {
     const authStatus = await getOrchideaAuthStatus()
     if (!authStatus.authenticated) {
-      const authError = new Error(
-        'Il database Orchidea Allievi è configurato, ma non hai una sessione attiva su orchidea-allievi. Fai logout da Nova e accedi con la stessa email/password admin che usi nel portale allievi; se accedi con manuel@orchidea.it ma l’admin allievi è manuelmia01385@gmail.com, Supabase non può vedere i tesserati per via delle policy RLS.'
-      )
-      authError.code = 'ORCHIDEA_AUTH_REQUIRED'
-      throw authError
+      try {
+        return await fetchOrchideaTesseramentiViaBridge(config)
+      } catch (bridgeError) {
+        const authError = new Error(
+          'Il database Orchidea Allievi è configurato, ma non hai una sessione attiva sul portale allievi e la funzione bridge Nova non è disponibile. Esegui SQL_ORCHIDEA_ALLIEVI_ACCESSO_OPERATORI_NOVA.sql oppure crea lo stesso utente anche su Orchidea Allievi con la stessa password.'
+        )
+        authError.code = 'ORCHIDEA_AUTH_REQUIRED'
+        authError.cause = bridgeError
+        throw authError
+      }
     }
   }
 
@@ -187,7 +232,12 @@ async function fetchOrchideaTesseramenti() {
 
   if (error) {
     if (isMissingTableError(error) || isPermissionError(error)) {
-      error._handledTesseramentiError = true
+      try {
+        return await fetchOrchideaTesseramentiViaBridge(config)
+      } catch (bridgeError) {
+        error._handledTesseramentiError = true
+        error._bridgeError = bridgeError
+      }
     }
     throw error
   }
@@ -255,6 +305,10 @@ export async function fetchTesseratoDetails(id) {
           corso_id,
           data_iscrizione,
           tariffa_mensile,
+          quota_allievo_mensile,
+          quota_insegnante_mensile,
+          percentuale_insegnante,
+          note_pacchetto,
           tipo_pagamento,
           data_inizio,
           data_fine,
@@ -286,7 +340,11 @@ export async function fetchTesseratoDetails(id) {
     }
   } catch (error) {
     if (isMissingTableError(error) || isPermissionError(error)) {
-      return { enrollments: [], payments: [] }
+      try {
+        return await fetchTesseratoDetailsViaBridge(id)
+      } catch {
+        return { enrollments: [], payments: [] }
+      }
     }
     throw new Error(error.message || 'Errore caricamento scheda allievo')
   }
@@ -309,7 +367,11 @@ export async function updateTesserato(id, payload) {
     }
 
     if (hasDedicatedOrchideaConfig && isPermissionError(error)) {
-      throw new Error('Non hai i permessi per modificare i tesserati sul database Orchidea Allievi.')
+      try {
+        return await updateOrchideaTesseramentoViaBridge(id, payload)
+      } catch (bridgeError) {
+        throw new Error(bridgeError.message || 'Non hai i permessi per modificare i tesserati sul database Orchidea Allievi.')
+      }
     }
 
     if (!isMissingTableError(error) && !isMissingColumnError(error) && !isPermissionError(error)) {
