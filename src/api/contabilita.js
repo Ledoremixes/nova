@@ -1,6 +1,6 @@
 import dayjs from 'dayjs'
 import { supabase } from './supabase'
-import { fetchEntriesFilteredTotals, fetchLastSumupImport } from './entries'
+import { fetchLastSumupImport } from './entries'
 
 export function euro(value) {
   return new Intl.NumberFormat('it-IT', {
@@ -41,14 +41,6 @@ function normalizeText(value) {
 
 function containsAny(text, keywords) {
   return keywords.some((keyword) => text.includes(keyword))
-}
-
-function startOfYearDate() {
-  return dayjs().startOf('year').format('YYYY-MM-DD')
-}
-
-function endOfTodayDate() {
-  return dayjs().format('YYYY-MM-DD')
 }
 
 const COMMERCIAL_PRODUCT_KEYWORDS = [
@@ -358,6 +350,49 @@ function buildStatement(rows) {
   }
 }
 
+async function fetchEntriesPageSet({
+  fromDate,
+  toDate,
+  select,
+  fallbackDateOnly = false,
+}) {
+  const pageSize = 1000
+  let from = 0
+  const rows = []
+
+  while (true) {
+    let query = supabase
+      .from('entries')
+      .select(select)
+      .order(fallbackDateOnly ? 'date' : 'operation_datetime', {
+        ascending: false,
+        nullsFirst: false,
+      })
+      .order('id_key', { ascending: false })
+      .range(from, from + pageSize - 1)
+
+    if (fallbackDateOnly) {
+      query = query.is('operation_datetime', null)
+      if (fromDate) query = query.gte('date', fromDate)
+      if (toDate) query = query.lte('date', toDate)
+    } else {
+      if (fromDate) query = query.gte('operation_datetime', `${fromDate}T00:00:00`)
+      if (toDate) query = query.lte('operation_datetime', `${toDate}T23:59:59`)
+    }
+
+    const { data, error } = await query
+    if (error) throw error
+
+    const chunk = data || []
+    rows.push(...chunk)
+
+    if (chunk.length < pageSize) break
+    from += pageSize
+  }
+
+  return rows
+}
+
 async function fetchAllEntriesPaged({
   fromDate,
   toDate,
@@ -380,64 +415,20 @@ async function fetchAllEntriesPaged({
     id_key
   `,
 }) {
-  const pageSize = 1000
-  let from = 0
-  let keepLoading = true
-  const allRows = []
+  // Con un intervallo selezionato eseguiamo due query indicizzabili:
+  // 1) righe moderne filtrate su operation_datetime;
+  // 2) sole righe storiche con operation_datetime nullo, filtrate su date.
+  // È più rapido e più affidabile di scaricare l'intera tabella nel browser.
+  if (fromDate || toDate) {
+    const [timestampRows, fallbackRows] = await Promise.all([
+      fetchEntriesPageSet({ fromDate, toDate, select }),
+      fetchEntriesPageSet({ fromDate, toDate, select, fallbackDateOnly: true }),
+    ])
 
-  while (keepLoading) {
-    let query = supabase
-      .from('entries')
-      .select(select)
-      .order('operation_datetime', {
-        ascending: false,
-        nullsFirst: false,
-      })
-      .order('id_key', {
-        ascending: false,
-      })
-      .range(from, from + pageSize - 1)
-
-    // Non filtriamo lato database solo su operation_datetime:
-    // alcune righe storiche hanno operation_datetime vuoto ma date valorizzata.
-    // Il filtro periodo viene applicato sotto usando operation_datetime || date,
-    // così i totali della Contabilità restano coerenti con la Prima nota.
-
-    const { data, error } = await query
-    if (error) throw error
-
-    const rawChunk = data || []
-    let chunk = rawChunk
-
-    if (fromDate || toDate) {
-      chunk = rawChunk.filter((row) => {
-        const ref = row.operation_datetime || row.date
-        const date = dayjs(ref)
-        if (!date.isValid()) return false
-        if (fromDate && date.isBefore(dayjs(fromDate), 'day')) return false
-        if (toDate && date.isAfter(dayjs(toDate), 'day')) return false
-        return true
-      })
-    }
-
-    allRows.push(...chunk)
-
-    if (chunk.length < pageSize) {
-      keepLoading = false
-    } else {
-      from += pageSize
-    }
+    return [...timestampRows, ...fallbackRows]
   }
 
-  return allRows
-}
-
-function sumEntriesBalance(rows) {
-  return (rows || []).reduce(
-    (acc, row) =>
-      acc + normalizeNumber(row.amount_in) - normalizeNumber(row.amount_out),
-    0
-  )
+  return fetchEntriesPageSet({ select })
 }
 
 function sumBalanceByMethod(rows, predicate) {
@@ -448,30 +439,6 @@ function sumBalanceByMethod(rows, predicate) {
         acc + normalizeNumber(row.amount_in) - normalizeNumber(row.amount_out),
       0
     )
-}
-
-async function fetchFinancialPositionUntilDate(toDate) {
-  const rows = await fetchAllEntriesPaged({
-    toDate,
-    select: 'method, amount_in, amount_out, id_key, operation_datetime, date',
-  })
-
-  const cashBalance = sumBalanceByMethod(rows, (method) => {
-    return normalizeMethod(method) === 'contanti'
-  })
-
-  const bankBalance = sumBalanceByMethod(rows, (method) => {
-    return normalizeMethod(method) !== 'contanti'
-  })
-
-  const portfolioBalance = 0
-
-  return {
-    total: cashBalance + bankBalance + portfolioBalance,
-    cashBalance,
-    bankBalance,
-    portfolioBalance,
-  }
 }
 
 export async function fetchRecentAccountingEntries(limit = 8) {
@@ -504,150 +471,75 @@ export async function fetchRecentAccountingEntries(limit = 8) {
 }
 
 export async function fetchContabilitaOverview() {
-  const fromDate = startOfYearDate()
-  const toDate = endOfTodayDate()
-
-  const [
-    totalAllRes,
-    totalYearRes,
-    uncategorizedRes,
-    entriesForBalances,
-    lastImport,
-  ] = await Promise.all([
-    fetchEntriesFilteredTotals({
-      search: '',
-      fromDate: '',
-      fromTime: '',
-      toDate: '',
-      toTime: '',
-      onlyWithoutAccount: false,
-      accountCode: '',
-      ivaFilter: '',
-    }),
-    fetchEntriesFilteredTotals({
-      search: '',
-      fromDate,
-      fromTime: '00:00',
-      toDate,
-      toTime: '23:59',
-      onlyWithoutAccount: false,
-      accountCode: '',
-      ivaFilter: '',
-    }),
+  const [uncategorizedRes, lastImport] = await Promise.all([
     supabase
       .from('entries')
-      .select('id', {
-        count: 'exact',
-        head: true,
-      })
+      .select('id', { count: 'exact', head: true })
       .or('nature.is.null,nature.eq.'),
-    fetchAllEntriesPaged({
-      select: 'method, amount_in, amount_out, id_key, operation_datetime, date',
-    }),
     fetchLastSumupImport(),
   ])
 
   if (uncategorizedRes.error) throw uncategorizedRes.error
 
-  const vatPeriod = await fetchIvaSummary({
-    fromDate,
-    toDate,
-  })
-
-  const cashBalance = sumBalanceByMethod(entriesForBalances, (method) => {
-    return normalizeMethod(method) === 'contanti'
-  })
-
-  const bankBalance = sumBalanceByMethod(entriesForBalances, (method) => {
-    return normalizeMethod(method) !== 'contanti'
-  })
-
-  const allAccountsBalance = sumEntriesBalance(entriesForBalances)
-  const otherAccountsBalance = 0
-  const negativeCashAccountsCount = 0
-
   return {
-    totalBalance: normalizeNumber(totalAllRes?.saldo),
-    yearIncome: normalizeNumber(totalYearRes?.total_in),
-    yearExpense: normalizeNumber(totalYearRes?.total_out),
-    vatDebit: normalizeNumber(vatPeriod?.vatDebit),
-    vatCredit: normalizeNumber(vatPeriod?.vatCredit),
     uncategorizedEntriesCount: uncategorizedRes.count || 0,
-    negativeCashAccountsCount,
-    cashBalance,
-    bankBalance,
-    otherAccountsBalance,
     lastSumupImportAt: lastImport?.created_at || null,
     lastSumupImportLabel: formatDateTimeLabel(lastImport?.created_at),
     lastSumupImportRows: Number(lastImport?.imported_rows || 0),
-    yearFromDate: fromDate,
-    yearToDate: toDate,
-    allAccountsBalance,
   }
 }
 
-export async function fetchRendicontoGestionale({ fromDate, toDate }) {
-  const currentRows = await fetchAllEntriesPaged({
+export async function fetchRendicontoGestionale({
+  fromDate,
+  toDate,
+  periodicity = 'quarterly',
+}) {
+  // Una sola lettura del periodo alimenta rendiconto, IVA e saldi per metodo.
+  // Prima questa pagina effettuava più scansioni complete della tabella entries.
+  const currentRows = await fetchAllEntriesPaged({ fromDate, toDate })
+  const current = buildStatement(currentRows)
+  const ivaSummary = buildIvaSummaryFromRows(currentRows, { fromDate, toDate })
+  const ivaScadenziario = buildIvaScadenziarioFromSummary({
+    iva: ivaSummary,
     fromDate,
     toDate,
+    periodicity,
   })
 
-  const current = buildStatement(currentRows)
-
-  const comparisonFromDate = fromDate
-    ? dayjs(fromDate).subtract(1, 'year').format('YYYY-MM-DD')
-    : null
-
-  const comparisonToDate = toDate
-    ? dayjs(toDate).subtract(1, 'year').format('YYYY-MM-DD')
-    : null
-
-  const comparisonRows =
-    comparisonFromDate && comparisonToDate
-      ? await fetchAllEntriesPaged({
-          fromDate: comparisonFromDate,
-          toDate: comparisonToDate,
-        })
-      : []
-
-  const comparison = buildStatement(comparisonRows)
-
-  const emptyFinancialPosition = {
-    total: 0,
-    cashBalance: 0,
-    bankBalance: 0,
-    portfolioBalance: 0,
-  }
-
-  const [financialPositionCurrent, financialPositionComparison] =
-    await Promise.all([
-      fetchFinancialPositionUntilDate(toDate),
-      comparisonToDate
-        ? fetchFinancialPositionUntilDate(comparisonToDate)
-        : Promise.resolve(emptyFinancialPosition),
-    ])
+  const cashBalance = sumBalanceByMethod(currentRows, (method) => {
+    return normalizeMethod(method) === 'contanti'
+  })
+  const bankBalance = sumBalanceByMethod(currentRows, (method) => {
+    return normalizeMethod(method) !== 'contanti'
+  })
+  const periodBalance = current.summary.totale.saldo
 
   return {
     rows: current.rows,
     summary: current.summary,
     statement: current.statement,
-    comparison: {
-      fromDate: comparisonFromDate,
-      toDate: comparisonToDate,
-      summary: comparison.summary,
-      statement: comparison.statement,
-    },
+    comparison: null,
     financialPosition: {
-      current: financialPositionCurrent,
-      comparison: financialPositionComparison,
+      current: {
+        total: periodBalance,
+        cashBalance,
+        bankBalance,
+        portfolioBalance: 0,
+      },
+      comparison: null,
     },
+    methodSummary: {
+      cashBalance,
+      bankBalance,
+      total: periodBalance,
+    },
+    ivaSummary,
+    ivaScadenziario,
     meta: {
       fromDate,
       toDate,
-      comparisonFromDate,
-      comparisonToDate,
       criteriaNote:
-        'Riclassificazione gestionale effettuata con regole coerenti e verificabili basate su descrizione, conto e natura del movimento. Consigliata validazione finale del consulente fiscale.',
+        'Saldo del periodo calcolato come entrate meno uscite. Rendiconto e IVA sono generati da una singola lettura dei movimenti selezionati.',
     },
   }
 }
@@ -813,52 +705,33 @@ function normalizeIvaReportRow(row) {
   }
 }
 
-async function fetchIvaCandidateRowsPaged() {
-  const pageSize = 1000
-  let from = 0
-  let keepLoading = true
-  const allRows = []
+async function fetchIvaCandidateRowsPaged({ fromDate, toDate } = {}) {
+  const rows = await fetchAllEntriesPaged({
+    fromDate,
+    toDate,
+    select: `
+      id,
+      date,
+      operation_datetime,
+      description,
+      amount_in,
+      amount_out,
+      account_code,
+      method,
+      center,
+      note,
+      source,
+      nature,
+      vat_rate,
+      vat_amount,
+      vat_side,
+      id_key
+    `,
+  })
 
-  while (keepLoading) {
-    const { data, error } = await supabase
-      .from('entries')
-      .select(`
-        id,
-        date,
-        operation_datetime,
-        description,
-        amount_in,
-        amount_out,
-        account_code,
-        method,
-        center,
-        note,
-        source,
-        nature,
-        vat_rate,
-        vat_amount,
-        vat_side,
-        id_key
-      `)
-      .or('amount_in.gt.0,vat_amount.gt.0')
-      .order('date', { ascending: true, nullsFirst: false })
-      .order('operation_datetime', { ascending: true, nullsFirst: false })
-      .order('id_key', { ascending: true })
-      .range(from, from + pageSize - 1)
-
-    if (error) throw error
-
-    const chunk = data || []
-    allRows.push(...chunk)
-
-    if (chunk.length < pageSize) {
-      keepLoading = false
-    } else {
-      from += pageSize
-    }
-  }
-
-  return allRows
+  return rows.filter((row) => {
+    return normalizeNumber(row.amount_in) > 0 || normalizeNumber(row.vat_amount) > 0
+  })
 }
 
 function monthNameFromNumber(monthNumber) {
@@ -1027,15 +900,12 @@ function cleanupIvaAggregate(target) {
   return target
 }
 
-export async function fetchIvaSummary({ fromDate, toDate }) {
-  const rows = await fetchIvaCandidateRowsPaged()
-
-  const rowsInPeriod = rows
+function buildIvaSummaryFromRows(rows, { fromDate, toDate } = {}) {
+  const rowsInPeriod = (rows || [])
     .filter((row) => isDateInSelectedRange(getIvaReferenceDate(row), fromDate, toDate))
     .map(normalizeIvaReportRow)
 
   const commercialRows = rowsInPeriod.filter(isCommercialIncomeRow)
-
   const creditRows = rowsInPeriod.filter((row) => {
     return normalizeText(row.vat_side) === 'credito' && normalizeNumber(row.vat_amount) > 0
   })
@@ -1044,17 +914,14 @@ export async function fetchIvaSummary({ fromDate, toDate }) {
     (acc, row) => acc + normalizeNumber(row.commercial_vat_amount),
     0
   )
-
   const vatCredit = creditRows.reduce(
     (acc, row) => acc + normalizeNumber(row.vat_amount),
     0
   )
-
   const grossCommercialIncome = commercialRows.reduce(
     (acc, row) => acc + normalizeNumber(row.amount_in),
     0
   )
-
   const taxableCommercialIncome = commercialRows.reduce(
     (acc, row) => acc + normalizeNumber(row.commercial_taxable_amount),
     0
@@ -1072,16 +939,12 @@ export async function fetchIvaSummary({ fromDate, toDate }) {
   }
 }
 
-export async function fetchIvaScadenziario({
+function buildIvaScadenziarioFromSummary({
+  iva,
   fromDate,
   toDate,
   periodicity = 'quarterly',
 }) {
-  const iva = await fetchIvaSummary({
-    fromDate,
-    toDate,
-  })
-
   const monthKeys = buildMonthKeysInRange(fromDate, toDate)
   const buckets = new Map()
 
@@ -1106,7 +969,7 @@ export async function fetchIvaScadenziario({
     }
   }
 
-  for (const row of iva.commercialRows || []) {
+  for (const row of iva?.commercialRows || []) {
     const refDate = row.reference_date || getIvaReferenceDate(row)
     const periodKey = periodKeyFromDate(refDate, periodicity)
     const periodLabel = periodLabelFromDate(refDate, periodicity)
@@ -1115,11 +978,7 @@ export async function fetchIvaScadenziario({
     if (!buckets.has(periodKey)) {
       buckets.set(
         periodKey,
-        createIvaAggregate({
-          key: periodKey,
-          label: periodLabel,
-          monthKeys: [monthKey],
-        })
+        createIvaAggregate({ key: periodKey, label: periodLabel, monthKeys: [monthKey] })
       )
     }
 
@@ -1127,20 +986,14 @@ export async function fetchIvaScadenziario({
     addCommercialRowToAggregate(period, row)
 
     let month = period.months.find((item) => item.key === monthKey)
-
     if (!month) {
-      month = createIvaAggregate({
-        key: monthKey,
-        label: monthLabelFromKey(monthKey),
-        monthKeys: [],
-      })
+      month = createIvaAggregate({ key: monthKey, label: monthLabelFromKey(monthKey), monthKeys: [] })
       period.months.push(month)
     }
-
     addCommercialRowToAggregate(month, row)
   }
 
-  for (const row of iva.creditRows || []) {
+  for (const row of iva?.creditRows || []) {
     const refDate = row.reference_date || getIvaReferenceDate(row)
     const periodKey = periodKeyFromDate(refDate, periodicity)
     const periodLabel = periodLabelFromDate(refDate, periodicity)
@@ -1149,11 +1002,7 @@ export async function fetchIvaScadenziario({
     if (!buckets.has(periodKey)) {
       buckets.set(
         periodKey,
-        createIvaAggregate({
-          key: periodKey,
-          label: periodLabel,
-          monthKeys: [monthKey],
-        })
+        createIvaAggregate({ key: periodKey, label: periodLabel, monthKeys: [monthKey] })
       )
     }
 
@@ -1161,21 +1010,11 @@ export async function fetchIvaScadenziario({
     addCreditVatToAggregate(period, row)
 
     let month = period.months.find((item) => item.key === monthKey)
-
     if (!month) {
-      month = createIvaAggregate({
-        key: monthKey,
-        label: monthLabelFromKey(monthKey),
-        monthKeys: [],
-      })
+      month = createIvaAggregate({ key: monthKey, label: monthLabelFromKey(monthKey), monthKeys: [] })
       period.months.push(month)
     }
-
     addCreditVatToAggregate(month, row)
-    if (side === 'debito') item.vatDebit += row.vat_amount
-    if (side === 'credito') item.vatCredit += row.vat_amount
-
-    item.rows.push(row)
   }
 
   const periods = Array.from(buckets.values())
@@ -1189,18 +1028,25 @@ export async function fetchIvaScadenziario({
       vatDebit: periods.reduce((acc, item) => acc + item.vatDebit, 0),
       vatCredit: periods.reduce((acc, item) => acc + item.vatCredit, 0),
       balance: periods.reduce((acc, item) => acc + item.balance, 0),
-      grossCommercialIncome: periods.reduce(
-        (acc, item) => acc + item.grossCommercialIncome,
-        0
-      ),
-      taxableCommercialIncome: periods.reduce(
-        (acc, item) => acc + item.taxableCommercialIncome,
-        0
-      ),
-      commercialRowsCount: periods.reduce(
-        (acc, item) => acc + item.commercialRowsCount,
-        0
-      ),
+      grossCommercialIncome: periods.reduce((acc, item) => acc + item.grossCommercialIncome, 0),
+      taxableCommercialIncome: periods.reduce((acc, item) => acc + item.taxableCommercialIncome, 0),
+      commercialRowsCount: periods.reduce((acc, item) => acc + item.commercialRowsCount, 0),
     },
   }
 }
+
+export async function fetchIvaSummary({ fromDate, toDate }) {
+  const rows = await fetchIvaCandidateRowsPaged({ fromDate, toDate })
+  return buildIvaSummaryFromRows(rows, { fromDate, toDate })
+}
+
+export async function fetchIvaScadenziario({
+  fromDate,
+  toDate,
+  periodicity = 'quarterly',
+  iva: providedIva,
+}) {
+  const iva = providedIva || await fetchIvaSummary({ fromDate, toDate })
+  return buildIvaScadenziarioFromSummary({ iva, fromDate, toDate, periodicity })
+}
+

@@ -1,0 +1,9 @@
+Migliorie applicate
+- Restyling finestra Pacchetti: chiusura compatta con icona X, pulsante aggiungi corso riallineato, eliminazione corso più pulita e responsive.
+- Filtro Atleti trasformato in switch moderno "Solo corsisti".
+- Stabilità navigazione: React Query configurato per evitare refetch aggressivi al cambio pagina/focus e retry eccessivi.
+- Contabilità: corretta la paginazione delle righe (prima poteva fermarsi dopo il filtro data) e separato il risultato del periodo dal saldo reale cassa+banca.
+- Build di produzione verificata con successo.
+
+Nota Instagram
+Il caricamento automatico delle immagini profilo richiede Meta Instagram Graph API e account Business/Creator autorizzati. Il campo Foto URL resta disponibile per immagini stabili; non è stato inserito scraping non affidabile dei profili Instagram.

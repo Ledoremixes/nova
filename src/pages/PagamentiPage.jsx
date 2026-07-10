@@ -135,7 +135,14 @@ export default function PagamentiPage() {
         </div>
         <div className="payments-summary-card payments-student-summary-card payments-student-summary-card--gold">
           <div className="payments-summary-icon"><Euro size={20} /></div>
-          <div><span className="payments-summary-label">Da incassare</span><strong>{summary.dueCount}</strong><small>{euro(summary.residue)}</small></div>
+          <div className="payments-summary-main">
+            <span className="payments-summary-label">Da incassare</span>
+            <strong className="payments-summary-amount">{euro(summary.residue)}</strong>
+            <div className="payments-summary-detail" aria-label={`${summary.dueCount} quote mancanti`}>
+              <span className="payments-summary-count">{summary.dueCount}</span>
+              <small>{summary.dueCount === 1 ? 'quota mancante' : 'quote mancanti'}</small>
+            </div>
+          </div>
         </div>
         <div className="payments-summary-card payments-student-summary-card">
           <div className="payments-summary-icon"><CheckCircle2 size={20} /></div>

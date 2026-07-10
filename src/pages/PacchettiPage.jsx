@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
-import { BookOpenCheck, Calculator, Euro, PackageCheck, Percent, Plus, Save, Search, Sparkles, Trash2, UserRoundCheck } from 'lucide-react'
+import { BookOpenCheck, Calculator, Euro, PackageCheck, Percent, Plus, Save, Search, Sparkles, Trash2, UserRoundCheck, X } from 'lucide-react'
 import { fetchAllieviPaymentsMonth, euro } from '../api/orchideaPayments'
 import { addCourseParticipant, fetchOrchideaCourses, fetchOrchideaTeachers, fetchStudentPackageDetails, removeCourseParticipant, saveStudentPackage } from '../api/orchideaEntities'
 import '../styles/PacchettiPage.css'
@@ -176,17 +176,16 @@ export default function PacchettiPage() {
   })
 
   const packages = packagesQuery.data || []
-  const details = detailsQuery.data || { enrollments: [] }
+  const enrollments = detailsQuery.data?.enrollments
   const allCourses = coursesQuery.data || []
   const teachers = teachersQuery.data || []
 
   useEffect(() => {
-    if (!selected) {
-      setRowsForm([])
-      return
-    }
+    // Non inizializzare il form finché la query è ancora in caricamento:
+    // un array di fallback creato a ogni render causava un ciclo infinito di setState.
+    if (!selected?.tesseramento_id || detailsQuery.isLoading || !enrollments) return
 
-    if (!details.enrollments?.length) {
+    if (enrollments.length === 0) {
       setRowsForm([])
       setPackageName('Pacchetto mensile')
       setPackageTotal('')
@@ -194,15 +193,23 @@ export default function PacchettiPage() {
       return
     }
 
-    const first = details.enrollments[0]
-    const prepared = details.enrollments.map(prepareEnrollment)
+    const first = enrollments[0]
+    const prepared = enrollments.map(prepareEnrollment)
     const calculatedTotal = prepared.reduce((sum, row) => sum + numeric(row.quota_allievo_mensile), 0)
 
-    setPackageName(first.pacchetto_nome || (details.enrollments.length > 1 ? 'Pacchetto multicorso' : 'Corso singolo'))
+    setPackageName(first.pacchetto_nome || (enrollments.length > 1 ? 'Pacchetto multicorso' : 'Corso singolo'))
     setPackageTotal(first.pacchetto_totale_mensile ? Number(first.pacchetto_totale_mensile).toFixed(2) : (calculatedTotal ? calculatedTotal.toFixed(2) : ''))
     setNote(first.note_pacchetto || '')
     setRowsForm(prepared)
-  }, [selected, details.enrollments])
+  }, [selected?.tesseramento_id, detailsQuery.isLoading, enrollments])
+
+  useEffect(() => {
+    if (!selected) {
+      setRowsForm([])
+      setCourseToAdd('')
+      setCourseToAddQuota('')
+    }
+  }, [selected])
 
   const summary = useMemo(() => {
     return packages.reduce((acc, row) => {
@@ -372,7 +379,7 @@ export default function PacchettiPage() {
                 <h3>{selected.nomeCompleto}</h3>
                 <p>Aggiungi o rimuovi corsi, poi distribuisci il totale in proporzione al prezzo originale dei corsi.</p>
               </div>
-              <button className="student-profile-close" onClick={() => setSelected(null)}>Chiudi</button>
+              <button className="package-editor-close" type="button" onClick={() => setSelected(null)} aria-label="Chiudi finestra"><X size={20} /></button>
             </div>
 
             <form className="package-editor-body" onSubmit={submit}>
@@ -402,8 +409,8 @@ export default function PacchettiPage() {
                     ))}
                   </select>
                   <input type="number" step="0.01" value={courseToAddQuota} onChange={(e) => setCourseToAddQuota(e.target.value)} placeholder={selectedCourseToAdd?.prezzo_mensile ? `Quota ${euro(selectedCourseToAdd.prezzo_mensile)}` : 'Quota iniziale'} />
-                  <button type="button" className="topbar__button topbar__button--primary" disabled={!courseToAdd || addCourseMutation.isPending} onClick={addCourse}>
-                    <Plus size={16} /> {addCourseMutation.isPending ? 'Aggiungo…' : 'Aggiungi corso'}
+                  <button type="button" className="package-add-course-button" disabled={!courseToAdd || addCourseMutation.isPending} onClick={addCourse}>
+                    {addCourseMutation.isPending ? 'Aggiungo…' : 'Aggiungi +'}
                   </button>
                 </div>
               </div>

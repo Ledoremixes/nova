@@ -146,7 +146,11 @@ export default function AtletiPage() {
             <Search size={18} />
             <input className="searchInput" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cerca atleta/corsista…" />
           </div>
-          <label className="check-card inline-check"><input type="checkbox" checked={onlyCorsisti} onChange={(e) => setOnlyCorsisti(e.target.checked)} /> Mostra solo corsisti</label>
+          <label className="atleti-filter-switch">
+            <input type="checkbox" checked={onlyCorsisti} onChange={(e) => setOnlyCorsisti(e.target.checked)} />
+            <span className="atleti-filter-switch__track"><span /></span>
+            <span className="atleti-filter-switch__copy"><strong>Solo corsisti</strong><small>{onlyCorsisti ? 'Filtro attivo' : 'Mostra tutti gli atleti'}</small></span>
+          </label>
         </div>
 
         {studentsQuery.isLoading ? <p>Caricamento atleti…</p> : null}

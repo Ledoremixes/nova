@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
@@ -20,8 +20,6 @@ import {
     fetchContabilitaOverview,
     fetchRecentAccountingEntries,
     fetchRendicontoGestionale,
-    fetchIvaSummary,
-    fetchIvaScadenziario,
 } from '../api/contabilita'
 import {
     exportIvaExcel,
@@ -119,54 +117,61 @@ export default function ContabilitaPage() {
     const [ivaScadenziario, setIvaScadenziario] = useState(null)
     const [error, setError] = useState('')
     const [filteredTotals, setFilteredTotals] = useState(null)
+    const loadSequenceRef = useRef(0)
 
     const [fromDate, setFromDate] = useState(startYear)
     const [toDate, setToDate] = useState(today)
     const [periodicity, setPeriodicity] = useState('quarterly')
 
     const loadData = async ({ silent = false } = {}) => {
+        const sequence = ++loadSequenceRef.current
+
         try {
             setError('')
             if (silent) setRefreshing(true)
             else setLoading(true)
 
-            const [
-                overviewData,
-                entriesData,
-                rendicontoData,
-                ivaData,
-                ivaScadData,
-            ] = await Promise.all([
+            const [overviewData, entriesData, rendicontoData] = await Promise.all([
                 fetchContabilitaOverview(),
                 fetchRecentAccountingEntries(8),
-                fetchRendicontoGestionale({ fromDate, toDate }),
-                fetchIvaSummary({ fromDate, toDate }),
-                fetchIvaScadenziario({ fromDate, toDate, periodicity }),
+                fetchRendicontoGestionale({ fromDate, toDate, periodicity }),
             ])
+
+            // Ignora una risposta vecchia se nel frattempo l'utente ha applicato
+            // un altro periodo o ha lasciato la pagina.
+            if (sequence !== loadSequenceRef.current) return
 
             setOverview(overviewData)
             setRecentEntries(entriesData)
             setRendiconto(rendicontoData)
-            setIvaSummary(ivaData)
-            setIvaScadenziario(ivaScadData)
+            setIvaSummary(rendicontoData?.ivaSummary || null)
+            setIvaScadenziario(rendicontoData?.ivaScadenziario || null)
             setFilteredTotals({
                 total_in: rendicontoData?.summary?.totale?.totalIn || 0,
                 total_out: rendicontoData?.summary?.totale?.totalOut || 0,
+                risultato_periodo: rendicontoData?.summary?.totale?.saldo || 0,
+                // Il saldo richiesto è la situazione economica del periodo:
+                // entrate meno uscite, non la somma dei conti cassa/banca.
                 saldo: rendicontoData?.summary?.totale?.saldo || 0,
                 total_rows: rendicontoData?.summary?.totale?.rowsCount || 0,
             })
-
         } catch (err) {
+            if (sequence !== loadSequenceRef.current) return
             console.error(err)
             setError('Impossibile caricare i dati della contabilità.')
         } finally {
-            setLoading(false)
-            setRefreshing(false)
+            if (sequence === loadSequenceRef.current) {
+                setLoading(false)
+                setRefreshing(false)
+            }
         }
     }
 
     useEffect(() => {
         loadData()
+        return () => {
+            loadSequenceRef.current += 1
+        }
     }, [])
 
     const alerts = useMemo(() => {
@@ -273,11 +278,11 @@ export default function ContabilitaPage() {
 
             <div className="contabilita-stats-grid">
                 <StatCard
-                    title="Risultato economico"
+                    title="Risultato economico reale"
                     value={euro(filteredTotals?.saldo || 0)}
                     icon={Wallet}
                     variant="primary"
-                    subtitle="Periodo selezionato"
+                    subtitle="Entrate meno uscite nel periodo"
                 />
                 <StatCard
                     title="Entrate periodo"
@@ -295,13 +300,13 @@ export default function ContabilitaPage() {
                 />
                 <StatCard
                     title="IVA a debito"
-                    value={euro(overview?.vatDebit || 0)}
+                    value={euro(ivaSummary?.vatDebit || 0)}
                     icon={FileSpreadsheet}
                     subtitle="Periodo anno corrente"
                 />
                 <StatCard
                     title="IVA a credito"
-                    value={euro(overview?.vatCredit || 0)}
+                    value={euro(ivaSummary?.vatCredit || 0)}
                     icon={Landmark}
                     subtitle="Periodo anno corrente"
                 />
@@ -311,6 +316,11 @@ export default function ContabilitaPage() {
                     icon={CalendarRange}
                     subtitle={`${overview?.lastSumupImportRows || 0} righe ultimo import`}
                 />
+            </div>
+
+            <div className="contabilita-banner contabilita-banner--info">
+                <CircleAlert size={18} />
+                <span>Risultato del periodo: <strong>{euro(filteredTotals?.risultato_periodo || 0)}</strong>. Il risultato sopra è calcolato direttamente come entrate meno uscite nel periodo selezionato.</span>
             </div>
 
             <div className="contabilita-layout">
@@ -664,22 +674,22 @@ export default function ContabilitaPage() {
                 <div className="contabilita-card__header">
                     <div>
                         <h2>Stato metodi</h2>
-                        <p>Saldo per contanti ed elettronici.</p>
+                        <p>Risultato del periodo suddiviso per metodo di pagamento.</p>
                     </div>
                 </div>
 
                 <div className="contabilita-account-list contabilita-account-list--grid">
                     <div className="contabilita-account-row">
                         <span>Cassa (contanti)</span>
-                        <strong>{euro(overview?.cashBalance || 0)}</strong>
+                        <strong>{euro(rendiconto?.methodSummary?.cashBalance || 0)}</strong>
                     </div>
                     <div className="contabilita-account-row">
                         <span>Banca / elettronici</span>
-                        <strong>{euro(overview?.bankBalance || 0)}</strong>
+                        <strong>{euro(rendiconto?.methodSummary?.bankBalance || 0)}</strong>
                     </div>
                     <div className="contabilita-account-row">
-                        <span>Saldo complessivo</span>
-                        <strong>{euro(overview?.allAccountsBalance || 0)}</strong>
+                        <span>Risultato complessivo</span>
+                        <strong>{euro(rendiconto?.methodSummary?.total || 0)}</strong>
                     </div>
                 </div>
             </div>

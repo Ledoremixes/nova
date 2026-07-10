@@ -611,6 +611,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  align-self: end;
+  width: 100%;
   gap: 8px;
   height: 44px;
   min-width: 140px;
@@ -763,4 +765,10 @@
     padding: 12px 10px;
     font-size: 13px;
   }
+}
+
+.contabilita-banner--info {
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  color: #4c1d95;
 }

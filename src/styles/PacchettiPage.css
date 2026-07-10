@@ -442,3 +442,226 @@
     justify-self: start;
   }
 }
+
+/* Restyling editor pacchetto */
+.package-editor-close {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(91, 33, 182, .16);
+  border-radius: 14px;
+  background: rgba(255,255,255,.92);
+  color: #4c1d95;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(76,29,149,.08);
+  transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.package-editor-close:hover { transform: translateY(-1px); background: #fff; box-shadow: 0 12px 24px rgba(76,29,149,.14); }
+
+.package-add-course-form { align-items: stretch; }
+.package-add-course-button {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #6d5dfc, #8b5cf6);
+  color: #fff;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(109,93,252,.2);
+  white-space: nowrap;
+}
+.package-add-course-button:disabled { opacity: .48; cursor: not-allowed; box-shadow: none; }
+.package-remove-course-btn {
+  border: 1px solid #fecaca !important;
+  border-radius: 14px !important;
+  background: #fff5f5 !important;
+  color: #dc2626 !important;
+}
+.package-remove-course-btn:hover { background: #fee2e2 !important; }
+
+@media (max-width: 1100px) {
+  .package-editor-hero { flex-direction: row; align-items: flex-start; }
+  .package-add-course-button { width: 100%; }
+  .package-remove-course-btn { justify-self: end; }
+}
+
+/* Correzioni overflow editor pacchetti */
+.package-editor-modal {
+  width: min(1120px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.package-editor-body,
+.package-editor-settings,
+.package-add-course-card,
+.package-add-course-form,
+.package-course-editor-row,
+.package-course-editor-title,
+.package-course-editor-title > div,
+.package-editor-totals {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.package-add-course-form > *,
+.package-course-editor-row > *,
+.package-editor-settings > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.package-add-course-form select,
+.package-add-course-form input,
+.package-add-course-button,
+.package-course-editor-row input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.package-course-editor-title small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1180px) {
+  .package-add-course-card {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .package-add-course-form {
+    grid-template-columns: minmax(0, 1fr) minmax(140px, .55fr) minmax(150px, auto);
+  }
+
+  .package-course-editor-row {
+    grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(120px, .55fr)) 44px;
+  }
+}
+
+@media (max-width: 900px) {
+  .package-editor-modal {
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+    border-radius: 22px;
+  }
+
+  .package-editor-hero,
+  .package-editor-body {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .package-add-course-form,
+  .package-course-editor-row,
+  .package-editor-settings,
+  .package-editor-totals {
+    grid-template-columns: 1fr;
+  }
+
+  .package-remove-course-btn {
+    justify-self: end;
+  }
+}
+
+
+/* Rifinitura 2026-07-10: isole più larghe e comandi sempre interni */
+.package-editor-modal {
+  width: min(1180px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+}
+
+.package-editor-body {
+  padding-left: 28px;
+  padding-right: 28px;
+}
+
+.package-add-course-card {
+  width: 100%;
+  grid-template-columns: minmax(190px, .72fr) minmax(0, 1.55fr);
+  padding: 20px;
+  overflow: hidden;
+}
+
+.package-add-course-form {
+  width: 100%;
+  grid-template-columns: minmax(175px, 1fr) minmax(125px, .62fr) 112px;
+  gap: 10px;
+}
+
+.package-add-course-button {
+  width: 112px;
+  min-width: 112px;
+  padding: 0 12px;
+}
+
+.package-course-editor-row {
+  width: 100%;
+  grid-template-columns:
+    minmax(210px, 1fr)
+    minmax(125px, .62fr)
+    minmax(145px, .72fr)
+    minmax(110px, .54fr)
+    46px;
+  gap: 10px;
+  padding: 18px 16px 18px 18px;
+  overflow: hidden;
+}
+
+.package-remove-course-btn {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  margin: 0;
+  justify-self: end;
+  align-self: end;
+}
+
+@media (max-width: 920px) {
+  .package-add-course-card {
+    grid-template-columns: 1fr;
+  }
+
+  .package-add-course-form {
+    grid-template-columns: minmax(0, 1fr) minmax(120px, .55fr) 108px;
+  }
+
+  .package-add-course-button {
+    width: 108px;
+    min-width: 108px;
+  }
+
+  .package-course-editor-row {
+    grid-template-columns: minmax(190px, 1fr) minmax(120px, .58fr) minmax(135px, .68fr) minmax(105px, .52fr) 44px;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 760px) {
+  .package-editor-body {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .package-add-course-form,
+  .package-course-editor-row {
+    grid-template-columns: 1fr;
+  }
+
+  .package-add-course-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .package-remove-course-btn {
+    justify-self: end;
+  }
+}
