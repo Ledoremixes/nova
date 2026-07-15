@@ -11,6 +11,7 @@ import './styles/cards.css'
 import './styles/pages.css'
 import './styles/forms.css'
 import './styles/tables.css'
+import './styles/modules.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {

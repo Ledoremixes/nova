@@ -8,7 +8,6 @@ import EntriesPage from '../pages/EntriesPage'
 import AdminUsersPage from '../pages/AdminUsersPage'
 import AuditPage from '../pages/AuditPage'
 import LoginPage from '../pages/LoginPage'
-import ComingSoonPage from '../pages/ComingSoonPage'
 import VisiteMedichePage from '../pages/VisiteMedichePage'
 import AccountPage from '../pages/AccountPage'
 import UtilitaPage from '../pages/UtilitaPage'
@@ -19,6 +18,11 @@ import AtletiPage from '../pages/AtletiPage'
 import ContiPage from '../pages/ContiPage'
 import GruppiPage from '../pages/GruppiPage'
 import PacchettiPage from '../pages/PacchettiPage'
+import CalendarioPage from '../pages/CalendarioPage'
+import GestioneEventiPage from '../pages/GestioneEventiPage'
+import ShopPage from '../pages/ShopPage'
+import MarketingPage from '../pages/MarketingPage'
+import GuidaTutorialPage from '../pages/GuidaTutorialPage'
 
 export const router = createBrowserRouter([
   {
@@ -43,15 +47,15 @@ export const router = createBrowserRouter([
       { path: 'gruppi', element: <GruppiPage title="Gruppi" /> },
       { path: 'atleti', element: <AtletiPage /> },
       { path: 'visite-mediche', element: (<ProtectedRoute roles={['admin']}><VisiteMedichePage /></ProtectedRoute>) },
-      { path: 'calendario', element: (<ProtectedRoute roles={['admin']}><ComingSoonPage title="Calendario" /></ProtectedRoute>) },
+      { path: 'calendario', element: (<ProtectedRoute roles={['admin']}><CalendarioPage /></ProtectedRoute>) },
       { path: 'pagamenti', element: <PagamentiPage /> },
       { path: 'pacchetti', element: <PacchettiPage /> },
-      { path: 'gestione-eventi', element: (<ProtectedRoute roles={['admin']}><ComingSoonPage title="Gestione eventi" /></ProtectedRoute>) },
-      { path: 'shop', element: (<ProtectedRoute roles={['admin']}><ComingSoonPage title="Shop" /></ProtectedRoute>) },
-      { path: 'marketing', element: (<ProtectedRoute roles={['admin']}><ComingSoonPage title="Marketing" /></ProtectedRoute>) },
+      { path: 'gestione-eventi', element: (<ProtectedRoute roles={['admin']}><GestioneEventiPage /></ProtectedRoute>) },
+      { path: 'shop', element: (<ProtectedRoute roles={['admin']}><ShopPage /></ProtectedRoute>) },
+      { path: 'marketing', element: (<ProtectedRoute roles={['admin']}><MarketingPage /></ProtectedRoute>) },
       { path: 'utilita', element: (<ProtectedRoute roles={['admin']}><UtilitaPage /></ProtectedRoute>) },
       { path: 'account', element: <AccountPage /> },
-      { path: 'guida-tutorial', element: (<ProtectedRoute roles={['admin']}><ComingSoonPage title="Guida e tutorial" /></ProtectedRoute>) },
+      { path: 'guida-tutorial', element: (<ProtectedRoute roles={['admin']}><GuidaTutorialPage /></ProtectedRoute>) },
 
       { path: 'tesserati', element: <TesseratiPage /> },
       { path: 'insegnanti', element: <InsegnantiPage /> },
