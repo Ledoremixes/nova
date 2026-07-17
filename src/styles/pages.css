@@ -1265,6 +1265,370 @@
   box-shadow: 0 10px 22px rgba(209, 30, 145, 0.18);
 }
 
+.nova-dashboard-charts-grid {
+  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.85fr);
+}
+
+.nova-dashboard-charts-grid .nova-chart-card {
+  position: relative;
+  min-height: 440px;
+  overflow: hidden;
+  border-color: rgba(124, 58, 237, 0.12);
+  background:
+    radial-gradient(circle at 92% 8%, rgba(217, 70, 239, 0.10), transparent 30%),
+    linear-gradient(145deg, #ffffff, #fdfaff);
+  box-shadow: 0 22px 48px rgba(74, 44, 116, 0.08);
+}
+
+.nova-chart-card--wave::after,
+.nova-chart-card--donut::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  width: 180px;
+  height: 180px;
+  border-radius: 999px;
+  pointer-events: none;
+  filter: blur(8px);
+}
+
+.nova-chart-card--wave::after {
+  right: -90px;
+  bottom: -120px;
+  background: rgba(124, 58, 237, 0.09);
+}
+
+.nova-chart-card--donut::after {
+  left: -110px;
+  top: -100px;
+  background: rgba(236, 72, 153, 0.09);
+}
+
+.nova-chart-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.nova-chart-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid rgba(124, 58, 237, 0.15);
+  border-radius: 999px;
+  color: #6d28d9;
+  background: rgba(124, 58, 237, 0.07);
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nova-chart-badge--pink {
+  color: #be185d;
+  border-color: rgba(236, 72, 153, 0.16);
+  background: rgba(236, 72, 153, 0.08);
+}
+
+.nova-chart-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 6px 0 4px;
+}
+
+.nova-chart-kpis > div {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(124, 58, 237, 0.10);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: 0 10px 24px rgba(42, 29, 73, 0.04);
+}
+
+.nova-chart-kpis span,
+.nova-chart-kpis strong {
+  display: block;
+}
+
+.nova-chart-kpis span {
+  overflow: hidden;
+  color: #7b8498;
+  font-size: 0.7rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nova-chart-kpis strong {
+  margin-top: 5px;
+  color: #211638;
+  font-size: 1.25rem;
+}
+
+.nova-chart-kpis .is-positive strong {
+  color: #0f9f6e;
+}
+
+.nova-chart-kpis .is-negative strong {
+  color: #e11d48;
+}
+
+.nova-wave-chart__canvas {
+  margin: 2px -6px -12px;
+}
+
+.nova-wave-chart__canvas svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.nova-wave-chart__grid line {
+  stroke: rgba(84, 73, 112, 0.11);
+  stroke-width: 1;
+  stroke-dasharray: 5 8;
+}
+
+.nova-wave-chart__grid text {
+  fill: #9aa1b2;
+  font-size: 10px;
+  font-weight: 700;
+  text-anchor: end;
+}
+
+.nova-wave-chart__area {
+  opacity: 0;
+  animation: nova-area-rise 0.8s ease 0.18s forwards;
+}
+
+.nova-wave-chart__line {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1400;
+  stroke-dashoffset: 1400;
+  animation: nova-line-draw 1.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.nova-wave-chart__halo {
+  fill: rgba(217, 70, 239, 0.13);
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.2s ease, fill 0.2s ease;
+}
+
+.nova-wave-chart__dot {
+  fill: #ffffff;
+  stroke: #d946ef;
+  stroke-width: 4;
+  cursor: help;
+}
+
+.nova-wave-chart__point:hover .nova-wave-chart__halo {
+  fill: rgba(217, 70, 239, 0.23);
+  transform: scale(1.5);
+}
+
+.nova-wave-chart__label {
+  fill: #737c90;
+  font-size: 10px;
+  font-weight: 800;
+  text-anchor: middle;
+  text-transform: capitalize;
+}
+
+.nova-donut-layout {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.85fr) minmax(170px, 1.15fr);
+  align-items: center;
+  gap: 16px;
+  min-height: 320px;
+}
+
+.nova-donut-chart {
+  position: relative;
+  width: min(100%, 245px);
+  margin: auto;
+  filter: drop-shadow(0 18px 25px rgba(91, 33, 182, 0.12));
+}
+
+.nova-donut-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.nova-donut-chart__track,
+.nova-donut-chart__segment {
+  fill: none;
+  stroke-width: 28;
+  transform: rotate(-90deg);
+  transform-origin: 110px 110px;
+}
+
+.nova-donut-chart__track {
+  stroke: rgba(124, 58, 237, 0.07);
+}
+
+.nova-donut-chart__segment {
+  stroke-linecap: round;
+  opacity: 0;
+  cursor: help;
+  animation: nova-donut-in 0.65s ease forwards;
+  transition: stroke-width 0.2s ease, filter 0.2s ease;
+}
+
+.nova-donut-chart__segment:hover {
+  stroke-width: 34;
+  filter: brightness(1.06);
+}
+
+.nova-donut-chart__center {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.nova-donut-chart__center strong,
+.nova-donut-chart__center span {
+  display: block;
+}
+
+.nova-donut-chart__center strong {
+  color: #24163f;
+  font-size: clamp(1.9rem, 3vw, 2.65rem);
+  line-height: 1;
+}
+
+.nova-donut-chart__center span {
+  margin-top: 6px;
+  color: #8a92a4;
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nova-donut-legend {
+  display: grid;
+  gap: 10px;
+}
+
+.nova-donut-legend__row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid rgba(124, 58, 237, 0.09);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.76);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.nova-donut-legend__row:hover {
+  transform: translateX(3px);
+  box-shadow: 0 10px 22px rgba(42, 29, 73, 0.06);
+}
+
+.nova-donut-legend__row > i {
+  width: 9px;
+  height: 28px;
+  border-radius: 999px;
+}
+
+.nova-donut-legend__row strong,
+.nova-donut-legend__row span {
+  display: block;
+}
+
+.nova-donut-legend__row strong {
+  overflow: hidden;
+  color: #2c2140;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nova-donut-legend__row span {
+  margin-top: 3px;
+  color: #9299a8;
+  font-size: 0.66rem;
+}
+
+.nova-donut-legend__row b {
+  color: #4a3a64;
+  font-size: 0.9rem;
+}
+
+@keyframes nova-line-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes nova-area-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes nova-donut-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 1180px) {
+  .nova-dashboard-charts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nova-donut-layout {
+    grid-template-columns: minmax(210px, 0.7fr) minmax(260px, 1.3fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .nova-dashboard-charts-grid .nova-chart-card {
+    min-height: 0;
+  }
+
+  .nova-chart-kpis {
+    grid-template-columns: repeat(3, minmax(92px, 1fr));
+    overflow-x: auto;
+  }
+
+  .nova-wave-chart__canvas {
+    min-width: 610px;
+  }
+
+  .nova-wave-chart {
+    overflow-x: auto;
+  }
+
+  .nova-donut-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .nova-donut-chart {
+    width: min(78vw, 250px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nova-wave-chart__line,
+  .nova-wave-chart__area,
+  .nova-donut-chart__segment {
+    animation: none;
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
 .teacher-month-filter {
   display: flex;
   align-items: end;

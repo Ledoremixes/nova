@@ -1,0 +1,22 @@
+NOVA GESTIONALE — DASHBOARD GRAFICI 17/07/2026
+
+Grafico ad area ondulato
+- Mostra i nuovi tesserati degli ultimi sei mesi usando i dati reali della dashboard.
+- Curva fluida con riempimento sfumato, punti interattivi e griglia di riferimento.
+- Evidenzia totale del periodo, valore dell'ultimo mese e variazione mensile.
+
+Grafico a torta / donut
+- Mostra la composizione dello stato degli allievi.
+- Segmenti colorati, percentuali, valori assoluti e legenda coordinata.
+- Il totale degli allievi rimane visibile al centro del grafico.
+
+Interfaccia
+- Card grafiche coerenti con i gradienti viola e rosa di Nova.
+- Animazioni leggere con supporto alla preferenza di movimento ridotto.
+- Layout responsive per desktop, tablet e smartphone.
+- Gestione degli stati senza dati senza errori grafici.
+
+Verifiche eseguite
+- Build Vite di produzione completata.
+- Controllo ESLint mirato completato senza errori.
+- Nessuna nuova dipendenza aggiunta: i grafici usano SVG e CSS nativi.
