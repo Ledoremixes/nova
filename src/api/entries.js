@@ -28,6 +28,16 @@ function cleanText(value) {
   return String(value ?? '').trim()
 }
 
+function entryMutationError(error, fallback) {
+  const message = String(error?.message || '')
+
+  if (message.includes('FINANCIAL_YEAR_CLOSED')) {
+    return new Error('L’esercizio finanziario relativo a questo movimento è chiuso. Riaprilo dalla sezione Contabilità prima di modificarlo.')
+  }
+
+  return new Error(message || fallback)
+}
+
 function applyEntryFilters(query, filters = {}) {
   const {
     search = '',
@@ -220,7 +230,7 @@ export async function createEntry(payload) {
     .single()
 
   if (error) {
-    throw new Error(error.message || 'Errore creazione movimento')
+    throw entryMutationError(error, 'Errore creazione movimento')
   }
 
   return data
@@ -243,7 +253,7 @@ export async function updateEntry(id, payload) {
     .single()
 
   if (error) {
-    throw new Error(error.message || 'Errore modifica movimento')
+    throw entryMutationError(error, 'Errore modifica movimento')
   }
 
   return data
@@ -256,7 +266,7 @@ export async function deleteEntry(id) {
     .eq('id', id)
 
   if (error) {
-    throw new Error(error.message || 'Errore eliminazione movimento')
+    throw entryMutationError(error, 'Errore eliminazione movimento')
   }
 }
 
@@ -269,7 +279,7 @@ export async function createEntriesBatch(rows) {
     .select('id,id_key')
 
   if (error) {
-    throw new Error(error.message || 'Errore import batch movimenti')
+    throw entryMutationError(error, 'Errore import batch movimenti')
   }
 
   return data || []
@@ -368,7 +378,7 @@ export async function bulkUpdateEntries({
     })
 
     if (error) {
-      throw new Error(error.message || 'Errore modifica massiva movimenti')
+      throw entryMutationError(error, 'Errore modifica massiva movimenti')
     }
 
     updatedRows += Number(data?.[0]?.updated_rows || 0)
@@ -395,9 +405,9 @@ export async function importSumupEntries({ userId, fileName, rows }) {
     })
 
     if (error) {
-      throw new Error(
-        error.message ||
-          `Errore import SumUp nel blocco ${i + 1} di ${chunks.length}`
+      throw entryMutationError(
+        error,
+        `Errore import SumUp nel blocco ${i + 1} di ${chunks.length}`
       )
     }
 

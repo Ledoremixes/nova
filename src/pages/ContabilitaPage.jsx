@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { createElement, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
@@ -6,21 +6,43 @@ import {
     Banknote,
     Building2,
     CalendarRange,
+    CheckCircle2,
     CircleAlert,
     Download,
     FileSpreadsheet,
     Landmark,
+    LockKeyhole,
+    PiggyBank,
     Receipt,
     RefreshCw,
+    RotateCcw,
+    Scale,
+    Settings2,
+    UnlockKeyhole,
     Wallet,
+    X,
 } from 'lucide-react'
 import '../styles/ContabilitaPage.css'
 import {
     euro,
     fetchContabilitaOverview,
+    fetchFinancialPosition,
     fetchRecentAccountingEntries,
     fetchRendicontoGestionale,
 } from '../api/contabilita'
+import {
+    closeFinancialYear,
+    fetchFinancialYears,
+    normalizeFinancialYearRecord,
+    reopenFinancialYear,
+    saveFinancialYearPosition,
+} from '../api/financialYears'
+import {
+    buildFinancialYearOptions,
+    getCurrentFinancialYear,
+    getFinancialPeriod,
+    getFinancialYearRange,
+} from '../lib/financialYear'
 import {
     exportIvaExcel,
     exportIvaPdf,
@@ -28,14 +50,14 @@ import {
     exportRendicontoPdf,
 } from '../utils/contabilitaExport'
 
-const today = dayjs().format('YYYY-MM-DD')
-const startYear = dayjs().startOf('year').format('YYYY-MM-DD')
+const currentFinancialYear = getCurrentFinancialYear()
+const initialPeriod = getFinancialPeriod(String(currentFinancialYear))
 
-function StatCard({ title, value, icon: Icon, variant = 'default', subtitle }) {
+function StatCard({ title, value, icon, variant = 'default', subtitle }) {
     return (
         <div className={`contabilita-stat contabilita-stat--${variant}`}>
             <div className="contabilita-stat__icon">
-                <Icon size={20} />
+                {createElement(icon, { size: 20 })}
             </div>
             <div className="contabilita-stat__content">
                 <div className="contabilita-stat__title">{title}</div>
@@ -46,11 +68,11 @@ function StatCard({ title, value, icon: Icon, variant = 'default', subtitle }) {
     )
 }
 
-function QuickAction({ to, title, description, icon: Icon }) {
+function QuickAction({ to, title, description, icon }) {
     return (
         <Link to={to} className="contabilita-action">
             <div className="contabilita-action__icon">
-                <Icon size={18} />
+                {createElement(icon, { size: 18 })}
             </div>
             <div className="contabilita-action__body">
                 <div className="contabilita-action__title">{title}</div>
@@ -71,6 +93,9 @@ function EmptyState({ title, description }) {
 }
 
 function FilterBar({
+    periodSelection,
+    financialYears,
+    onPeriodSelectionChange,
     fromDate,
     toDate,
     periodicity,
@@ -81,14 +106,40 @@ function FilterBar({
 }) {
     return (
         <div className="contabilita-filterbar">
+            <div className="contabilita-filterbar__field contabilita-filterbar__field--year">
+                <label>Anno finanziario</label>
+                <select value={periodSelection} onChange={(e) => onPeriodSelectionChange(e.target.value)}>
+                    {buildFinancialYearOptions(financialYears).map((year) => {
+                        const record = financialYears.find((item) => Number(item.year) === year)
+                        return (
+                            <option key={year} value={year}>
+                                {year}{record?.status === 'closed' ? ' — chiuso' : ''}
+                            </option>
+                        )
+                    })}
+                    <option value="all">Tutti gli anni</option>
+                    <option value="custom">Intervallo personalizzato</option>
+                </select>
+            </div>
+
             <div className="contabilita-filterbar__field">
                 <label>Dal</label>
-                <input type="date" value={fromDate} onChange={(e) => onFromDateChange(e.target.value)} />
+                <input
+                    type="date"
+                    value={fromDate}
+                    disabled={periodSelection !== 'custom'}
+                    onChange={(e) => onFromDateChange(e.target.value)}
+                />
             </div>
 
             <div className="contabilita-filterbar__field">
                 <label>Al</label>
-                <input type="date" value={toDate} onChange={(e) => onToDateChange(e.target.value)} />
+                <input
+                    type="date"
+                    value={toDate}
+                    disabled={periodSelection !== 'custom'}
+                    onChange={(e) => onToDateChange(e.target.value)}
+                />
             </div>
 
             <div className="contabilita-filterbar__field">
@@ -117,24 +168,75 @@ export default function ContabilitaPage() {
     const [ivaScadenziario, setIvaScadenziario] = useState(null)
     const [error, setError] = useState('')
     const [filteredTotals, setFilteredTotals] = useState(null)
+    const [financialYears, setFinancialYears] = useState([])
+    const [financialPosition, setFinancialPosition] = useState(null)
+    const [periodSelection, setPeriodSelection] = useState(String(currentFinancialYear))
+    const [appliedFilters, setAppliedFilters] = useState({
+        periodSelection: String(currentFinancialYear),
+        fromDate: initialPeriod.fromDate,
+        toDate: initialPeriod.toDate,
+        periodicity: 'quarterly',
+    })
+    const [positionModalOpen, setPositionModalOpen] = useState(false)
+    const [closingModalOpen, setClosingModalOpen] = useState(false)
+    const [financialActionPending, setFinancialActionPending] = useState(false)
+    const [financialActionError, setFinancialActionError] = useState('')
+    const [closeConfirmed, setCloseConfirmed] = useState(false)
+    const [positionForm, setPositionForm] = useState({
+        openingCashBalance: '0',
+        openingBankBalance: '0',
+        openingReceivables: '0',
+        openingPayables: '0',
+        currentReceivables: '0',
+        currentPayables: '0',
+    })
+    const [closingForm, setClosingForm] = useState({
+        closingCashBalance: '0',
+        closingBankBalance: '0',
+        closingReceivables: '0',
+        closingPayables: '0',
+        note: '',
+    })
     const loadSequenceRef = useRef(0)
 
-    const [fromDate, setFromDate] = useState(startYear)
-    const [toDate, setToDate] = useState(today)
+    const [fromDate, setFromDate] = useState(initialPeriod.fromDate)
+    const [toDate, setToDate] = useState(initialPeriod.toDate)
     const [periodicity, setPeriodicity] = useState('quarterly')
 
     const loadData = async ({ silent = false } = {}) => {
         const sequence = ++loadSequenceRef.current
+        const requestedFilters = { periodSelection, fromDate, toDate, periodicity }
 
         try {
             setError('')
             if (silent) setRefreshing(true)
             else setLoading(true)
 
-            const [overviewData, entriesData, rendicontoData] = await Promise.all([
-                fetchContabilitaOverview(),
-                fetchRecentAccountingEntries(8),
+            const [rendicontoData, financialYearsData] = await Promise.all([
                 fetchRendicontoGestionale({ fromDate, toDate, periodicity }),
+                fetchFinancialYears(),
+            ])
+
+            const currentYearRange = getFinancialYearRange(currentFinancialYear, { limitToToday: true })
+            const currentYearRecord = financialYearsData.find(
+                (item) => Number(item.year) === currentFinancialYear
+            ) || normalizeFinancialYearRecord(null, currentFinancialYear)
+            const canReuseSelectedRows =
+                fromDate === currentYearRange.fromDate &&
+                toDate === currentYearRange.toDate
+
+            const [overviewData, entriesData, positionData] = await Promise.all([
+                fetchContabilitaOverview({ rows: rendicontoData.rows, fromDate, toDate }),
+                fetchRecentAccountingEntries(8, { rows: rendicontoData.rows, fromDate, toDate }),
+                fetchFinancialPosition({
+                    fromDate: currentYearRange.fromDate,
+                    toDate: currentYearRange.toDate,
+                    openingCashBalance: currentYearRecord.openingCashBalance,
+                    openingBankBalance: currentYearRecord.openingBankBalance,
+                    receivables: currentYearRecord.currentReceivables,
+                    payables: currentYearRecord.currentPayables,
+                    rows: canReuseSelectedRows ? rendicontoData.rows : undefined,
+                }),
             ])
 
             // Ignora una risposta vecchia se nel frattempo l'utente ha applicato
@@ -143,9 +245,12 @@ export default function ContabilitaPage() {
 
             setOverview(overviewData)
             setRecentEntries(entriesData)
+            setFinancialYears(financialYearsData)
+            setFinancialPosition(positionData)
             setRendiconto(rendicontoData)
             setIvaSummary(rendicontoData?.ivaSummary || null)
             setIvaScadenziario(rendicontoData?.ivaScadenziario || null)
+            setAppliedFilters(requestedFilters)
             setFilteredTotals({
                 total_in: rendicontoData?.summary?.totale?.totalIn || 0,
                 total_out: rendicontoData?.summary?.totale?.totalOut || 0,
@@ -166,13 +271,52 @@ export default function ContabilitaPage() {
             }
         }
     }
+    const initialLoadRef = useRef(loadData)
 
     useEffect(() => {
-        loadData()
+        initialLoadRef.current()
         return () => {
             loadSequenceRef.current += 1
         }
     }, [])
+
+    const filtersAreApplied =
+        periodSelection === appliedFilters.periodSelection &&
+        fromDate === appliedFilters.fromDate &&
+        toDate === appliedFilters.toDate &&
+        periodicity === appliedFilters.periodicity
+    const selectedYear = appliedFilters.periodSelection === 'all' || appliedFilters.periodSelection === 'custom'
+        ? null
+        : Number(appliedFilters.periodSelection)
+    const selectedYearRecord = selectedYear
+        ? financialYears.find((item) => Number(item.year) === selectedYear) || normalizeFinancialYearRecord(null, selectedYear)
+        : null
+    const selectedPeriod = getFinancialPeriod(
+        appliedFilters.periodSelection,
+        appliedFilters.fromDate,
+        appliedFilters.toDate
+    )
+    const selectedYearEnded = selectedYear
+        ? !dayjs().isBefore(dayjs(getFinancialYearRange(selectedYear).fullToDate), 'day')
+        : false
+
+    function handlePeriodSelectionChange(value) {
+        setPeriodSelection(value)
+
+        if (value === 'custom') return
+
+        const period = getFinancialPeriod(value, fromDate, toDate)
+        setFromDate(period.fromDate)
+        setToDate(period.toDate)
+    }
+
+    function handleCustomFromDateChange(value) {
+        setFromDate(value)
+    }
+
+    function handleCustomToDateChange(value) {
+        setToDate(value)
+    }
 
     const alerts = useMemo(() => {
         if (!overview) return []
@@ -216,10 +360,113 @@ export default function ContabilitaPage() {
     }, [overview])
 
     const periodLabel = useMemo(() => {
-        const from = dayjs(fromDate).format('DD/MM/YYYY')
-        const to = dayjs(toDate).format('DD/MM/YYYY')
+        const from = dayjs(appliedFilters.fromDate).format('DD/MM/YYYY')
+        const to = dayjs(appliedFilters.toDate).format('DD/MM/YYYY')
         return `${from}_${to}`
-    }, [fromDate, toDate])
+    }, [appliedFilters.fromDate, appliedFilters.toDate])
+
+    const selectedYearCashBalance = selectedYearRecord
+        ? selectedYearRecord.openingCashBalance + Number(rendiconto?.methodSummary?.cashBalance || 0)
+        : 0
+    const selectedYearBankBalance = selectedYearRecord
+        ? selectedYearRecord.openingBankBalance + Number(rendiconto?.methodSummary?.bankBalance || 0)
+        : 0
+    const incompleteRows = useMemo(() => {
+        return (rendiconto?.rows || []).filter((row) => {
+            const hasAmount = Number(row.amount_in || 0) > 0 || Number(row.amount_out || 0) > 0
+            return (
+                !String(row.description || '').trim() ||
+                !hasAmount ||
+                !String(row.account_code || '').trim() ||
+                !String(row.nature || '').trim()
+            )
+        })
+    }, [rendiconto])
+
+    function applySelectedPeriod() {
+        if (!fromDate || !toDate || dayjs(fromDate).isAfter(dayjs(toDate), 'day')) {
+            setError('Controlla l’intervallo: la data iniziale deve precedere quella finale.')
+            return
+        }
+        loadData({ silent: true })
+    }
+
+    function openPositionModal() {
+        if (!selectedYearRecord) return
+        setFinancialActionError('')
+        setPositionForm({
+            openingCashBalance: String(selectedYearRecord.openingCashBalance || 0),
+            openingBankBalance: String(selectedYearRecord.openingBankBalance || 0),
+            openingReceivables: String(selectedYearRecord.openingReceivables || 0),
+            openingPayables: String(selectedYearRecord.openingPayables || 0),
+            currentReceivables: String(selectedYearRecord.currentReceivables || 0),
+            currentPayables: String(selectedYearRecord.currentPayables || 0),
+        })
+        setPositionModalOpen(true)
+    }
+
+    async function handleSavePosition(event) {
+        event.preventDefault()
+        if (!selectedYear || selectedYearRecord?.status === 'closed') return
+
+        try {
+            setFinancialActionPending(true)
+            setFinancialActionError('')
+            await saveFinancialYearPosition({ year: selectedYear, ...positionForm })
+            setPositionModalOpen(false)
+            await loadData({ silent: true })
+        } catch (actionError) {
+            setFinancialActionError(actionError.message || 'Impossibile salvare i saldi.')
+        } finally {
+            setFinancialActionPending(false)
+        }
+    }
+
+    function openClosingModal() {
+        if (!filtersAreApplied || !selectedYearRecord || selectedYearRecord.status === 'closed' || !selectedYearEnded) return
+        setFinancialActionError('')
+        setCloseConfirmed(false)
+        setClosingForm({
+            closingCashBalance: String(selectedYearCashBalance || 0),
+            closingBankBalance: String(selectedYearBankBalance || 0),
+            closingReceivables: String(selectedYearRecord.currentReceivables || 0),
+            closingPayables: String(selectedYearRecord.currentPayables || 0),
+            note: '',
+        })
+        setClosingModalOpen(true)
+    }
+
+    async function handleCloseFinancialYear(event) {
+        event.preventDefault()
+        if (!selectedYear || !closeConfirmed) return
+
+        try {
+            setFinancialActionPending(true)
+            setFinancialActionError('')
+            await closeFinancialYear({ year: selectedYear, ...closingForm })
+            setClosingModalOpen(false)
+            await loadData({ silent: true })
+        } catch (actionError) {
+            setFinancialActionError(actionError.message || 'Impossibile chiudere l’esercizio.')
+        } finally {
+            setFinancialActionPending(false)
+        }
+    }
+
+    async function handleReopenFinancialYear() {
+        if (!selectedYear || !window.confirm(`Riaprire l’esercizio ${selectedYear}? I movimenti torneranno modificabili.`)) return
+
+        try {
+            setFinancialActionPending(true)
+            setFinancialActionError('')
+            await reopenFinancialYear(selectedYear)
+            await loadData({ silent: true })
+        } catch (actionError) {
+            setError(actionError.message || 'Impossibile riaprire l’esercizio.')
+        } finally {
+            setFinancialActionPending(false)
+        }
+    }
 
     if (loading) {
         return (
@@ -245,14 +492,15 @@ export default function ContabilitaPage() {
             <div className="contabilita-page__header">
                 <div>
                     <h1>Contabilità</h1>
-                    <p>Risultati economici ufficiali calcolati dalla Prima nota nel periodo selezionato.</p>
+                    <p>Esercizi solari, rendiconto annuale e posizione finanziaria reale dell’associazione.</p>
                 </div>
 
                 <button
                     type="button"
                     className="contabilita-refresh-btn"
                     onClick={() => loadData({ silent: true })}
-                    disabled={refreshing}
+                    disabled={refreshing || !filtersAreApplied}
+                    title={!filtersAreApplied ? 'Applica prima i nuovi filtri' : ''}
                 >
                     <RefreshCw size={16} className={refreshing ? 'spin' : ''} />
                     Aggiorna
@@ -260,13 +508,16 @@ export default function ContabilitaPage() {
             </div>
 
             <FilterBar
+                periodSelection={periodSelection}
+                financialYears={financialYears}
+                onPeriodSelectionChange={handlePeriodSelectionChange}
                 fromDate={fromDate}
                 toDate={toDate}
                 periodicity={periodicity}
-                onFromDateChange={setFromDate}
-                onToDateChange={setToDate}
+                onFromDateChange={handleCustomFromDateChange}
+                onToDateChange={handleCustomToDateChange}
                 onPeriodicityChange={setPeriodicity}
-                onApply={() => loadData({ silent: true })}
+                onApply={applySelectedPeriod}
             />
 
             {error ? (
@@ -276,51 +527,148 @@ export default function ContabilitaPage() {
                 </div>
             ) : null}
 
+            {!filtersAreApplied ? (
+                <div className="contabilita-banner contabilita-banner--warning">
+                    <CircleAlert size={18} />
+                    <span>Hai modificato i filtri. Premi <strong>Applica</strong> per aggiornare riepiloghi, esportazioni e gestione dell’esercizio.</span>
+                </div>
+            ) : null}
+
             <div className="contabilita-stats-grid">
                 <StatCard
-                    title="Risultato economico reale"
+                    title={selectedPeriod.mode === 'year' ? `Risultato esercizio ${selectedYear}` : 'Risultato del periodo'}
                     value={euro(filteredTotals?.saldo || 0)}
-                    icon={Wallet}
+                    icon={Scale}
                     variant="primary"
-                    subtitle="Entrate meno uscite nel periodo"
+                    subtitle="Avanzo o disavanzo: entrate meno uscite"
                 />
                 <StatCard
-                    title="Entrate periodo"
+                    title="Liquidità attuale"
+                    value={euro(financialPosition?.liquidity || 0)}
+                    icon={PiggyBank}
+                    variant="success"
+                    subtitle="Cassa più banca, indipendente dal filtro"
+                />
+                <StatCard
+                    title="Posizione finanziaria"
+                    value={euro(financialPosition?.financialPosition || 0)}
+                    icon={Landmark}
+                    subtitle="Liquidità + crediti − debiti"
+                />
+                <StatCard
+                    title="Entrate selezione"
                     value={euro(filteredTotals?.total_in || 0)}
                     icon={Banknote}
                     variant="success"
-                    subtitle="Calcolate dal rendiconto del periodo"
+                    subtitle={`${appliedFilters.fromDate} → ${appliedFilters.toDate}`}
                 />
                 <StatCard
-                    title="Uscite periodo"
+                    title="Uscite selezione"
                     value={euro(filteredTotals?.total_out || 0)}
                     icon={Receipt}
                     variant="danger"
-                    subtitle="Calcolate dal rendiconto del periodo"
+                    subtitle={`${filteredTotals?.total_rows || 0} movimenti complessivi`}
                 />
                 <StatCard
-                    title="IVA a debito"
-                    value={euro(ivaSummary?.vatDebit || 0)}
+                    title="Saldo IVA"
+                    value={euro(ivaSummary?.balance || 0)}
                     icon={FileSpreadsheet}
-                    subtitle="Periodo anno corrente"
-                />
-                <StatCard
-                    title="IVA a credito"
-                    value={euro(ivaSummary?.vatCredit || 0)}
-                    icon={Landmark}
-                    subtitle="Periodo anno corrente"
-                />
-                <StatCard
-                    title="Ultimo import SumUp"
-                    value={overview?.lastSumupImportLabel || 'Non disponibile'}
-                    icon={CalendarRange}
-                    subtitle={`${overview?.lastSumupImportRows || 0} righe ultimo import`}
+                    subtitle="Debito IVA meno credito IVA nel periodo"
                 />
             </div>
 
             <div className="contabilita-banner contabilita-banner--info">
                 <CircleAlert size={18} />
-                <span>Risultato del periodo: <strong>{euro(filteredTotals?.risultato_periodo || 0)}</strong>. Il risultato sopra è calcolato direttamente come entrate meno uscite nel periodo selezionato.</span>
+                <span>Il saldo iniziale di banca e cassa <strong>non è registrato come entrata</strong>: contribuisce alla liquidità, mentre il risultato dell’esercizio resta calcolato solo come entrate meno uscite.</span>
+            </div>
+
+            {!financialYears.length ? (
+                <div className="contabilita-banner contabilita-banner--warning">
+                    <CircleAlert size={18} />
+                    <span>La gestione degli esercizi non è ancora attiva nel database. Applica la migrazione <strong>202607170001_financial_years.sql</strong> prima di configurare o chiudere un anno.</span>
+                </div>
+            ) : null}
+
+            <div className="contabilita-card financial-year-card">
+                <div className="financial-year-card__header">
+                    <div className="financial-year-card__title">
+                        <span className="financial-year-card__icon">
+                            {selectedYearRecord?.status === 'closed' ? <LockKeyhole size={22} /> : <CalendarRange size={22} />}
+                        </span>
+                        <div>
+                            <div className="financial-year-card__eyebrow">Gestione esercizio</div>
+                            <h2>{selectedYear ? `Esercizio finanziario ${selectedYear}` : selectedPeriod.label}</h2>
+                            <p>
+                                {selectedYear
+                                    ? `${dayjs(getFinancialYearRange(selectedYear).fromDate).format('DD/MM/YYYY')} – 31/12/${selectedYear}`
+                                    : 'Vista di consultazione: non modifica lo stato dei singoli esercizi.'}
+                            </p>
+                        </div>
+                    </div>
+
+                    {selectedYear ? (
+                        <div className="financial-year-card__actions">
+                            <span className={`financial-year-status financial-year-status--${selectedYearRecord?.status || 'open'}`}>
+                                {selectedYearRecord?.status === 'closed' ? <LockKeyhole size={15} /> : <UnlockKeyhole size={15} />}
+                                {selectedYearRecord?.status === 'closed' ? 'Chiuso' : 'Aperto'}
+                            </span>
+                            {selectedYearRecord?.status === 'closed' ? (
+                                <button
+                                    type="button"
+                                    className="contabilita-link-btn contabilita-link-btn--warning"
+                                    onClick={handleReopenFinancialYear}
+                                    disabled={!filtersAreApplied || financialActionPending}
+                                >
+                                    <RotateCcw size={16} /> Riapri esercizio
+                                </button>
+                            ) : (
+                                <>
+                                    <button type="button" className="contabilita-link-btn" onClick={openPositionModal} disabled={!filtersAreApplied}>
+                                        <Settings2 size={16} /> Saldi e posizioni
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="contabilita-close-year-btn"
+                                        onClick={openClosingModal}
+                                        disabled={!filtersAreApplied || !selectedYearEnded || financialActionPending}
+                                        title={!filtersAreApplied ? 'Applica prima i nuovi filtri' : !selectedYearEnded ? `Disponibile dal 31/12/${selectedYear}` : ''}
+                                    >
+                                        <LockKeyhole size={16} /> Chiudi esercizio {selectedYear}
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    ) : null}
+                </div>
+
+                {selectedYear ? (
+                    <div className="financial-year-card__body">
+                        <div className="financial-year-position-grid">
+                            <div><span>Liquidità iniziale</span><strong>{euro((selectedYearRecord?.openingCashBalance || 0) + (selectedYearRecord?.openingBankBalance || 0))}</strong><small>Cassa e banca riportate</small></div>
+                            <div><span>Crediti aperti</span><strong>{euro(selectedYearRecord?.currentReceivables || 0)}</strong><small>Ancora da incassare</small></div>
+                            <div><span>Debiti aperti</span><strong>{euro(selectedYearRecord?.currentPayables || 0)}</strong><small>Ancora da pagare</small></div>
+                            <div><span>Risultato selezionato</span><strong>{euro(filteredTotals?.risultato_periodo || 0)}</strong><small>Non genera un’entrata di riporto</small></div>
+                        </div>
+
+                        {selectedYearRecord?.status === 'closed' ? (
+                            <div className="financial-year-closed-summary">
+                                <CheckCircle2 size={20} />
+                                <span>
+                                    Chiuso il {selectedYearRecord.closedAt ? dayjs(selectedYearRecord.closedAt).format('DD/MM/YYYY [alle] HH:mm') : '—'}.
+                                    Snapshot: entrate <strong>{euro(selectedYearRecord.totalIncome)}</strong>, uscite <strong>{euro(selectedYearRecord.totalExpenses)}</strong>, risultato <strong>{euro(selectedYearRecord.result)}</strong>.
+                                </span>
+                            </div>
+                        ) : !selectedYearEnded ? (
+                            <div className="financial-year-open-note">
+                                <CircleAlert size={18} /> La chiusura sarà disponibile dal 31 dicembre {selectedYear}. Fino ad allora Nova aggiorna automaticamente il risultato dell’esercizio.
+                            </div>
+                        ) : null}
+                    </div>
+                ) : (
+                    <div className="financial-year-open-note">
+                        <CircleAlert size={18} /> Seleziona un singolo anno per configurare saldi iniziali, chiudere o riaprire l’esercizio.
+                    </div>
+                )}
             </div>
 
             <div className="contabilita-layout">
@@ -365,7 +713,7 @@ export default function ContabilitaPage() {
                         <div className="contabilita-card__header">
                             <div>
                                 <h2>Rendiconto gestionale ASD</h2>
-                                <p>Periodo selezionato: {dayjs(fromDate).format('DD/MM/YYYY')} - {dayjs(toDate).format('DD/MM/YYYY')}</p>
+                                <p>Periodo selezionato: {dayjs(appliedFilters.fromDate).format('DD/MM/YYYY')} - {dayjs(appliedFilters.toDate).format('DD/MM/YYYY')}</p>
                             </div>
 
                             <div className="contabilita-export-actions">
@@ -504,7 +852,7 @@ export default function ContabilitaPage() {
                         <div className="contabilita-card__header">
                             <div>
                                 <h2>Scadenziario IVA</h2>
-                                <p>Periodicità {periodicity === 'quarterly' ? 'trimestrale' : 'mensile'} sul periodo selezionato.</p>
+                                <p>Periodicità {appliedFilters.periodicity === 'quarterly' ? 'trimestrale' : 'mensile'} sul periodo selezionato.</p>
                             </div>
 
                             <div className="contabilita-export-actions">
@@ -673,26 +1021,108 @@ export default function ContabilitaPage() {
             <div className="contabilita-card contabilita-card--full">
                 <div className="contabilita-card__header">
                     <div>
-                        <h2>Stato metodi</h2>
-                        <p>Risultato del periodo suddiviso per metodo di pagamento.</p>
+                        <h2>Posizione finanziaria attuale</h2>
+                        <p>Situazione reale al {dayjs(financialPosition?.toDate).format('DD/MM/YYYY')}, indipendente dall’anno visualizzato sopra.</p>
                     </div>
                 </div>
 
                 <div className="contabilita-account-list contabilita-account-list--grid">
                     <div className="contabilita-account-row">
                         <span>Cassa (contanti)</span>
-                        <strong>{euro(rendiconto?.methodSummary?.cashBalance || 0)}</strong>
+                        <strong>{euro(financialPosition?.cashBalance || 0)}</strong>
                     </div>
                     <div className="contabilita-account-row">
                         <span>Banca / elettronici</span>
-                        <strong>{euro(rendiconto?.methodSummary?.bankBalance || 0)}</strong>
+                        <strong>{euro(financialPosition?.bankBalance || 0)}</strong>
                     </div>
                     <div className="contabilita-account-row">
-                        <span>Risultato complessivo</span>
-                        <strong>{euro(rendiconto?.methodSummary?.total || 0)}</strong>
+                        <span>Liquidità totale</span>
+                        <strong>{euro(financialPosition?.liquidity || 0)}</strong>
+                    </div>
+                    <div className="contabilita-account-row">
+                        <span>Crediti aperti</span>
+                        <strong>{euro(financialPosition?.receivables || 0)}</strong>
+                    </div>
+                    <div className="contabilita-account-row">
+                        <span>Debiti aperti</span>
+                        <strong>{euro(financialPosition?.payables || 0)}</strong>
+                    </div>
+                    <div className="contabilita-account-row contabilita-account-row--accent">
+                        <span>Posizione finanziaria</span>
+                        <strong>{euro(financialPosition?.financialPosition || 0)}</strong>
                     </div>
                 </div>
             </div>
+
+            {positionModalOpen ? (
+                <div className="financial-modal-overlay" onMouseDown={() => setPositionModalOpen(false)}>
+                    <div className="financial-modal" onMouseDown={(event) => event.stopPropagation()}>
+                        <div className="financial-modal__header">
+                            <div><h3>Saldi e posizioni {selectedYear}</h3><p>Configura i valori che non devono diventare entrate dell’esercizio.</p></div>
+                            <button type="button" onClick={() => setPositionModalOpen(false)}><X size={18} /></button>
+                        </div>
+                        <form className="financial-modal__form" onSubmit={handleSavePosition}>
+                            <div className="financial-modal__section">
+                                <h4>Situazione iniziale al {dayjs(getFinancialYearRange(selectedYear).fromDate).format('DD/MM/YYYY')}</h4>
+                                <p>Questi importi costituiscono patrimonio/liquidità iniziale, non ricavi.</p>
+                                <div className="financial-modal__grid">
+                                    <label>Cassa iniziale (€)<input type="number" step="0.01" value={positionForm.openingCashBalance} onChange={(event) => setPositionForm({ ...positionForm, openingCashBalance: event.target.value })} /></label>
+                                    <label>Banca iniziale (€)<input type="number" step="0.01" value={positionForm.openingBankBalance} onChange={(event) => setPositionForm({ ...positionForm, openingBankBalance: event.target.value })} /></label>
+                                    <label>Crediti iniziali (€)<input type="number" min="0" step="0.01" value={positionForm.openingReceivables} onChange={(event) => setPositionForm({ ...positionForm, openingReceivables: event.target.value })} /></label>
+                                    <label>Debiti iniziali (€)<input type="number" min="0" step="0.01" value={positionForm.openingPayables} onChange={(event) => setPositionForm({ ...positionForm, openingPayables: event.target.value })} /></label>
+                                </div>
+                            </div>
+                            <div className="financial-modal__section">
+                                <h4>Crediti e debiti attualmente aperti</h4>
+                                <p>Aggiornali quando una posizione viene incassata o pagata.</p>
+                                <div className="financial-modal__grid">
+                                    <label>Crediti ancora da incassare (€)<input type="number" min="0" step="0.01" value={positionForm.currentReceivables} onChange={(event) => setPositionForm({ ...positionForm, currentReceivables: event.target.value })} /></label>
+                                    <label>Debiti ancora da pagare (€)<input type="number" min="0" step="0.01" value={positionForm.currentPayables} onChange={(event) => setPositionForm({ ...positionForm, currentPayables: event.target.value })} /></label>
+                                </div>
+                            </div>
+                            {financialActionError ? <div className="contabilita-banner contabilita-banner--error"><CircleAlert size={17} /> {financialActionError}</div> : null}
+                            <div className="financial-modal__actions"><button type="button" className="contabilita-refresh-btn" onClick={() => setPositionModalOpen(false)}>Annulla</button><button type="submit" className="contabilita-apply-btn" disabled={financialActionPending}>{financialActionPending ? 'Salvataggio…' : 'Salva posizione'}</button></div>
+                        </form>
+                    </div>
+                </div>
+            ) : null}
+
+            {closingModalOpen ? (
+                <div className="financial-modal-overlay" onMouseDown={() => setClosingModalOpen(false)}>
+                    <div className="financial-modal financial-modal--large" onMouseDown={(event) => event.stopPropagation()}>
+                        <div className="financial-modal__header financial-modal__header--closing">
+                            <div><h3>Chiudi esercizio {selectedYear}</h3><p>Nova congelerà il rendiconto e bloccherà i movimenti fino a eventuale riapertura.</p></div>
+                            <button type="button" onClick={() => setClosingModalOpen(false)}><X size={18} /></button>
+                        </div>
+                        <form className="financial-modal__form" onSubmit={handleCloseFinancialYear}>
+                            <div className="financial-close-checks">
+                                <div className="is-ok"><CheckCircle2 size={18} /><span><strong>{filteredTotals?.total_rows || 0}</strong> movimenti controllati</span></div>
+                                <div className={incompleteRows.length ? 'is-warning' : 'is-ok'}><CircleAlert size={18} /><span><strong>{incompleteRows.length}</strong> movimenti incompleti o da classificare</span></div>
+                                <div className="is-ok"><FileSpreadsheet size={18} /><span>Rendiconto PDF ed Excel disponibili nella pagina</span></div>
+                            </div>
+
+                            <div className="financial-modal__section">
+                                <h4>Saldi reali al 31/12/{selectedYear}</h4>
+                                <p>Verifica gli importi con estratto conto e cassa fisica prima della conferma.</p>
+                                <div className="financial-modal__grid">
+                                    <label>Cassa finale (€)<input type="number" step="0.01" value={closingForm.closingCashBalance} onChange={(event) => setClosingForm({ ...closingForm, closingCashBalance: event.target.value })} /></label>
+                                    <label>Banca finale (€)<input type="number" step="0.01" value={closingForm.closingBankBalance} onChange={(event) => setClosingForm({ ...closingForm, closingBankBalance: event.target.value })} /></label>
+                                    <label>Crediti da riportare (€)<input type="number" min="0" step="0.01" value={closingForm.closingReceivables} onChange={(event) => setClosingForm({ ...closingForm, closingReceivables: event.target.value })} /></label>
+                                    <label>Debiti da riportare (€)<input type="number" min="0" step="0.01" value={closingForm.closingPayables} onChange={(event) => setClosingForm({ ...closingForm, closingPayables: event.target.value })} /></label>
+                                </div>
+                                <label className="financial-modal__note">Nota di chiusura<textarea value={closingForm.note} onChange={(event) => setClosingForm({ ...closingForm, note: event.target.value })} placeholder="Eventuali annotazioni per il direttivo…" /></label>
+                            </div>
+
+                            <div className="financial-close-result">
+                                <span>Entrate {euro(filteredTotals?.total_in || 0)}</span><span>Uscite {euro(filteredTotals?.total_out || 0)}</span><strong>Avanzo/disavanzo {euro(filteredTotals?.saldo || 0)}</strong>
+                            </div>
+                            <label className="financial-confirm"><input type="checkbox" checked={closeConfirmed} onChange={(event) => setCloseConfirmed(event.target.checked)} /><span>Confermo di aver verificato saldi, movimenti incompleti, crediti e debiti. L’avanzo non verrà creato come nuova entrata.</span></label>
+                            {financialActionError ? <div className="contabilita-banner contabilita-banner--error"><CircleAlert size={17} /> {financialActionError}</div> : null}
+                            <div className="financial-modal__actions"><button type="button" className="contabilita-refresh-btn" onClick={() => setClosingModalOpen(false)}>Annulla</button><button type="submit" className="contabilita-close-year-btn" disabled={!closeConfirmed || financialActionPending}><LockKeyhole size={16} /> {financialActionPending ? 'Chiusura…' : `Chiudi esercizio ${selectedYear}`}</button></div>
+                        </form>
+                    </div>
+                </div>
+            ) : null}
 
         </section>
     )

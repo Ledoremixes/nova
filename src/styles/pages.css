@@ -1163,6 +1163,39 @@
   }
 }
 
+.entries-financial-lock-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 14px 18px;
+  border: 1px solid rgba(124, 58, 237, 0.16);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(250, 245, 255, 0.96), rgba(255, 255, 255, 0.96));
+  color: #4c1d95;
+  box-shadow: 0 12px 28px rgba(76, 29, 149, 0.06);
+  font-size: 0.92rem;
+}
+
+.entries-financial-lock-banner svg {
+  flex: 0 0 auto;
+  color: #7c3aed;
+}
+
+.entry-locked-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 1px solid rgba(124, 58, 237, 0.16);
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.08);
+  color: #5b21b6;
+  font-size: 0.76rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
 /* Dashboard operativa: niente importi, solo scuola/allievi */
 .nova-dashboard-page .dashboard-hero {
   align-items: flex-start;

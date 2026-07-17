@@ -441,24 +441,22 @@ function sumBalanceByMethod(rows, predicate) {
     )
 }
 
-export async function fetchRecentAccountingEntries(limit = 8) {
-  const { data, error } = await supabase
-    .from('entries')
-    .select(
-      'id, date, operation_datetime, description, amount_in, amount_out, account_code, nature, id_key'
-    )
-    .order('operation_datetime', {
-      ascending: false,
-      nullsFirst: false,
-    })
-    .order('id_key', {
-      ascending: false,
-    })
-    .limit(limit)
+export async function fetchRecentAccountingEntries(limit = 8, { rows, fromDate, toDate } = {}) {
+  const sourceRows = rows || await fetchAllEntriesPaged({
+    fromDate,
+    toDate,
+    select: 'id, date, operation_datetime, description, amount_in, amount_out, account_code, nature, id_key',
+  })
 
-  if (error) throw error
-
-  return (data || []).map((row) => ({
+  return [...sourceRows]
+    .sort((left, right) => {
+      const leftDate = dayjs(left.operation_datetime || left.date).valueOf()
+      const rightDate = dayjs(right.operation_datetime || right.date).valueOf()
+      if (leftDate !== rightDate) return rightDate - leftDate
+      return Number(right.id_key || 0) - Number(left.id_key || 0)
+    })
+    .slice(0, limit)
+    .map((row) => ({
     id: row.id,
     dateLabel: formatDateLabel(row.operation_datetime || row.date),
     description: row.description,
@@ -467,22 +465,27 @@ export async function fetchRecentAccountingEntries(limit = 8) {
     amountOut: normalizeNumber(row.amount_out),
     natureLabel: row.nature || '',
     natureKey: normalizeNature(row.nature),
-  }))
+    }))
 }
 
-export async function fetchContabilitaOverview() {
-  const [uncategorizedRes, lastImport] = await Promise.all([
-    supabase
-      .from('entries')
-      .select('id', { count: 'exact', head: true })
-      .or('nature.is.null,nature.eq.'),
+export async function fetchContabilitaOverview({ rows, fromDate, toDate } = {}) {
+  const [sourceRows, lastImport] = await Promise.all([
+    rows
+      ? Promise.resolve(rows)
+      : fetchAllEntriesPaged({
+          fromDate,
+          toDate,
+          select: 'id, date, operation_datetime, nature, account_code, description, amount_in, amount_out, id_key',
+        }),
     fetchLastSumupImport(),
   ])
 
-  if (uncategorizedRes.error) throw uncategorizedRes.error
+  const uncategorizedEntriesCount = (sourceRows || []).filter((row) => {
+    return !String(row.nature || '').trim() || !String(row.account_code || '').trim()
+  }).length
 
   return {
-    uncategorizedEntriesCount: uncategorizedRes.count || 0,
+    uncategorizedEntriesCount,
     lastSumupImportAt: lastImport?.created_at || null,
     lastSumupImportLabel: formatDateTimeLabel(lastImport?.created_at),
     lastSumupImportRows: Number(lastImport?.imported_rows || 0),
@@ -541,6 +544,49 @@ export async function fetchRendicontoGestionale({
       criteriaNote:
         'Saldo del periodo calcolato come entrate meno uscite. Rendiconto e IVA sono generati da una singola lettura dei movimenti selezionati.',
     },
+  }
+}
+
+export async function fetchFinancialPosition({
+  fromDate,
+  toDate,
+  openingCashBalance = 0,
+  openingBankBalance = 0,
+  receivables = 0,
+  payables = 0,
+  rows,
+}) {
+  const sourceRows = rows || await fetchAllEntriesPaged({
+    fromDate,
+    toDate,
+    select: 'id, date, operation_datetime, amount_in, amount_out, method, id_key',
+  })
+
+  const cashMovement = sumBalanceByMethod(sourceRows, (method) => {
+    return normalizeMethod(method) === 'contanti'
+  })
+  const bankMovement = sumBalanceByMethod(sourceRows, (method) => {
+    return normalizeMethod(method) !== 'contanti'
+  })
+  const cashBalance = normalizeNumber(openingCashBalance) + cashMovement
+  const bankBalance = normalizeNumber(openingBankBalance) + bankMovement
+  const liquidity = cashBalance + bankBalance
+  const normalizedReceivables = normalizeNumber(receivables)
+  const normalizedPayables = normalizeNumber(payables)
+
+  return {
+    fromDate,
+    toDate,
+    openingCashBalance: normalizeNumber(openingCashBalance),
+    openingBankBalance: normalizeNumber(openingBankBalance),
+    cashMovement,
+    bankMovement,
+    cashBalance,
+    bankBalance,
+    liquidity,
+    receivables: normalizedReceivables,
+    payables: normalizedPayables,
+    financialPosition: liquidity + normalizedReceivables - normalizedPayables,
   }
 }
 
@@ -1049,4 +1095,3 @@ export async function fetchIvaScadenziario({
   const iva = providedIva || await fetchIvaSummary({ fromDate, toDate })
   return buildIvaScadenziarioFromSummary({ iva, fromDate, toDate, periodicity })
 }
-

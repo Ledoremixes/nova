@@ -530,7 +530,7 @@
 
 .contabilita-filterbar {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(190px, 1.25fr) repeat(3, minmax(0, 1fr)) minmax(140px, 0.8fr);
   gap: 14px;
   padding: 18px;
   background: #ffffff;
@@ -560,6 +560,12 @@
   font-size: 14px;
   background: #fff;
   color: #1f2a44;
+}
+
+.contabilita-filterbar__field input:disabled {
+  color: #536079;
+  background: #f4f6fa;
+  cursor: not-allowed;
 }
 
 .contabilita-summary-grid {
@@ -771,4 +777,506 @@
   background: #f5f3ff;
   border: 1px solid #ddd6fe;
   color: #4c1d95;
+}
+
+.contabilita-banner--warning {
+  background: #fff8e6;
+  border: 1px solid #f0dfac;
+  color: #70540e;
+}
+
+/* Esercizi finanziari */
+.financial-year-card {
+  overflow: hidden;
+  padding: 0;
+  border-color: #ded8ff;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(123, 97, 255, 0.13), transparent 30%),
+    linear-gradient(145deg, #ffffff, #fbfaff);
+}
+
+.financial-year-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px;
+  border-bottom: 1px solid #ece9fb;
+}
+
+.financial-year-card__title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.financial-year-card__icon {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 50px;
+  border-radius: 17px;
+  color: #fff;
+  background: linear-gradient(135deg, #5b7cff, #7b61ff);
+  box-shadow: 0 12px 24px rgba(91, 124, 255, 0.22);
+}
+
+.financial-year-card__eyebrow {
+  margin-bottom: 4px;
+  color: #6f5ee8;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.financial-year-card h2 {
+  margin: 0;
+  color: #17233c;
+  font-size: 22px;
+}
+
+.financial-year-card__title p {
+  margin: 5px 0 0;
+  color: #77829a;
+  font-size: 13px;
+}
+
+.financial-year-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.financial-year-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.financial-year-status--open {
+  color: #137144;
+  background: #eaf8f0;
+  border: 1px solid #c8ebd7;
+}
+
+.financial-year-status--closed {
+  color: #565e6e;
+  background: #eff1f5;
+  border: 1px solid #dfe3ea;
+}
+
+.contabilita-close-year-btn {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, #25324a, #111827);
+  box-shadow: 0 11px 24px rgba(17, 24, 39, 0.18);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.contabilita-close-year-btn:disabled,
+.contabilita-link-btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.contabilita-link-btn--warning {
+  color: #9a5b00;
+  border-color: #d79a3c;
+}
+
+.financial-year-card__body {
+  padding: 20px 22px 22px;
+}
+
+.financial-year-position-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.financial-year-position-grid > div {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid #e8e8f2;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.financial-year-position-grid span,
+.financial-year-position-grid small {
+  display: block;
+  color: #778197;
+  font-size: 11px;
+}
+
+.financial-year-position-grid strong {
+  display: block;
+  margin: 7px 0 5px;
+  color: #1d2942;
+  font-size: 20px;
+  white-space: nowrap;
+}
+
+.financial-year-closed-summary,
+.financial-year-open-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 16px 22px 20px;
+  padding: 13px 15px;
+  border-radius: 15px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.financial-year-card__body .financial-year-closed-summary,
+.financial-year-card__body .financial-year-open-note {
+  margin: 15px 0 0;
+}
+
+.financial-year-closed-summary {
+  color: #12613e;
+  background: #eaf8f0;
+  border: 1px solid #caead8;
+}
+
+.financial-year-open-note {
+  color: #70540e;
+  background: #fff8e6;
+  border: 1px solid #f0dfac;
+}
+
+.contabilita-account-row--accent {
+  color: #fff;
+  background: linear-gradient(135deg, #5b7cff, #7b61ff) !important;
+  border-color: transparent !important;
+  box-shadow: 0 12px 25px rgba(91, 124, 255, 0.2);
+}
+
+.contabilita-account-row--accent span,
+.contabilita-account-row--accent strong {
+  color: #fff !important;
+}
+
+.financial-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(5px);
+}
+
+.financial-modal {
+  width: min(100%, 720px);
+  max-height: 92vh;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 26px;
+  background: #fff;
+  box-shadow: 0 32px 70px rgba(15, 23, 42, 0.24);
+}
+
+.financial-modal--large {
+  width: min(100%, 850px);
+}
+
+.financial-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 21px 23px 18px;
+  border-bottom: 1px solid #e9edf4;
+  background: linear-gradient(135deg, #fff, #f8f7ff);
+}
+
+.financial-modal__header--closing {
+  color: #fff;
+  border-bottom: 0;
+  background: linear-gradient(135deg, #26344d, #111827);
+}
+
+.financial-modal__header h3 {
+  margin: 0;
+  font-size: 21px;
+}
+
+.financial-modal__header p {
+  margin: 6px 0 0;
+  color: #788399;
+  font-size: 13px;
+}
+
+.financial-modal__header--closing p {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.financial-modal__header > button {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+  border: 1px solid #dde2ec;
+  border-radius: 12px;
+  color: #4d586c;
+  background: #fff;
+  cursor: pointer;
+}
+
+.financial-modal__header--closing > button {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.17);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.financial-modal__form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 21px 23px 23px;
+}
+
+.financial-modal__section {
+  padding: 16px;
+  border: 1px solid #e6eaf2;
+  border-radius: 17px;
+  background: #fbfcfe;
+}
+
+.financial-modal__section h4 {
+  margin: 0;
+  color: #22304b;
+  font-size: 15px;
+}
+
+.financial-modal__section > p {
+  margin: 5px 0 14px;
+  color: #778197;
+  font-size: 12px;
+}
+
+.financial-modal__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.financial-modal__grid label,
+.financial-modal__note {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #4b566c;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.financial-modal__grid input,
+.financial-modal__note textarea {
+  width: 100%;
+  min-height: 43px;
+  padding: 10px 12px;
+  border: 1px solid #d9dfe9;
+  border-radius: 12px;
+  outline: 0;
+  color: #26324a;
+  background: #fff;
+}
+
+.financial-modal__grid input:focus,
+.financial-modal__note textarea:focus {
+  border-color: #7b61ff;
+  box-shadow: 0 0 0 4px rgba(123, 97, 255, 0.09);
+}
+
+.financial-modal__note {
+  margin-top: 13px;
+}
+
+.financial-modal__note textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.financial-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.financial-modal__actions .contabilita-apply-btn {
+  width: auto;
+  min-width: 155px;
+}
+
+.financial-close-checks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.financial-close-checks > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 12px;
+  border-radius: 14px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.financial-close-checks .is-ok {
+  color: #11613e;
+  background: #eaf8f0;
+}
+
+.financial-close-checks .is-warning {
+  color: #8a5a00;
+  background: #fff4d9;
+}
+
+.financial-close-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border-radius: 15px;
+  color: #586277;
+  background: #f3f5fa;
+  font-size: 12px;
+}
+
+.financial-close-result strong {
+  color: #4f38ca;
+  font-size: 14px;
+}
+
+.financial-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px 14px;
+  border: 1px solid #dcdfea;
+  border-radius: 14px;
+  color: #4f596c;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.financial-confirm input {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  margin-top: 1px;
+  accent-color: #6d4aff;
+}
+
+@media (max-width: 1100px) {
+  .financial-year-card__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .financial-year-card__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .financial-year-position-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .financial-year-card__header,
+  .financial-year-card__body {
+    padding: 16px;
+  }
+
+  .financial-year-card__actions > button {
+    width: 100%;
+  }
+
+  .financial-close-checks {
+    grid-template-columns: 1fr;
+  }
+
+  .financial-modal-overlay {
+    align-items: end;
+    padding: 8px;
+  }
+
+  .financial-modal {
+    max-height: 95vh;
+    border-radius: 22px 22px 10px 10px;
+  }
+}
+
+@media (max-width: 560px) {
+  .financial-year-card__title {
+    align-items: flex-start;
+  }
+
+  .financial-year-card__icon {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+    border-radius: 14px;
+  }
+
+  .financial-year-card h2 {
+    font-size: 18px;
+  }
+
+  .financial-year-position-grid,
+  .financial-modal__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .financial-year-position-grid strong {
+    font-size: 18px;
+  }
+
+  .financial-modal__header,
+  .financial-modal__form {
+    padding: 16px;
+  }
+
+  .financial-modal__actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .financial-modal__actions > button,
+  .financial-modal__actions .contabilita-apply-btn {
+    width: 100%;
+  }
 }

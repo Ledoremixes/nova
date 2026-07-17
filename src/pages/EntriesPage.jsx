@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as XLSX from 'xlsx'
+import { LockKeyhole } from 'lucide-react'
 import { useAuth } from '../context/AuthProvider'
 import {
   fetchEntries,
@@ -16,6 +17,8 @@ import {
   fetchLastSumupImport,
 } from '../api/entries'
 import { fetchLookupList } from '../api/lookups'
+import { fetchFinancialYears } from '../api/financialYears'
+import { isDateInClosedFinancialYear } from '../lib/financialYear'
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -298,6 +301,11 @@ export default function EntriesPage() {
     queryFn: fetchLastSumupImport,
   })
 
+  const financialYearsQuery = useQuery({
+    queryKey: ['financial-years'],
+    queryFn: fetchFinancialYears,
+  })
+
   function handleSaveSuccess() {
     const message = editing ? 'Movimento modificato correttamente' : 'Movimento creato correttamente'
 
@@ -323,16 +331,19 @@ export default function EntriesPage() {
   const createMutation = useMutation({
     mutationFn: createEntry,
     onSuccess: handleSaveSuccess,
+    onError: (error) => alert(error.message || 'Errore durante la creazione del movimento'),
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }) => updateEntry(id, payload),
     onSuccess: handleSaveSuccess,
+    onError: (error) => alert(error.message || 'Errore durante la modifica del movimento'),
   })
 
   const bulkUpdateMutation = useMutation({
     mutationFn: bulkUpdateEntries,
     onSuccess: handleSaveSuccess,
+    onError: (error) => alert(error.message || 'Errore durante la modifica multipla'),
   })
 
   const deleteMutation = useMutation({
@@ -341,6 +352,7 @@ export default function EntriesPage() {
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       queryClient.invalidateQueries({ queryKey: ['entries-totals'] })
     },
+    onError: (error) => alert(error.message || 'Errore durante l’eliminazione del movimento'),
   })
 
   const importMutation = useMutation({
@@ -388,6 +400,16 @@ export default function EntriesPage() {
   const methodOptions = (methodsQuery.data || [])
     .map((item) => item.label || item.value)
     .filter(Boolean)
+  const financialYears = financialYearsQuery.data || []
+  const closedFinancialYears = financialYears.filter((item) => item.status === 'closed')
+
+  function entryDate(row) {
+    return row?.operation_datetime || row?.date || null
+  }
+
+  function isEntryLocked(row) {
+    return isDateInClosedFinancialYear(entryDate(row), closedFinancialYears)
+  }
 
 
   function applyFilters() {
@@ -460,6 +482,10 @@ export default function EntriesPage() {
   }
 
   function handleEdit(row) {
+    if (isEntryLocked(row)) {
+      alert('Questo movimento appartiene a un esercizio chiuso. Riaprilo dalla sezione Contabilità prima di modificarlo.')
+      return
+    }
     setEditing(row)
     setApplyScope('single')
     setModalSuccess(false)
@@ -495,6 +521,10 @@ export default function EntriesPage() {
   }
 
   function handleDelete(row) {
+    if (isEntryLocked(row)) {
+      alert('Questo movimento appartiene a un esercizio chiuso e non può essere eliminato.')
+      return
+    }
     const ok = window.confirm(`Eliminare il movimento "${row.description || 'senza descrizione'}"?`)
     if (!ok) return
     deleteMutation.mutate(row.id)
@@ -527,6 +557,11 @@ export default function EntriesPage() {
 
   function confirmImport() {
     if (!importPreview.length || !user?.id) return
+
+    if (importPreview.some((row) => isDateInClosedFinancialYear(row.date, closedFinancialYears))) {
+      alert('Il file contiene movimenti riferiti a un esercizio chiuso. Riapri l’esercizio oppure rimuovi quelle righe dal file.')
+      return
+    }
 
     importMutation.mutate({
       userId: user.id,
@@ -567,6 +602,14 @@ export default function EntriesPage() {
 
   function handleSubmit(e) {
     e.preventDefault()
+
+    if (
+      isDateInClosedFinancialYear(form.date, closedFinancialYears) ||
+      (editing && isEntryLocked(editing))
+    ) {
+      alert('L’esercizio finanziario relativo a questo movimento è chiuso. Riaprilo dalla sezione Contabilità.')
+      return
+    }
 
     const payload = {
       user_id: editing?.user_id || user?.id || null,
@@ -609,6 +652,10 @@ export default function EntriesPage() {
     }
 
     if (applyScope === 'page') {
+      if (entries.some(isEntryLocked)) {
+        alert('La pagina contiene movimenti di un esercizio chiuso. Applica la modifica solo alle righe di esercizi aperti.')
+        return
+      }
       const pageIds = entries.map((row) => row.id)
       bulkUpdateMutation.mutate({
         ids: pageIds,
@@ -647,6 +694,15 @@ export default function EntriesPage() {
           }}
         >
           ✓ {saveAlert.message}
+        </div>
+      ) : null}
+      {closedFinancialYears.length ? (
+        <div className="entries-financial-lock-banner">
+          <LockKeyhole size={18} />
+          <span>
+            Esercizi bloccati: <strong>{closedFinancialYears.map((item) => item.year).join(', ')}</strong>.
+            I relativi movimenti restano consultabili ma non modificabili.
+          </span>
         </div>
       ) : null}
       <div className="page-card">
@@ -904,16 +960,22 @@ export default function EntriesPage() {
                       <td>
                         {isAdmin ? (
                           <div className="rowActions">
-                            <button type="button" className="actionBtn" onClick={() => handleEdit(row)}>
-                              Modifica
-                            </button>
-                            <button
-                              type="button"
-                              className="actionBtn actionBtn--danger"
-                              onClick={() => handleDelete(row)}
-                            >
-                              Elimina
-                            </button>
+                            {isEntryLocked(row) ? (
+                              <span className="entry-locked-badge"><LockKeyhole size={14} /> Bloccato</span>
+                            ) : (
+                              <>
+                                <button type="button" className="actionBtn" onClick={() => handleEdit(row)}>
+                                  Modifica
+                                </button>
+                                <button
+                                  type="button"
+                                  className="actionBtn actionBtn--danger"
+                                  onClick={() => handleDelete(row)}
+                                >
+                                  Elimina
+                                </button>
+                              </>
+                            )}
                           </div>
                         ) : (
                           '-'
