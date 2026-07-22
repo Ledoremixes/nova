@@ -2062,3 +2062,267 @@
     padding: 24px 22px !important;
   }
 }
+
+/* Insegnanti 2.0: schede allineate e leggibili anche con email lunghe */
+.teachers-page > .page-card {
+  overflow: hidden;
+}
+
+.teachers-page .teacher-card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  align-items: stretch;
+}
+
+.teachers-page .teacher-profile-card {
+  min-width: 0;
+  height: 100%;
+  padding: 19px;
+  gap: 13px;
+  border-radius: 24px;
+  border: 1px solid rgba(124, 58, 237, 0.12);
+  background:
+    radial-gradient(circle at top right, rgba(124, 58, 237, 0.07), transparent 32%),
+    linear-gradient(180deg, #ffffff, #fdfbff);
+  box-shadow: 0 15px 40px rgba(15, 23, 42, 0.06);
+}
+
+.teachers-page .teacher-profile-head {
+  align-items: center;
+  min-height: 76px;
+}
+
+.teachers-page .teacher-profile-identity {
+  min-width: 0;
+}
+
+.teachers-page .teacher-name-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 9px;
+}
+
+.teachers-page .teacher-name-row h3 {
+  min-width: 0;
+  margin: 0;
+  color: #111827;
+  font-size: 1.14rem;
+  line-height: 1.24;
+  overflow-wrap: anywhere;
+}
+
+.teachers-page .teacher-name-row .nova-pill {
+  flex: 0 0 auto;
+}
+
+.teachers-page .teacher-profile-identity > p {
+  display: -webkit-box;
+  min-height: 38px;
+  margin-top: 7px;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.teachers-page .teacherAvatar--large {
+  width: 64px;
+  height: 64px;
+  border-radius: 19px;
+}
+
+.teacher-compensation-rule {
+  min-width: 0;
+  padding: 11px 13px;
+  border: 1px solid rgba(124, 58, 237, 0.12);
+  border-radius: 15px;
+  background: #f8f7ff;
+}
+
+.teacher-compensation-rule span,
+.teacher-compensation-rule strong {
+  display: block;
+}
+
+.teacher-compensation-rule span {
+  color: #7c3aed;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.teacher-compensation-rule strong {
+  margin-top: 3px;
+  color: #33215d;
+  font-size: 0.91rem;
+  overflow-wrap: anywhere;
+}
+
+.teachers-page .teacher-payout-card-inline {
+  min-width: 0;
+  margin: 0;
+  padding: 13px;
+  border-radius: 16px;
+}
+
+.teachers-page .teacher-payout-card-inline > div {
+  min-width: 0;
+}
+
+.teachers-page .teacher-payout-card-inline strong {
+  font-size: 1.24rem;
+}
+
+.teachers-page .teacher-payout-card-inline small {
+  line-height: 1.35;
+}
+
+.teacher-contact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.teacher-contact-grid > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid #e7eaf1;
+  border-radius: 15px;
+  background: #fff;
+}
+
+.teacher-contact-grid svg {
+  margin-top: 2px;
+  color: #7c3aed;
+  flex: 0 0 auto;
+}
+
+.teacher-contact-grid span,
+.teacher-contact-grid strong,
+.teacher-contact-grid em {
+  display: block;
+  min-width: 0;
+}
+
+.teacher-contact-grid strong {
+  color: #64748b;
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.teacher-contact-grid em {
+  margin-top: 3px;
+  color: #172033;
+  font-size: 0.82rem;
+  font-style: normal;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.teacher-courses-preview {
+  min-height: 94px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 16px;
+  background: #fbfcfe;
+}
+
+.teacher-courses-preview__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.teacher-courses-preview__head span {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.teacher-courses-preview__head strong {
+  display: grid;
+  min-width: 27px;
+  height: 27px;
+  place-items: center;
+  padding: 0 7px;
+  border-radius: 999px;
+  color: #6d28d9;
+  background: rgba(124, 58, 237, 0.10);
+}
+
+.teacher-courses-preview .tagWrap {
+  align-content: flex-start;
+  min-height: 36px;
+}
+
+.teacher-courses-preview .status-badge {
+  max-width: 145px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.teacher-more-courses {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: #64748b;
+  background: #eef2f7;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.teacher-card-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.teacher-card-actions .actionBtn {
+  justify-content: center;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.teacher-card-actions .actionBtn--primary {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, #d11e91, #7c3aed);
+  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.16);
+}
+
+@media (max-width: 780px) {
+  .teachers-page .teacher-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 460px) {
+  .teacher-contact-grid,
+  .teacher-card-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .teacher-card-actions .actionBtn {
+    width: 100%;
+  }
+}
+
+.teacher-card-actions .actionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

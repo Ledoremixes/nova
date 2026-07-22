@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
     ArrowRight,
+    ArrowRightLeft,
     Banknote,
     Building2,
     CalendarRange,
@@ -49,6 +50,7 @@ import {
     exportRendicontoExcel,
     exportRendicontoPdf,
 } from '../utils/contabilitaExport'
+import { createCashToBankTransfer } from '../api/entries'
 
 const currentFinancialYear = getCurrentFinancialYear()
 const initialPeriod = getFinancialPeriod(String(currentFinancialYear))
@@ -170,6 +172,7 @@ export default function ContabilitaPage() {
     const [filteredTotals, setFilteredTotals] = useState(null)
     const [financialYears, setFinancialYears] = useState([])
     const [financialPosition, setFinancialPosition] = useState(null)
+    const [selectedFinancialPosition, setSelectedFinancialPosition] = useState(null)
     const [periodSelection, setPeriodSelection] = useState(String(currentFinancialYear))
     const [appliedFilters, setAppliedFilters] = useState({
         periodSelection: String(currentFinancialYear),
@@ -179,6 +182,15 @@ export default function ContabilitaPage() {
     })
     const [positionModalOpen, setPositionModalOpen] = useState(false)
     const [closingModalOpen, setClosingModalOpen] = useState(false)
+    const [transferModalOpen, setTransferModalOpen] = useState(false)
+    const [transferPending, setTransferPending] = useState(false)
+    const [transferError, setTransferError] = useState('')
+    const [transferSuccess, setTransferSuccess] = useState('')
+    const [transferForm, setTransferForm] = useState({
+        date: dayjs().format('YYYY-MM-DD'),
+        amount: '',
+        note: '',
+    })
     const [financialActionPending, setFinancialActionPending] = useState(false)
     const [financialActionError, setFinancialActionError] = useState('')
     const [closeConfirmed, setCloseConfirmed] = useState(false)
@@ -221,22 +233,52 @@ export default function ContabilitaPage() {
             const currentYearRecord = financialYearsData.find(
                 (item) => Number(item.year) === currentFinancialYear
             ) || normalizeFinancialYearRecord(null, currentFinancialYear)
-            const canReuseSelectedRows =
+            const requestedSelectedYear =
+                periodSelection === 'all' || periodSelection === 'custom'
+                    ? null
+                    : Number(periodSelection)
+            const selectedYearRange = requestedSelectedYear
+                ? getFinancialYearRange(requestedSelectedYear, { limitToToday: true })
+                : null
+            const selectedYearRecordForRequest = requestedSelectedYear
+                ? financialYearsData.find((item) => Number(item.year) === requestedSelectedYear) ||
+                  normalizeFinancialYearRecord(null, requestedSelectedYear)
+                : null
+            const canReuseRowsForCurrentPosition =
                 fromDate === currentYearRange.fromDate &&
                 toDate === currentYearRange.toDate
+            const canReuseRowsForSelectedPosition = Boolean(
+                selectedYearRange &&
+                fromDate === selectedYearRange.fromDate &&
+                toDate === selectedYearRange.toDate
+            )
 
-            const [overviewData, entriesData, positionData] = await Promise.all([
+            const positionPromise = fetchFinancialPosition({
+                fromDate: currentYearRange.fromDate,
+                toDate: currentYearRange.toDate,
+                openingCashBalance: currentYearRecord.openingCashBalance,
+                openingBankBalance: currentYearRecord.openingBankBalance,
+                receivables: currentYearRecord.currentReceivables,
+                payables: currentYearRecord.currentPayables,
+                rows: canReuseRowsForCurrentPosition ? rendicontoData.rows : undefined,
+            })
+            const selectedPositionPromise = selectedYearRange && selectedYearRecordForRequest
+                ? fetchFinancialPosition({
+                    fromDate: selectedYearRange.fromDate,
+                    toDate: selectedYearRange.toDate,
+                    openingCashBalance: selectedYearRecordForRequest.openingCashBalance,
+                    openingBankBalance: selectedYearRecordForRequest.openingBankBalance,
+                    receivables: selectedYearRecordForRequest.currentReceivables,
+                    payables: selectedYearRecordForRequest.currentPayables,
+                    rows: canReuseRowsForSelectedPosition ? rendicontoData.rows : undefined,
+                })
+                : Promise.resolve(null)
+
+            const [overviewData, entriesData, positionData, selectedPositionData] = await Promise.all([
                 fetchContabilitaOverview({ rows: rendicontoData.rows, fromDate, toDate }),
                 fetchRecentAccountingEntries(8, { rows: rendicontoData.rows, fromDate, toDate }),
-                fetchFinancialPosition({
-                    fromDate: currentYearRange.fromDate,
-                    toDate: currentYearRange.toDate,
-                    openingCashBalance: currentYearRecord.openingCashBalance,
-                    openingBankBalance: currentYearRecord.openingBankBalance,
-                    receivables: currentYearRecord.currentReceivables,
-                    payables: currentYearRecord.currentPayables,
-                    rows: canReuseSelectedRows ? rendicontoData.rows : undefined,
-                }),
+                positionPromise,
+                selectedPositionPromise,
             ])
 
             // Ignora una risposta vecchia se nel frattempo l'utente ha applicato
@@ -247,6 +289,7 @@ export default function ContabilitaPage() {
             setRecentEntries(entriesData)
             setFinancialYears(financialYearsData)
             setFinancialPosition(positionData)
+            setSelectedFinancialPosition(selectedPositionData)
             setRendiconto(rendicontoData)
             setIvaSummary(rendicontoData?.ivaSummary || null)
             setIvaScadenziario(rendicontoData?.ivaScadenziario || null)
@@ -342,10 +385,20 @@ export default function ContabilitaPage() {
             })
         }
 
-        if ((overview?.uncategorizedEntriesCount || 0) > 0) {
+        const unclassifiedCount = Number(rendiconto?.summary?.nonClassificate?.rowsCount || 0)
+        const unclassifiedAmount =
+            Number(rendiconto?.summary?.nonClassificate?.totalIn || 0) +
+            Number(rendiconto?.summary?.nonClassificate?.totalOut || 0)
+
+        if (unclassifiedCount > 0) {
             items.push({
                 type: 'warning',
-                text: `Ci sono ${overview.uncategorizedEntriesCount} movimenti senza natura o classificazione completa.`,
+                text: `${unclassifiedCount} movimenti per ${euro(unclassifiedAmount)} non hanno una classificazione rendiconto valida. Apri Conti e completa il conto associato.`,
+            })
+        } else if ((overview?.uncategorizedEntriesCount || 0) > 0) {
+            items.push({
+                type: 'warning',
+                text: `Ci sono ${overview.uncategorizedEntriesCount} movimenti con dati contabili incompleti.`,
             })
         }
 
@@ -357,7 +410,7 @@ export default function ContabilitaPage() {
         }
 
         return items
-    }, [overview])
+    }, [overview, rendiconto])
 
     const periodLabel = useMemo(() => {
         const from = dayjs(appliedFilters.fromDate).format('DD/MM/YYYY')
@@ -365,12 +418,15 @@ export default function ContabilitaPage() {
         return `${from}_${to}`
     }, [appliedFilters.fromDate, appliedFilters.toDate])
 
-    const selectedYearCashBalance = selectedYearRecord
-        ? selectedYearRecord.openingCashBalance + Number(rendiconto?.methodSummary?.cashBalance || 0)
+    const selectedYearCashBalance = selectedYear
+        ? Number(selectedFinancialPosition?.cashBalance || 0)
         : 0
-    const selectedYearBankBalance = selectedYearRecord
-        ? selectedYearRecord.openingBankBalance + Number(rendiconto?.methodSummary?.bankBalance || 0)
+    const selectedYearBankBalance = selectedYear
+        ? Number(selectedFinancialPosition?.bankBalance || 0)
         : 0
+    const transferAmount = Number(String(transferForm.amount || '').replace(',', '.')) || 0
+    const cashAfterTransfer = Number(financialPosition?.cashBalance || 0) - transferAmount
+    const bankAfterTransfer = Number(financialPosition?.bankBalance || 0) + transferAmount
     const incompleteRows = useMemo(() => {
         return (rendiconto?.rows || []).filter((row) => {
             const hasAmount = Number(row.amount_in || 0) > 0 || Number(row.amount_out || 0) > 0
@@ -419,6 +475,65 @@ export default function ContabilitaPage() {
             setFinancialActionError(actionError.message || 'Impossibile salvare i saldi.')
         } finally {
             setFinancialActionPending(false)
+        }
+    }
+
+    function openTransferModal() {
+        if (
+            selectedYear !== currentFinancialYear ||
+            selectedYearRecord?.status === 'closed'
+        ) return
+
+        setTransferError('')
+        setTransferSuccess('')
+        setTransferForm({
+            date: dayjs().format('YYYY-MM-DD'),
+            amount: '',
+            note: '',
+        })
+        setTransferModalOpen(true)
+    }
+
+    async function handleCashToBankTransfer(event) {
+        event.preventDefault()
+
+        const amount = Number(String(transferForm.amount || '').replace(',', '.'))
+        const availableCash = Number(financialPosition?.cashBalance || 0)
+
+        if (!transferForm.date || dayjs(transferForm.date).year() !== currentFinancialYear) {
+            setTransferError(`Il versamento deve avere una data compresa nell’esercizio ${currentFinancialYear}.`)
+            return
+        }
+        if (dayjs(transferForm.date).isAfter(dayjs(), 'day')) {
+            setTransferError('Non puoi registrare un versamento con una data futura.')
+            return
+        }
+        if (!Number.isFinite(amount) || amount <= 0) {
+            setTransferError('Inserisci un importo maggiore di zero.')
+            return
+        }
+        if (amount > availableCash + 0.005) {
+            setTransferError(`La cassa disponibile è ${euro(availableCash)}: il versamento non può superarla.`)
+            return
+        }
+
+        try {
+            setTransferPending(true)
+            setTransferError('')
+            await createCashToBankTransfer({
+                date: transferForm.date,
+                amount,
+                note: transferForm.note,
+            })
+            setTransferModalOpen(false)
+            setTransferSuccess(
+                `Versamento di ${euro(amount)} registrato: cassa diminuita e banca aumentata dello stesso importo.`
+            )
+            await loadData({ silent: true })
+        } catch (actionError) {
+            setTransferError(actionError?.message || 'Impossibile registrare il versamento.')
+        } finally {
+            setTransferPending(false)
         }
     }
 
@@ -527,6 +642,16 @@ export default function ContabilitaPage() {
                 </div>
             ) : null}
 
+            {transferSuccess ? (
+                <div className="contabilita-banner contabilita-banner--success">
+                    <CheckCircle2 size={18} />
+                    <span>{transferSuccess}</span>
+                    <button type="button" className="contabilita-banner__close" onClick={() => setTransferSuccess('')} aria-label="Chiudi">
+                        <X size={16} />
+                    </button>
+                </div>
+            ) : null}
+
             {!filtersAreApplied ? (
                 <div className="contabilita-banner contabilita-banner--warning">
                     <CircleAlert size={18} />
@@ -540,20 +665,32 @@ export default function ContabilitaPage() {
                     value={euro(filteredTotals?.saldo || 0)}
                     icon={Scale}
                     variant="primary"
-                    subtitle="Avanzo o disavanzo: entrate meno uscite"
+                    subtitle="Entrate meno uscite del periodo"
+                />
+                <StatCard
+                    title="Cassa disponibile"
+                    value={euro(financialPosition?.cashBalance || 0)}
+                    icon={Wallet}
+                    subtitle="Contanti che dovresti avere fisicamente"
+                />
+                <StatCard
+                    title="Banca disponibile"
+                    value={euro(financialPosition?.bankBalance || 0)}
+                    icon={Landmark}
+                    subtitle="Conti bancari ed elettronici"
                 />
                 <StatCard
                     title="Liquidità attuale"
                     value={euro(financialPosition?.liquidity || 0)}
                     icon={PiggyBank}
                     variant="success"
-                    subtitle="Cassa più banca, indipendente dal filtro"
+                    subtitle="Denaro realmente disponibile: cassa + banca"
                 />
                 <StatCard
-                    title="Posizione finanziaria"
+                    title="Posizione finanziaria netta"
                     value={euro(financialPosition?.financialPosition || 0)}
-                    icon={Landmark}
-                    subtitle="Liquidità + crediti − debiti"
+                    icon={Building2}
+                    subtitle="Non è denaro disponibile: liquidità + crediti − debiti"
                 />
                 <StatCard
                     title="Entrate selezione"
@@ -567,7 +704,7 @@ export default function ContabilitaPage() {
                     value={euro(filteredTotals?.total_out || 0)}
                     icon={Receipt}
                     variant="danger"
-                    subtitle={`${filteredTotals?.total_rows || 0} movimenti complessivi`}
+                    subtitle={`${filteredTotals?.total_rows || 0} movimenti economici`}
                 />
                 <StatCard
                     title="Saldo IVA"
@@ -577,9 +714,11 @@ export default function ContabilitaPage() {
                 />
             </div>
 
-            <div className="contabilita-banner contabilita-banner--info">
+            <div className="contabilita-banner contabilita-banner--info contabilita-banner--financial-help">
                 <CircleAlert size={18} />
-                <span>Il saldo iniziale di banca e cassa <strong>non è registrato come entrata</strong>: contribuisce alla liquidità, mentre il risultato dell’esercizio resta calcolato solo come entrate meno uscite.</span>
+                <span>
+                    <strong>Quanto denaro dovresti avere adesso?</strong> La risposta è la <strong>liquidità attuale</strong>, cioè {euro(financialPosition?.cashBalance || 0)} in cassa + {euro(financialPosition?.bankBalance || 0)} in banca = <strong>{euro(financialPosition?.liquidity || 0)}</strong>. La posizione finanziaria considera anche crediti e debiti ancora aperti e quindi non coincide con i soldi presenti oggi.
+                </span>
             </div>
 
             {!financialYears.length ? (
@@ -623,6 +762,16 @@ export default function ContabilitaPage() {
                                 </button>
                             ) : (
                                 <>
+                                    {selectedYear === currentFinancialYear ? (
+                                        <button
+                                            type="button"
+                                            className="contabilita-link-btn contabilita-link-btn--transfer"
+                                            onClick={openTransferModal}
+                                            disabled={!filtersAreApplied || refreshing}
+                                        >
+                                            <ArrowRightLeft size={16} /> Versa cassa in banca
+                                        </button>
+                                    ) : null}
                                     <button type="button" className="contabilita-link-btn" onClick={openPositionModal} disabled={!filtersAreApplied}>
                                         <Settings2 size={16} /> Saldi e posizioni
                                     </button>
@@ -644,10 +793,10 @@ export default function ContabilitaPage() {
                 {selectedYear ? (
                     <div className="financial-year-card__body">
                         <div className="financial-year-position-grid">
-                            <div><span>Liquidità iniziale</span><strong>{euro((selectedYearRecord?.openingCashBalance || 0) + (selectedYearRecord?.openingBankBalance || 0))}</strong><small>Cassa e banca riportate</small></div>
-                            <div><span>Crediti aperti</span><strong>{euro(selectedYearRecord?.currentReceivables || 0)}</strong><small>Ancora da incassare</small></div>
-                            <div><span>Debiti aperti</span><strong>{euro(selectedYearRecord?.currentPayables || 0)}</strong><small>Ancora da pagare</small></div>
-                            <div><span>Risultato selezionato</span><strong>{euro(filteredTotals?.risultato_periodo || 0)}</strong><small>Non genera un’entrata di riporto</small></div>
+                            <div><span>Cassa calcolata</span><strong>{euro(selectedFinancialPosition?.cashBalance || 0)}</strong><small>Saldo iniziale + movimenti in contanti</small></div>
+                            <div><span>Banca calcolata</span><strong>{euro(selectedFinancialPosition?.bankBalance || 0)}</strong><small>Saldo iniziale + movimenti elettronici</small></div>
+                            <div><span>Crediti aperti</span><strong>{euro(selectedYearRecord?.currentReceivables || 0)}</strong><small>Da incassare, non ancora liquidità</small></div>
+                            <div><span>Debiti aperti</span><strong>{euro(selectedYearRecord?.currentPayables || 0)}</strong><small>Da pagare, non ancora un’uscita registrata</small></div>
                         </div>
 
                         {selectedYearRecord?.status === 'closed' ? (
@@ -801,6 +950,11 @@ export default function ContabilitaPage() {
                                     />
                                 </div>
 
+                                <div className="rendiconto-criteria-note">
+                                    <CircleAlert size={17} />
+                                    <span>{rendiconto.meta?.criteriaNote}</span>
+                                </div>
+
                                 <div className="contabilita-table-wrap">
                                     <table className="contabilita-table">
                                         <thead>
@@ -828,6 +982,20 @@ export default function ContabilitaPage() {
                                                 <td>{rendiconto.summary.commerciale.rowsCount}</td>
                                             </tr>
                                             <tr>
+                                                <td>Finanziaria / patrimoniale</td>
+                                                <td className="is-income">{euro(rendiconto.summary.finanziaria?.totalIn || 0)}</td>
+                                                <td className="is-expense">{euro(rendiconto.summary.finanziaria?.totalOut || 0)}</td>
+                                                <td>{euro(rendiconto.summary.finanziaria?.saldo || 0)}</td>
+                                                <td>{rendiconto.summary.finanziaria?.rowsCount || 0}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Supporto generale</td>
+                                                <td className="is-income">{euro(rendiconto.summary.supportoGenerale?.totalIn || 0)}</td>
+                                                <td className="is-expense">{euro(rendiconto.summary.supportoGenerale?.totalOut || 0)}</td>
+                                                <td>{euro(rendiconto.summary.supportoGenerale?.saldo || 0)}</td>
+                                                <td>{rendiconto.summary.supportoGenerale?.rowsCount || 0}</td>
+                                            </tr>
+                                            <tr className={(rendiconto.summary.nonClassificate?.rowsCount || 0) > 0 ? 'contabilita-table__warning' : ''}>
                                                 <td>Non classificate</td>
                                                 <td className="is-income">{euro(rendiconto.summary.nonClassificate.totalIn)}</td>
                                                 <td className="is-expense">{euro(rendiconto.summary.nonClassificate.totalOut)}</td>
@@ -1052,7 +1220,120 @@ export default function ContabilitaPage() {
                         <strong>{euro(financialPosition?.financialPosition || 0)}</strong>
                     </div>
                 </div>
+
+                <div className="financial-position-readout">
+                    <CircleAlert size={17} />
+                    <span>
+                        La posizione finanziaria differisce dalla liquidità di <strong>{euro((financialPosition?.receivables || 0) - (financialPosition?.payables || 0))}</strong>: crediti aperti {euro(financialPosition?.receivables || 0)} meno debiti aperti {euro(financialPosition?.payables || 0)}. Questi importi non modificano il rendiconto finché non diventano incassi o pagamenti reali in Prima nota.
+                    </span>
+                </div>
             </div>
+
+            {transferModalOpen ? (
+                <div className="financial-modal-overlay" onMouseDown={() => !transferPending && setTransferModalOpen(false)}>
+                    <div className="financial-modal financial-modal--transfer" onMouseDown={(event) => event.stopPropagation()}>
+                        <div className="financial-modal__header">
+                            <div>
+                                <h3>Versamento cassa → banca</h3>
+                                <p>Registra lo spostamento senza creare una falsa entrata o una falsa uscita.</p>
+                            </div>
+                            <button type="button" onClick={() => setTransferModalOpen(false)} disabled={transferPending}>
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <form className="financial-modal__form" onSubmit={handleCashToBankTransfer}>
+                            <div className="transfer-balance-grid">
+                                <div>
+                                    <span>Cassa prima</span>
+                                    <strong>{euro(financialPosition?.cashBalance || 0)}</strong>
+                                    <small>Diminuisce del versamento</small>
+                                </div>
+                                <div className="transfer-balance-grid__arrow"><ArrowRight size={22} /></div>
+                                <div>
+                                    <span>Banca prima</span>
+                                    <strong>{euro(financialPosition?.bankBalance || 0)}</strong>
+                                    <small>Aumenta del versamento</small>
+                                </div>
+                            </div>
+
+                            <div className="financial-modal__section">
+                                <div className="financial-modal__grid">
+                                    <label>
+                                        Data versamento
+                                        <input
+                                            type="date"
+                                            value={transferForm.date}
+                                            max={dayjs().format('YYYY-MM-DD')}
+                                            min={`${currentFinancialYear}-01-01`}
+                                            onChange={(event) => setTransferForm({ ...transferForm, date: event.target.value })}
+                                            required
+                                        />
+                                    </label>
+                                    <label>
+                                        Importo (€)
+                                        <input
+                                            type="number"
+                                            min="0.01"
+                                            max={Math.max(0, Number(financialPosition?.cashBalance || 0))}
+                                            step="0.01"
+                                            value={transferForm.amount}
+                                            onChange={(event) => setTransferForm({ ...transferForm, amount: event.target.value })}
+                                            placeholder="0,00"
+                                            required
+                                        />
+                                    </label>
+                                </div>
+                                <label className="financial-modal__note">
+                                    Nota facoltativa
+                                    <textarea
+                                        value={transferForm.note}
+                                        onChange={(event) => setTransferForm({ ...transferForm, note: event.target.value })}
+                                        placeholder="Es. Versamento contanti serata del sabato"
+                                    />
+                                </label>
+                            </div>
+
+                            <div className="transfer-preview">
+                                <div>
+                                    <span>Cassa dopo</span>
+                                    <strong className={cashAfterTransfer < -0.005 ? 'is-negative' : ''}>{euro(cashAfterTransfer)}</strong>
+                                </div>
+                                <div>
+                                    <span>Banca dopo</span>
+                                    <strong>{euro(bankAfterTransfer)}</strong>
+                                </div>
+                                <div>
+                                    <span>Liquidità totale</span>
+                                    <strong>{euro(financialPosition?.liquidity || 0)}</strong>
+                                    <small>Resta invariata</small>
+                                </div>
+                            </div>
+
+                            <div className="contabilita-banner contabilita-banner--info transfer-info-banner">
+                                <CircleAlert size={17} />
+                                <span>Il versamento crea due movimenti collegati: uscita dalla cassa e ingresso in banca. È escluso da rendiconto, risultato e IVA.</span>
+                            </div>
+
+                            {transferError ? (
+                                <div className="contabilita-banner contabilita-banner--error">
+                                    <CircleAlert size={17} />
+                                    <span>{transferError}</span>
+                                </div>
+                            ) : null}
+
+                            <div className="financial-modal__actions">
+                                <button type="button" className="contabilita-refresh-btn" onClick={() => setTransferModalOpen(false)} disabled={transferPending}>
+                                    Annulla
+                                </button>
+                                <button type="submit" className="contabilita-apply-btn" disabled={transferPending || transferAmount <= 0 || cashAfterTransfer < -0.005}>
+                                    <ArrowRightLeft size={16} /> {transferPending ? 'Registrazione…' : 'Registra versamento'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            ) : null}
 
             {positionModalOpen ? (
                 <div className="financial-modal-overlay" onMouseDown={() => setPositionModalOpen(false)}>
@@ -1074,7 +1355,7 @@ export default function ContabilitaPage() {
                             </div>
                             <div className="financial-modal__section">
                                 <h4>Crediti e debiti attualmente aperti</h4>
-                                <p>Aggiornali quando una posizione viene incassata o pagata.</p>
+                                <p>Servono per la posizione finanziaria. Un debito aperto non diventa automaticamente un’uscita: quando lo paghi devi registrare anche il movimento in Prima nota e poi ridurre il debito aperto.</p>
                                 <div className="financial-modal__grid">
                                     <label>Crediti ancora da incassare (€)<input type="number" min="0" step="0.01" value={positionForm.currentReceivables} onChange={(event) => setPositionForm({ ...positionForm, currentReceivables: event.target.value })} /></label>
                                     <label>Debiti ancora da pagare (€)<input type="number" min="0" step="0.01" value={positionForm.currentPayables} onChange={(event) => setPositionForm({ ...positionForm, currentPayables: event.target.value })} /></label>

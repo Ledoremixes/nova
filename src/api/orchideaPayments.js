@@ -1,23 +1,9 @@
 import dayjs from 'dayjs'
 import { orchideaSupabase } from './orchideaSupabase'
+import { summarizeMonthlyTuitionPayments } from '../lib/paymentLedger'
 
 export function euro(value) {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
-}
-
-function parseJsonArray(data) {
-  if (!data) return []
-  if (Array.isArray(data)) return data
-  if (typeof data === 'string') {
-    try {
-      const parsed = JSON.parse(data)
-      return Array.isArray(parsed) ? parsed : []
-    } catch {
-      return []
-    }
-  }
-  if (Array.isArray(data.items)) return data.items
-  return []
 }
 
 function safeCourses(value) {
@@ -34,11 +20,6 @@ function safeCourses(value) {
   return []
 }
 
-function isMissingFunction(error) {
-  const msg = `${error?.code || ''} ${error?.message || ''} ${error?.details || ''}`.toLowerCase()
-  return msg.includes('could not find the function') || msg.includes('schema cache') || msg.includes('pgrst202') || msg.includes('does not exist')
-}
-
 function normalizeText(value) {
   return String(value ?? '').trim().toLowerCase()
 }
@@ -47,7 +28,8 @@ function normalizePaymentRow(row = {}) {
   const courses = safeCourses(row.corsi || row.courses || row.corsi_collegati)
   const total = Number(row.quota_mese ?? row.totale_mese ?? row.amount_due ?? 0)
   const paid = Number(row.pagato ?? row.paid_amount ?? row.totale_pagato ?? 0)
-  const status = row.stato_pagamento || row.status || row.stato || (paid >= total && total > 0 ? 'pagato' : 'da_pagare')
+  const status = row.stato_pagamento || row.status || row.stato || (paid >= total && total > 0 ? 'pagato' : paid > 0 ? 'parziale' : 'da_pagare')
+  const residue = Number(row.residuo ?? Math.max(total - paid, 0))
 
   return {
     id: row.tesseramento_id || row.id,
@@ -66,22 +48,17 @@ function normalizePaymentRow(row = {}) {
     mese: row.mese || dayjs().format('YYYY-MM'),
     quota_mese: total,
     pagato: paid,
-    residuo: Math.max(total - paid, 0),
+    residuo: Math.max(residue, 0),
     stato_pagamento: status,
     pagamento_id: row.pagamento_id || null,
+    metodo_pagamento: row.metodo_pagamento || '',
+    nota_pagamento: row.nota_pagamento || '',
+    data_pagamento: row.data_pagamento || null,
+    payment_source: row.payment_source || 'none',
+    payment_records_count: Number(row.payment_records_count || 0),
+    payment_ignored_excess: Number(row.payment_ignored_excess || 0),
     corsi: courses,
   }
-}
-
-function rowMonthMatches(row, selectedMonth) {
-  const candidates = [row.periodo, row.mese, row.scadenza, row.data_pagamento, row.pagato_il].filter(Boolean)
-  if (!candidates.length) return false
-  return candidates.some((value) => {
-    const raw = String(value)
-    if (raw.slice(0, 7) === selectedMonth) return true
-    const date = dayjs(raw)
-    return date.isValid() && date.format('YYYY-MM') === selectedMonth
-  })
 }
 
 function isEnrollmentActive(row, monthStart, monthEnd) {
@@ -147,33 +124,32 @@ function normalizeDirectRows({ enrollments = [], students = [], courses = [], pa
       })
     })
 
-  const monthPayments = payments.filter((row) => rowMonthMatches(row, selectedMonth))
   const paymentsByStudent = new Map()
-  monthPayments.forEach((row) => {
-    const studentId = String(row.tesseramento_id || row.allievo_id || row.student_id || '')
+  payments.forEach((payment) => {
+    const studentId = String(payment.tesseramento_id || payment.allievo_id || payment.student_id || '')
     if (!studentId) return
     if (!paymentsByStudent.has(studentId)) paymentsByStudent.set(studentId, [])
-    paymentsByStudent.get(studentId).push(row)
+    paymentsByStudent.get(studentId).push(payment)
   })
 
   return [...groups.values()].map((row) => {
     const relatedPayments = paymentsByStudent.get(String(row.tesseramento_id)) || []
-    const paid = relatedPayments.reduce((sum, item) => {
-      const state = normalizeText(item.stato || item.status)
-      if (['pagato', 'paid', 'coperto'].includes(state)) return sum + Number(item.importo || item.amount || 0)
-      return sum
-    }, 0)
-    const paused = relatedPayments.some((item) => ['sospeso', 'chiuso'].includes(normalizeText(item.stato || item.status)))
     const total = Number(row.quota_mese || 0)
-    const status = paused ? 'sospeso' : (paid >= total && total > 0 ? 'pagato' : 'da_pagare')
+    const ledger = summarizeMonthlyTuitionPayments({ payments: relatedPayments, selectedMonth, totalDue: total })
 
     return normalizePaymentRow({
       ...row,
       quota_mese: total,
-      pagato: paid,
-      residuo: Math.max(total - paid, 0),
-      stato_pagamento: status,
-      pagamento_id: relatedPayments[0]?.id || null,
+      pagato: ledger.paid,
+      residuo: ledger.residue,
+      stato_pagamento: ledger.status,
+      pagamento_id: ledger.authoritative?.id || null,
+      metodo_pagamento: ledger.method,
+      nota_pagamento: ledger.note,
+      data_pagamento: ledger.paidAt,
+      payment_source: ledger.source,
+      payment_records_count: ledger.relevantCount,
+      payment_ignored_excess: ledger.ignoredExcess,
     })
   }).sort((a, b) => a.nomeCompleto.localeCompare(b.nomeCompleto))
 }
@@ -228,7 +204,9 @@ async function setAllievoMonthlyPaymentDirect({ tesseramentoId, month, amount, s
   const monthStart = `${selectedMonth}-01`
   const monthEnd = dayjs(monthStart).endOf('month').format('YYYY-MM-DD')
   const cleanStatus = status || 'pagato'
-  const importo = cleanStatus === 'pagato' ? Number(amount || 0) : 0
+  const normalizedAmount = Math.round(Math.max(0, Number(amount || 0)) * 100) / 100
+  const importo = cleanStatus === 'pagato' ? normalizedAmount : 0
+  const now = new Date().toISOString()
 
   const payload = {
     tesseramento_id: tesseramentoId,
@@ -243,12 +221,14 @@ async function setAllievoMonthlyPaymentDirect({ tesseramentoId, month, amount, s
     tipo: 'quota_mensile',
     pagato_il: cleanStatus === 'pagato' ? dayjs().format('YYYY-MM-DD') : null,
     data_pagamento: cleanStatus === 'pagato' ? dayjs().format('YYYY-MM-DD') : null,
-    updated_at: new Date().toISOString(),
+    updated_at: now,
   }
 
+  // Un solo record Nova autorevole per allievo e mese. I vecchi record per-corso
+  // restano nello storico ma non vengono più sommati al saldo mensile.
   const existing = await orchideaSupabase
     .from('pagamenti')
-    .select('id')
+    .select('id, updated_at, created_at')
     .eq('tesseramento_id', tesseramentoId)
     .eq('periodo', selectedMonth)
     .eq('tipo', 'quota_mensile')
@@ -266,13 +246,17 @@ async function setAllievoMonthlyPaymentDirect({ tesseramentoId, month, amount, s
     return data
   }
 
+  if (existing.error) {
+    throw new Error(existing.error.message || 'Errore verifica pagamento mensile')
+  }
+
   const { data, error } = await orchideaSupabase
     .from('pagamenti')
-    .insert([{ ...payload, created_at: new Date().toISOString() }])
+    .insert([{ ...payload, created_at: now }])
     .select()
     .single()
 
-  if (error) throw new Error(error.message || 'Errore creazione pagamento. Esegui SQL_ORCHIDEA_ALLIEVI_PAGAMENTI_NOVA.sql su Orchidea Allievi.')
+  if (error) throw new Error(error.message || 'Errore creazione pagamento. Verifica la tabella pagamenti di Orchidea Allievi.')
   return data
 }
 

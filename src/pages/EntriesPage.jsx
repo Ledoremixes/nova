@@ -20,7 +20,16 @@ import { fetchLookupList } from '../api/lookups'
 import { fetchFinancialYears } from '../api/financialYears'
 import { isDateInClosedFinancialYear } from '../lib/financialYear'
 
-const today = new Date().toISOString().slice(0, 10)
+function localDateString(value = new Date()) {
+  const local = new Date(value.getTime() - value.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 10)
+}
+
+function accountingDateToIso(date) {
+  return date ? new Date(`${date}T12:00:00`).toISOString() : null
+}
+
+const today = localDateString()
 
 const NATURE_OPTIONS = [
   'Acquisti',
@@ -135,7 +144,15 @@ function matchesNatureFilter(row, activeFilters) {
 }
 
 function calculateEntriesTotals(rows) {
-  return rows.reduce(
+  const economicRows = (rows || []).filter((row) => {
+    return !(
+      normalizeText(row?.nature) === 'trasferimento' ||
+      normalizeText(row?.source) === 'trasferimento interno' ||
+      String(row?.account_code || '').trim().toUpperCase() === 'GIRO'
+    )
+  })
+
+  return economicRows.reduce(
     (acc, row) => {
       const amountIn = Number(row.amount_in || 0)
       const amountOut = Number(row.amount_out || 0)
@@ -575,7 +592,7 @@ export default function EntriesPage() {
 
     const original = {
       date: editing.date || null,
-      operation_datetime: editing.date ? new Date(`${editing.date}T00:00:00`).toISOString() : null,
+      operation_datetime: editing.date ? accountingDateToIso(editing.date) : null,
       description: editing.description || null,
       amount_in: normalizeNumberInput(editing.amount_in),
       amount_out: normalizeNumberInput(editing.amount_out),
@@ -614,7 +631,7 @@ export default function EntriesPage() {
     const payload = {
       user_id: editing?.user_id || user?.id || null,
       date: form.date || null,
-      operation_datetime: form.date ? new Date(`${form.date}T00:00:00`).toISOString() : null,
+      operation_datetime: form.date ? accountingDateToIso(form.date) : null,
       description: form.description || null,
       amount_in: normalizeNumberInput(form.amount_in),
       amount_out: normalizeNumberInput(form.amount_out),

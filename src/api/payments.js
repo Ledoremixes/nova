@@ -63,6 +63,8 @@ export async function fetchRegisteredPayments({
     .from('entries')
     .select('*', { count: 'exact' })
     .gt('amount_out', 0)
+    .or('account_code.is.null,account_code.neq.GIRO')
+    .or('nature.is.null,nature.neq.trasferimento')
     .order('operation_datetime', { ascending: false, nullsFirst: false })
     .order('id_key', { ascending: false })
     .range(fromIndex, toIndex)
@@ -103,8 +105,10 @@ export async function fetchRegisteredPayments({
 export async function fetchRegisteredPaymentsSummary({ month = '' } = {}) {
   let query = supabase
     .from('entries')
-    .select('amount_out, description, note, source, date, account_code')
+    .select('amount_out, description, note, source, date, account_code, nature')
     .gt('amount_out', 0)
+    .or('account_code.is.null,account_code.neq.GIRO')
+    .or('nature.is.null,nature.neq.trasferimento')
 
   if (month) {
     const fromDate = `${month}-01`

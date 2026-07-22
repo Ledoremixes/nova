@@ -1,9 +1,0 @@
-MODIFICHE APPLICATE
-
-1. Contabilità
-- Pulsante “Applica” allineato in basso ai campi filtro.
-- Larghezza coerente con la quarta colonna del filtro.
-
-2. Pagamenti
-- Il valore “Da incassare” ora mostra come dato principale l’importo reale.
-- Il numero delle quote mancanti è separato in un badge distinto, evitando letture ambigue come “2180”.

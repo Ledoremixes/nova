@@ -35,12 +35,85 @@ function normalizeMethod(method) {
   return String(method || '').trim().toLowerCase()
 }
 
+function isCashMethod(method) {
+  const normalized = normalizeMethod(method)
+  return normalized === 'contanti' || normalized === 'contante' || normalized === 'cassa' || normalized === 'cash'
+}
+
 function normalizeText(value) {
   return String(value || '').trim().toLowerCase()
 }
 
 function containsAny(text, keywords) {
   return keywords.some((keyword) => text.includes(keyword))
+}
+
+function normalizeAccountCode(value) {
+  return String(value || '').trim().toUpperCase()
+}
+
+function isInternalTransfer(row) {
+  const source = normalizeText(row?.source)
+  const nature = normalizeText(row?.nature)
+  const accountCode = normalizeAccountCode(row?.account_code)
+  const note = normalizeText(row?.note)
+
+  return (
+    nature === 'trasferimento' ||
+    accountCode === 'GIRO' ||
+    source === 'trasferimento interno' ||
+    note.includes('trasferimento interno') ||
+    note.includes('nova-transfer:')
+  )
+}
+
+function bucketFromConfiguredAccount(config, amountIn, amountOut) {
+  if (!config) return null
+
+  const area = normalizeText(config.report_area)
+  const configuredBucket = normalizeAccountCode(config.report_bucket)
+
+  if (area === 'istituzionale' || configuredBucket.includes('ISTITUZIONAL')) {
+    return 'istituzionale'
+  }
+  if (area === 'commerciale' || configuredBucket.includes('COMMERCIAL')) {
+    return 'commerciale'
+  }
+  if (area === 'finanziaria' || configuredBucket.includes('FINANZIAR')) {
+    return 'finanziaria'
+  }
+  if (area === 'supporto_generale' || configuredBucket.includes('SUPPORTO')) {
+    return 'supporto_generale'
+  }
+  if (area === 'da_classificare' || configuredBucket.includes('DA_CLASSIFICARE')) {
+    return 'non_classificate'
+  }
+
+  // Fallback utile quando è valorizzato solo il bucket A/C/D/E.
+  if (configuredBucket.startsWith('A_')) return 'istituzionale'
+  if (configuredBucket.startsWith('C_')) return 'commerciale'
+  if (configuredBucket.startsWith('D_')) return 'finanziaria'
+  if (configuredBucket.startsWith('E_')) return 'supporto_generale'
+
+  // Se il conto non è configurato non forziamo una classificazione errata.
+  return amountIn > 0 || amountOut > 0 ? null : 'non_classificate'
+}
+
+function fallbackLineCode(bucket, amountIn) {
+  const isIncome = amountIn > 0
+
+  if (bucket === 'istituzionale') return isIncome ? 'RA13' : 'CA7'
+  if (bucket === 'commerciale') return isIncome ? 'RC3' : 'CC3'
+  if (bucket === 'finanziaria') return isIncome ? 'RD5' : 'CD5'
+  if (bucket === 'supporto_generale') return isIncome ? 'RE3' : 'CE7'
+
+  return null
+}
+
+function isValidLineCode(lineCode, amountIn, amountOut) {
+  if (!lineCode) return false
+  const normalized = normalizeAccountCode(lineCode)
+  return amountIn > 0 ? normalized.startsWith('R') : amountOut > 0 ? normalized.startsWith('C') : false
 }
 
 const COMMERCIAL_PRODUCT_KEYWORDS = [
@@ -126,17 +199,40 @@ function createStatementAccumulator() {
   }
 }
 
-function classifyReportEntry(row) {
+function classifyReportEntry(row, accountClassifications = new Map()) {
   const description = normalizeText(row.description)
   const note = normalizeText(row.note)
   const source = normalizeText(row.source)
   const text = `${description} ${note} ${source}`
 
-  const accountCode = String(row.account_code || '').trim().toUpperCase()
+  const accountCode = normalizeAccountCode(row.account_code)
   const nature = normalizeText(row.nature)
 
   const amountIn = normalizeNumber(row.amount_in)
   const amountOut = normalizeNumber(row.amount_out)
+
+  // I versamenti tra cassa e banca spostano denaro, ma non sono né ricavi né costi.
+  if (isInternalTransfer(row)) {
+    return { bucket: 'trasferimenti', lineCode: null, isTransfer: true }
+  }
+
+  // La configurazione presente in Conti è la fonte primaria del rendiconto.
+  // Prima veniva ignorata e il sistema provava a indovinare dalla descrizione:
+  // questo poteva lasciare fuori importi perfettamente registrati.
+  const configuredAccount = accountClassifications.get(accountCode)
+  const configuredBucket = bucketFromConfiguredAccount(configuredAccount, amountIn, amountOut)
+
+  if (configuredBucket) {
+    const configuredLine = normalizeAccountCode(configuredAccount?.report_row_code)
+    return {
+      bucket: configuredBucket,
+      lineCode: isValidLineCode(configuredLine, amountIn, amountOut)
+        ? configuredLine
+        : fallbackLineCode(configuredBucket, amountIn),
+      isTransfer: false,
+      classificationSource: 'account',
+    }
+  }
 
   if (amountIn > 0) {
     if (accountCode === 'C' || containsAny(text, COMMERCIAL_PRODUCT_KEYWORDS)) {
@@ -168,7 +264,15 @@ function classifyReportEntry(row) {
       return { bucket: 'commerciale', lineCode: 'RC3' }
     }
 
-    return { bucket: 'non_classificate', lineCode: 'RA13' }
+    if (nature === 'finanziaria') {
+      return { bucket: 'finanziaria', lineCode: 'RD5' }
+    }
+
+    if (nature === 'supporto_generale') {
+      return { bucket: 'supporto_generale', lineCode: 'RE3' }
+    }
+
+    return { bucket: 'non_classificate', lineCode: null }
   }
 
   if (amountOut > 0) {
@@ -231,7 +335,7 @@ function classifyReportEntry(row) {
         'bonifico istantaneo',
       ])
     ) {
-      return { bucket: 'supporto_generale', lineCode: 'CD1' }
+      return { bucket: 'finanziaria', lineCode: 'CD1' }
     }
 
     if (
@@ -252,7 +356,15 @@ function classifyReportEntry(row) {
       return { bucket: 'commerciale', lineCode: 'CC3' }
     }
 
-    return { bucket: 'supporto_generale', lineCode: 'CE7' }
+    if (nature === 'finanziaria') {
+      return { bucket: 'finanziaria', lineCode: 'CD5' }
+    }
+
+    if (nature === 'supporto_generale') {
+      return { bucket: 'supporto_generale', lineCode: 'CE7' }
+    }
+
+    return { bucket: 'non_classificate', lineCode: null }
   }
 
   return { bucket: 'non_classificate', lineCode: null }
@@ -277,7 +389,7 @@ function summarizeRows(rows) {
   )
 }
 
-function buildStatement(rows) {
+function buildStatement(rows, accountClassifications = new Map()) {
   const statement = createStatementAccumulator()
   const classifiedRows = []
 
@@ -292,12 +404,16 @@ function buildStatement(rows) {
       dateLabel: formatDateLabel(originalRow.operation_datetime || originalRow.date),
     }
 
-    const report = classifyReportEntry(row)
+    const report = classifyReportEntry(row, accountClassifications)
 
     row.report_bucket = report.bucket
     row.report_line_code = report.lineCode
+    row.is_internal_transfer = Boolean(report.isTransfer)
+    row.classification_source = report.classificationSource || 'fallback'
 
     classifiedRows.push(row)
+
+    if (row.is_internal_transfer) continue
 
     if (row.amount_in > 0 && report.lineCode && statement.in[report.lineCode]) {
       statement.in[report.lineCode].amount += row.amount_in
@@ -310,30 +426,28 @@ function buildStatement(rows) {
     }
   }
 
+  const economicRows = classifiedRows.filter((row) => !row.is_internal_transfer)
   const rowsByBucket = {
-    istituzionale: classifiedRows.filter(
-      (row) => row.report_bucket === 'istituzionale'
-    ),
-    commerciale: classifiedRows.filter(
-      (row) => row.report_bucket === 'commerciale'
-    ),
-    supportoGenerale: classifiedRows.filter(
-      (row) => row.report_bucket === 'supporto_generale'
-    ),
-    nonClassificate: classifiedRows.filter(
-      (row) => row.report_bucket === 'non_classificate'
-    ),
+    istituzionale: economicRows.filter((row) => row.report_bucket === 'istituzionale'),
+    commerciale: economicRows.filter((row) => row.report_bucket === 'commerciale'),
+    finanziaria: economicRows.filter((row) => row.report_bucket === 'finanziaria'),
+    supportoGenerale: economicRows.filter((row) => row.report_bucket === 'supporto_generale'),
+    nonClassificate: economicRows.filter((row) => row.report_bucket === 'non_classificate'),
+    trasferimenti: classifiedRows.filter((row) => row.report_bucket === 'trasferimenti'),
   }
 
   return {
     rows: classifiedRows,
+    economicRows,
     rowsByBucket,
     summary: {
       istituzionale: summarizeRows(rowsByBucket.istituzionale),
       commerciale: summarizeRows(rowsByBucket.commerciale),
+      finanziaria: summarizeRows(rowsByBucket.finanziaria),
       supportoGenerale: summarizeRows(rowsByBucket.supportoGenerale),
       nonClassificate: summarizeRows(rowsByBucket.nonClassificate),
-      totale: summarizeRows(classifiedRows),
+      trasferimenti: summarizeRows(rowsByBucket.trasferimenti),
+      totale: summarizeRows(economicRows),
     },
     statement: {
       out: LINE_DEFINITIONS.out.map((line) => ({
@@ -350,11 +464,43 @@ function buildStatement(rows) {
   }
 }
 
+async function fetchAccountClassificationMap() {
+  const { data, error } = await supabase
+    .from('lookup_options')
+    .select('user_id, value, report_area, report_bucket, report_row_code, report_row_label, is_active')
+    .eq('section_key', 'contabilita')
+    .eq('list_key', 'conti_rendiconto')
+    .eq('is_active', true)
+
+  if (error) {
+    // Manteniamo il rendiconto operativo anche se la migrazione lookup non è stata
+    // ancora applicata: in quel caso entra in gioco la classificazione di fallback.
+    console.warn('Classificazione conti non disponibile:', error.message)
+    return new Map()
+  }
+
+  const classifications = new Map()
+
+  for (const item of data || []) {
+    const code = normalizeAccountCode(item.value)
+    if (!code) continue
+
+    const existing = classifications.get(code)
+    // Le configurazioni globali (user_id nullo) hanno precedenza sulle vecchie
+    // copie per utente create dalle migrazioni iniziali.
+    if (!existing || (existing.user_id && !item.user_id)) {
+      classifications.set(code, item)
+    }
+  }
+
+  return classifications
+}
+
 async function fetchEntriesPageSet({
   fromDate,
   toDate,
   select,
-  fallbackDateOnly = false,
+  useTimestampFallback = false,
 }) {
   const pageSize = 1000
   let from = 0
@@ -364,20 +510,22 @@ async function fetchEntriesPageSet({
     let query = supabase
       .from('entries')
       .select(select)
-      .order(fallbackDateOnly ? 'date' : 'operation_datetime', {
+      .order(useTimestampFallback ? 'operation_datetime' : 'date', {
         ascending: false,
         nullsFirst: false,
       })
       .order('id_key', { ascending: false })
       .range(from, from + pageSize - 1)
 
-    if (fallbackDateOnly) {
-      query = query.is('operation_datetime', null)
-      if (fromDate) query = query.gte('date', fromDate)
-      if (toDate) query = query.lte('date', toDate)
-    } else {
+    if (useTimestampFallback) {
+      // Solo record legacy senza data contabile. Gli altri vengono filtrati sul
+      // campo date, che evita slittamenti di un giorno dovuti al fuso orario.
+      query = query.is('date', null)
       if (fromDate) query = query.gte('operation_datetime', `${fromDate}T00:00:00`)
       if (toDate) query = query.lte('operation_datetime', `${toDate}T23:59:59`)
+    } else {
+      if (fromDate) query = query.gte('date', fromDate)
+      if (toDate) query = query.lte('date', toDate)
     }
 
     const { data, error } = await query
@@ -415,17 +563,15 @@ async function fetchAllEntriesPaged({
     id_key
   `,
 }) {
-  // Con un intervallo selezionato eseguiamo due query indicizzabili:
-  // 1) righe moderne filtrate su operation_datetime;
-  // 2) sole righe storiche con operation_datetime nullo, filtrate su date.
-  // È più rapido e più affidabile di scaricare l'intera tabella nel browser.
+  // Il campo date è la data contabile e quindi la fonte primaria del periodo.
+  // operation_datetime viene usato solo per vecchie righe prive di date.
   if (fromDate || toDate) {
-    const [timestampRows, fallbackRows] = await Promise.all([
+    const [datedRows, legacyTimestampRows] = await Promise.all([
       fetchEntriesPageSet({ fromDate, toDate, select }),
-      fetchEntriesPageSet({ fromDate, toDate, select, fallbackDateOnly: true }),
+      fetchEntriesPageSet({ fromDate, toDate, select, useTimestampFallback: true }),
     ])
 
-    return [...timestampRows, ...fallbackRows]
+    return [...datedRows, ...legacyTimestampRows]
   }
 
   return fetchEntriesPageSet({ select })
@@ -498,10 +644,17 @@ export async function fetchRendicontoGestionale({
   periodicity = 'quarterly',
 }) {
   // Una sola lettura del periodo alimenta rendiconto, IVA e saldi per metodo.
-  // Prima questa pagina effettuava più scansioni complete della tabella entries.
-  const currentRows = await fetchAllEntriesPaged({ fromDate, toDate })
-  const current = buildStatement(currentRows)
-  const ivaSummary = buildIvaSummaryFromRows(currentRows, { fromDate, toDate })
+  const [currentRows, accountClassifications] = await Promise.all([
+    fetchAllEntriesPaged({ fromDate, toDate }),
+    fetchAccountClassificationMap(),
+  ])
+
+  const current = buildStatement(currentRows, accountClassifications)
+  const ivaSummary = buildIvaSummaryFromRows(currentRows, {
+    fromDate,
+    toDate,
+    accountClassifications,
+  })
   const ivaScadenziario = buildIvaScadenziarioFromSummary({
     iva: ivaSummary,
     fromDate,
@@ -509,22 +662,23 @@ export async function fetchRendicontoGestionale({
     periodicity,
   })
 
+  // I trasferimenti interni devono incidere sul singolo conto cassa/banca,
+  // mantenendo invariata la liquidità totale e il risultato economico.
   const cashBalance = sumBalanceByMethod(currentRows, (method) => {
-    return normalizeMethod(method) === 'contanti'
+    return isCashMethod(method)
   })
   const bankBalance = sumBalanceByMethod(currentRows, (method) => {
-    return normalizeMethod(method) !== 'contanti'
+    return !isCashMethod(method)
   })
-  const periodBalance = current.summary.totale.saldo
-
   return {
     rows: current.rows,
+    economicRows: current.economicRows,
     summary: current.summary,
     statement: current.statement,
     comparison: null,
     financialPosition: {
       current: {
-        total: periodBalance,
+        total: cashBalance + bankBalance,
         cashBalance,
         bankBalance,
         portfolioBalance: 0,
@@ -534,7 +688,7 @@ export async function fetchRendicontoGestionale({
     methodSummary: {
       cashBalance,
       bankBalance,
-      total: periodBalance,
+      total: cashBalance + bankBalance,
     },
     ivaSummary,
     ivaScadenziario,
@@ -542,7 +696,7 @@ export async function fetchRendicontoGestionale({
       fromDate,
       toDate,
       criteriaNote:
-        'Saldo del periodo calcolato come entrate meno uscite. Rendiconto e IVA sono generati da una singola lettura dei movimenti selezionati.',
+        'Il rendiconto usa la classificazione configurata nei Conti. I trasferimenti tra cassa e banca sono esclusi da entrate e uscite ma aggiornano i saldi dei due conti.',
     },
   }
 }
@@ -563,10 +717,10 @@ export async function fetchFinancialPosition({
   })
 
   const cashMovement = sumBalanceByMethod(sourceRows, (method) => {
-    return normalizeMethod(method) === 'contanti'
+    return isCashMethod(method)
   })
   const bankMovement = sumBalanceByMethod(sourceRows, (method) => {
-    return normalizeMethod(method) !== 'contanti'
+    return !isCashMethod(method)
   })
   const cashBalance = normalizeNumber(openingCashBalance) + cashMovement
   const bankBalance = normalizeNumber(openingBankBalance) + bankMovement
@@ -718,11 +872,11 @@ function classifyCommercialIncomeType(row) {
   return { key: 'altre_entrate_commerciali', label: 'Altre entrate commerciali' }
 }
 
-function isCommercialIncomeRow(row) {
+function isCommercialIncomeRow(row, accountClassifications = new Map()) {
   const amountIn = normalizeNumber(row.amount_in)
   if (amountIn <= 0) return false
 
-  const report = classifyReportEntry(row)
+  const report = classifyReportEntry(row, accountClassifications)
 
   // IMPORTANTE:
   // Per evitare differenze tra Rendiconto gestionale e PDF IVA,
@@ -946,12 +1100,12 @@ function cleanupIvaAggregate(target) {
   return target
 }
 
-function buildIvaSummaryFromRows(rows, { fromDate, toDate } = {}) {
+function buildIvaSummaryFromRows(rows, { fromDate, toDate, accountClassifications = new Map() } = {}) {
   const rowsInPeriod = (rows || [])
     .filter((row) => isDateInSelectedRange(getIvaReferenceDate(row), fromDate, toDate))
     .map(normalizeIvaReportRow)
 
-  const commercialRows = rowsInPeriod.filter(isCommercialIncomeRow)
+  const commercialRows = rowsInPeriod.filter((row) => isCommercialIncomeRow(row, accountClassifications))
   const creditRows = rowsInPeriod.filter((row) => {
     return normalizeText(row.vat_side) === 'credito' && normalizeNumber(row.vat_amount) > 0
   })
@@ -1082,8 +1236,11 @@ function buildIvaScadenziarioFromSummary({
 }
 
 export async function fetchIvaSummary({ fromDate, toDate }) {
-  const rows = await fetchIvaCandidateRowsPaged({ fromDate, toDate })
-  return buildIvaSummaryFromRows(rows, { fromDate, toDate })
+  const [rows, accountClassifications] = await Promise.all([
+    fetchIvaCandidateRowsPaged({ fromDate, toDate }),
+    fetchAccountClassificationMap(),
+  ])
+  return buildIvaSummaryFromRows(rows, { fromDate, toDate, accountClassifications })
 }
 
 export async function fetchIvaScadenziario({

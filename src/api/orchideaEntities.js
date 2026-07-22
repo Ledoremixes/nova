@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { orchideaSupabase } from './orchideaSupabase'
 import { fetchTesserati, updateTesserato } from './tesserati'
+import { summarizeMonthlyTuitionPayments } from '../lib/paymentLedger'
 
 function text(value) {
   return String(value ?? '').trim()
@@ -556,31 +557,6 @@ export async function fetchStudentPackageDetails(studentId) {
   return { enrollments: res.data || [] }
 }
 
-function monthNameToNumber(value) {
-  const months = {
-    gennaio: '01', febbraio: '02', marzo: '03', aprile: '04', maggio: '05', giugno: '06',
-    luglio: '07', agosto: '08', settembre: '09', ottobre: '10', novembre: '11', dicembre: '12',
-  }
-  return months[lower(value)] || ''
-}
-
-function paymentMatchesMonth(row, selectedMonth) {
-  const periodo = text(row.periodo || row.mese || row.scadenza || row.data_pagamento || row.pagato_il)
-  if (!periodo) return false
-  if (periodo.slice(0, 7) === selectedMonth) return true
-
-  const monthNameMatch = lower(periodo).match(/(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)\s+(\d{4})/)
-  if (monthNameMatch) {
-    return `${monthNameMatch[2]}-${monthNameToNumber(monthNameMatch[1])}` === selectedMonth
-  }
-
-  const date = new Date(periodo)
-  if (!Number.isNaN(date.getTime())) {
-    return date.toISOString().slice(0, 7) === selectedMonth
-  }
-  return false
-}
-
 function teacherPaymentConfig(row = {}) {
   const paymentType = row.payment_type || row.tipo_compenso || row.pagamento_tipo || row.metodo_compenso || row.compenso_tipo || 'percentuale'
   const fixed = row.fixed_monthly_compensation ?? row.compenso_fisso_mensile ?? row.compenso_default_mensile ?? row.compenso_fisso ?? row.quota_fissa_mensile ?? null
@@ -669,20 +645,8 @@ export async function fetchTeacherMonthlyPayouts({ month = '' } = {}) {
     throw new Error(enrollmentsRes.error.message || 'Errore caricamento compensi insegnanti.')
   }
 
-  const paidByStudent = new Map()
-  if (!paymentsRes.error) {
-    ;(paymentsRes.data || []).forEach((payment) => {
-      const state = lower(payment.stato || payment.status)
-      if (!['pagato', 'paid', 'coperto'].includes(state)) return
-      if (!paymentMatchesMonth(payment, selectedMonth)) return
-      const studentId = text(payment.tesseramento_id || payment.allievo_id || payment.student_id)
-      if (!studentId) return
-      paidByStudent.set(studentId, (paidByStudent.get(studentId) || 0) + Number(payment.importo || payment.amount || 0))
-    })
-  }
-
   const courseById = new Map((courses || []).map((course) => [String(course.id), course]))
-  const activeRows = (enrollmentsRes.data || []).filter((row) => {
+  const enrollmentRows = (enrollmentsRes.data || []).filter((row) => {
     const state = lower(row.stato || '')
     if (['annullato', 'rimosso', 'cancellato', 'inactive', 'non_attivo'].includes(state)) return false
     if (row.rinnovo_attivo === false) return false
@@ -690,7 +654,7 @@ export async function fetchTeacherMonthlyPayouts({ month = '' } = {}) {
     const end = row.data_fine || null
     if (start && String(start).slice(0, 10) > monthEnd) return false
     if (end && String(end).slice(0, 10) < monthStart) return false
-    return paidByStudent.has(String(row.tesseramento_id || ''))
+    return true
   }).map((row) => ({
     ...row,
     course: courseById.get(String(row.corso_id)) || null,
@@ -698,12 +662,52 @@ export async function fetchTeacherMonthlyPayouts({ month = '' } = {}) {
     student_quota: Math.max(0, Number(row.quota_allievo_mensile ?? row.tariffa_mensile ?? courseById.get(String(row.corso_id))?.prezzo_mensile ?? 0)),
   }))
 
+  const dueByStudent = new Map()
+  enrollmentRows.forEach((row) => {
+    const studentId = String(row.tesseramento_id || '')
+    if (!studentId) return
+    dueByStudent.set(studentId, (dueByStudent.get(studentId) || 0) + row.student_quota)
+  })
+
+  const paymentsByStudent = new Map()
+  if (!paymentsRes.error) {
+    ;(paymentsRes.data || []).forEach((payment) => {
+      const studentId = text(payment.tesseramento_id || payment.allievo_id || payment.student_id)
+      if (!studentId) return
+      if (!paymentsByStudent.has(studentId)) paymentsByStudent.set(studentId, [])
+      paymentsByStudent.get(studentId).push(payment)
+    })
+  }
+
+  const ledgerByStudent = new Map()
+  dueByStudent.forEach((totalDue, studentId) => {
+    ledgerByStudent.set(studentId, summarizeMonthlyTuitionPayments({
+      payments: paymentsByStudent.get(studentId) || [],
+      selectedMonth,
+      totalDue,
+    }))
+  })
+
+  // Per i compensi percentuali consideriamo solo l'importo realmente incassato.
+  // Un pagamento parziale viene distribuito proporzionalmente sui corsi dell'allievo.
+  const activeRows = enrollmentRows.map((row) => {
+    const studentId = String(row.tesseramento_id || '')
+    const ledger = ledgerByStudent.get(studentId) || { paid: 0 }
+    const totalDue = dueByStudent.get(studentId) || 0
+    const paidRatio = totalDue > 0 ? Math.min(ledger.paid / totalDue, 1) : 0
+    return {
+      ...row,
+      paid_student_quota: row.student_quota * paidRatio,
+      paid_ratio: paidRatio,
+    }
+  }).filter((row) => row.paid_student_quota > 0)
+
   const payouts = (teachers || []).map((teacher) => {
     const config = teacherPaymentConfig(teacher || {})
     const assignedCourses = (courses || []).filter((course) => (course.teachers || []).some((item) => lower(item.full_name) === lower(teacher.full_name) || String(item.id) === String(teacher.id)))
     const assignedCourseIds = new Set(assignedCourses.map((course) => String(course.id)))
     const rows = activeRows.filter((row) => assignedCourseIds.has(String(row.corso_id)))
-    const paidTotal = rows.reduce((sum, row) => sum + row.student_quota, 0)
+    const paidTotal = rows.reduce((sum, row) => sum + row.paid_student_quota, 0)
     const studentsCount = new Set(rows.map((row) => row.tesseramento_id)).size
     const paidCourseIds = [...new Set(rows.map((row) => String(row.corso_id)))]
 
@@ -744,14 +748,14 @@ export async function fetchTeacherMonthlyPayouts({ month = '' } = {}) {
     } else {
       const percent = Number(config.percent || 0)
       detailRows = rows.map((row) => {
-        const teacherQuota = row.student_quota * percent / 100
+        const teacherQuota = row.paid_student_quota * percent / 100
         total += teacherQuota
         return {
           enrollment_id: `${teacher.id}-${row.id}`,
           course_name: row.course?.nome || 'Corso',
           course_level: row.course?.livello || '',
           student_name: row.student_name,
-          student_quota: row.student_quota,
+          student_quota: row.paid_student_quota,
           teacher_quota: teacherQuota,
           percentuale_insegnante: percent,
           method: `${percent}% su quota pagata`,

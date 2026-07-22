@@ -28,6 +28,20 @@ function cleanText(value) {
   return String(value ?? '').trim()
 }
 
+function isInternalTransferEntry(row) {
+  const nature = cleanText(row?.nature).toLowerCase()
+  const source = cleanText(row?.source).toLowerCase()
+  const accountCode = cleanText(row?.account_code).toUpperCase()
+  const note = cleanText(row?.note).toLowerCase()
+
+  return (
+    nature === 'trasferimento' ||
+    source === 'trasferimento interno' ||
+    accountCode === 'GIRO' ||
+    note.includes('nova-transfer:')
+  )
+}
+
 function entryMutationError(error, fallback) {
   const message = String(error?.message || '')
 
@@ -285,6 +299,96 @@ export async function createEntriesBatch(rows) {
   return data || []
 }
 
+
+function makeInternalTransferId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function operationDatetimeForAccountingDate(date) {
+  if (!date) return null
+
+  // Mezzogiorno evita che la conversione UTC sposti il movimento al giorno prima.
+  return new Date(`${date}T12:00:00`).toISOString()
+}
+
+export async function createCashToBankTransfer({
+  date,
+  amount,
+  note = '',
+}) {
+  const normalizedAmount = Number(amount)
+
+  if (!date) throw new Error('Seleziona la data del versamento.')
+  if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+    throw new Error('Inserisci un importo di versamento maggiore di zero.')
+  }
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError) throw userError
+  if (!user) throw new Error('Utente non autenticato')
+
+  const transferId = makeInternalTransferId()
+  const transferNote = [
+    `NOVA-TRANSFER:${transferId}`,
+    'Trasferimento interno cassa → banca',
+    String(note || '').trim(),
+  ].filter(Boolean).join(' · ')
+
+  const common = {
+    user_id: user.id,
+    date,
+    operation_datetime: operationDatetimeForAccountingDate(date),
+    account_code: 'B',
+    center: 'Tesoreria',
+    note: transferNote,
+    source: 'Trasferimento interno',
+    nature: 'trasferimento',
+    vat_rate: 0,
+    vat_amount: 0,
+    vat_side: null,
+  }
+
+  // L'inserimento dell'array è una singola operazione SQL: le due gambe del
+  // trasferimento vengono create insieme oppure non viene creato nulla.
+  const rows = [
+    {
+      ...common,
+      description: 'Versamento contanti dalla cassa alla banca',
+      amount_in: 0,
+      amount_out: normalizedAmount,
+      method: 'Contanti',
+      entry_key: `transfer:${transferId}:cash-out`,
+    },
+    {
+      ...common,
+      description: 'Accredito versamento contanti sul conto bancario',
+      amount_in: normalizedAmount,
+      amount_out: 0,
+      method: 'Banca',
+      entry_key: `transfer:${transferId}:bank-in`,
+    },
+  ]
+
+  const { data, error } = await supabase
+    .from('entries')
+    .insert(rows)
+    .select('id,id_key,date,amount_in,amount_out,method,note')
+
+  if (error) {
+    throw entryMutationError(error, 'Errore registrazione versamento cassa-banca')
+  }
+
+  return data || []
+}
+
 export function euro(value) {
   return new Intl.NumberFormat('it-IT', {
     style: 'currency',
@@ -301,9 +405,13 @@ export function normalizeNumberInput(value) {
 }
 
 export async function fetchEntriesFilteredTotals(filters) {
-  const rows = await fetchAllFilteredRows(filters, 'amount_in,amount_out')
+  const rows = await fetchAllFilteredRows(
+    filters,
+    'amount_in,amount_out,nature,source,account_code,note'
+  )
+  const economicRows = rows.filter((row) => !isInternalTransferEntry(row))
 
-  const totals = rows.reduce(
+  const totals = economicRows.reduce(
     (acc, row) => {
       const amountIn = Number(row.amount_in || 0)
       const amountOut = Number(row.amount_out || 0)
@@ -323,6 +431,7 @@ export async function fetchEntriesFilteredTotals(filters) {
   )
 
   totals.saldo = totals.total_in - totals.total_out
+  totals.transfer_rows = rows.length - economicRows.length
 
   return totals
 }

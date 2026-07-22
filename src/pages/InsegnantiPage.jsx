@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpenCheck, Clock3, Euro, GraduationCap, Link2, Pencil, Search, Trash2, X } from 'lucide-react'
+import { BookOpenCheck, Clock3, Euro, GraduationCap, Link2, Mail, Pencil, Phone, Search, Trash2, X } from 'lucide-react'
 import { useAuth } from '../context/AuthProvider'
 import {
   assignCourseToTeacher,
@@ -116,8 +116,8 @@ export default function InsegnantiPage() {
   })
 
   const teachers = teachersQuery.data || []
-  const courses = coursesQuery.data || []
-  const payouts = payoutsQuery.data || []
+  const courses = useMemo(() => coursesQuery.data || [], [coursesQuery.data])
+  const payouts = useMemo(() => payoutsQuery.data || [], [payoutsQuery.data])
   const payoutsByName = useMemo(() => new Map(payouts.map((item) => [norm(item.teacher_name), item])), [payouts])
   const totalPayouts = payouts.reduce((sum, item) => sum + Number(item.total || 0), 0)
 
@@ -225,32 +225,42 @@ export default function InsegnantiPage() {
               <article className="page-card teacher-profile-card" key={`${row._table}-${row.id}`}>
                 <div className="teacher-profile-head">
                   {row.photo_url ? <img className="teacherAvatar teacherAvatar--large" src={row.photo_url} alt={row.full_name} /> : <div className="teacherAvatar teacherAvatar--large teacherAvatar--placeholder">{initials(row.full_name)}</div>}
-                  <div>
-                    <h3>{row.full_name}</h3>
-                    <p>{row.bio || 'Nessuna bio inserita.'}</p>
-                    <div className="teacher-pill-row">
+                  <div className="teacher-profile-identity">
+                    <div className="teacher-name-row">
+                      <h3>{row.full_name}</h3>
                       <span className={row.active !== false ? 'nova-pill nova-pill--ok' : 'nova-pill nova-pill--neutral'}>{row.active !== false ? 'Attivo' : 'Non attivo'}</span>
-                      <span className="nova-pill nova-pill--neutral">{teacherPaymentSummary(row)}</span>
                     </div>
+                    <p>{row.bio || 'Nessuna bio inserita.'}</p>
                   </div>
                 </div>
+
+                <div className="teacher-compensation-rule">
+                  <span>Regola compenso</span>
+                  <strong>{teacherPaymentSummary(row)}</strong>
+                </div>
+
                 <div className="teacher-payout-card-inline">
                   <Euro size={18} />
                   <div><span>Da pagare nel mese</span><strong>{money(payout.total)}</strong><small>{payout.students_count || 0} allievi paganti · {assigned.length || 0} corsi assegnati</small></div>
                 </div>
-                <div className="teacher-info-grid teacher-info-grid--fixed">
-                  <span><strong>Email</strong><em>{row.email || '—'}</em></span>
-                  <span><strong>Telefono</strong><em>{row.phone || '—'}</em></span>
-                  <span><strong>Corsi assegnati</strong><em>{assigned.length}</em></span>
+
+                <div className="teacher-contact-grid">
+                  <div><Mail size={16} /><span><strong>Email</strong><em>{row.email || 'Non indicata'}</em></span></div>
+                  <div><Phone size={16} /><span><strong>Telefono</strong><em>{row.phone || 'Non indicato'}</em></span></div>
                 </div>
-                <div className="tagWrap">
-                  {assigned.length ? assigned.slice(0, 5).map((course) => <span className="status-badge" key={course.id}>{course.nome}</span>) : <span className="simple-list__meta">Nessun corso assegnato</span>}
-                  {assigned.length > 5 ? <span className="simple-list__meta">+{assigned.length - 5} altri</span> : null}
+
+                <div className="teacher-courses-preview">
+                  <div className="teacher-courses-preview__head"><span>Corsi assegnati</span><strong>{assigned.length}</strong></div>
+                  <div className="tagWrap">
+                    {assigned.length ? assigned.slice(0, 4).map((course) => <span className="status-badge" key={course.id}>{course.nome}</span>) : <span className="simple-list__meta">Nessun corso assegnato</span>}
+                    {assigned.length > 4 ? <span className="teacher-more-courses">+{assigned.length - 4} altri</span> : null}
+                  </div>
                 </div>
-                <div className="rowActions">
-                  <button className="actionBtn" onClick={() => { setSelectedTeacher(row); setCourseToAssign('') }}><GraduationCap size={15} /> Scheda</button>
+
+                <div className="rowActions teacher-card-actions">
+                  <button className="actionBtn actionBtn--primary" onClick={() => { setSelectedTeacher(row); setCourseToAssign('') }}><GraduationCap size={15} /> Apri scheda</button>
                   {isAdmin ? <button className="actionBtn" onClick={() => openEdit(row)}><Pencil size={15} /> Modifica</button> : null}
-                  {isAdmin ? <button className="actionBtn actionBtn--danger" onClick={() => remove(row)}><Trash2 size={15} /> Elimina</button> : null}
+                  {isAdmin ? <button className="actionBtn actionBtn--danger" onClick={() => remove(row)}><Trash2 size={15} /></button> : null}
                 </div>
               </article>
             )

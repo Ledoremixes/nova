@@ -1,0 +1,35 @@
+NOVA - MODIFICHE PAGAMENTI E INSEGNANTI (22/07/2026)
+
+1. INSEGNANTI
+- Schede ridisegnate con larghezza minima corretta: niente più quattro colonne troppo strette.
+- Nome, stato, bio, regola compenso, compenso mensile, contatti e corsi ora sono allineati.
+- Email e numeri lunghi vanno a capo senza uscire dai riquadri.
+- Pulsanti sempre allineati in fondo alla scheda.
+
+2. PAGAMENTI - INTERFACCIA
+- Nuovo pannello filtri con mese precedente/successivo, ricerca grande, stato a pulsanti, corso e metodo predefinito.
+- Schede allievo compatte in due colonne su desktop e una colonna su mobile.
+- Bottone Dettagli per aprire la scheda completa come prima.
+- Stati distinti: Da pagare, Parziale, Pagato, Sospeso/chiuso.
+- Un pagamento già coperto non mostra più "Segna pagato": mostra "Pagamento registrato" e "Riapri pagamento".
+- Modale di incasso con importo, metodo, nota e anteprima del saldo dopo il salvataggio.
+
+3. PAGAMENTI - PRECISIONE CONTABILE
+- Per ogni allievo e mese Nova usa un solo record autorevole di tipo quota_mensile.
+- I vecchi record per-corso non vengono più sommati al record mensile Nova.
+- Corretto il caso 70,00 € -> pagato -> riaperto -> residuo errato 28,00 €.
+- Riaprendo il pagamento, l'incassato torna esattamente a 0,00 € e il residuo torna alla quota corrente.
+- Se viene aggiunto un corso dopo il pagamento, il saldo diventa Parziale e mostra solo la differenza da incassare.
+- Le eccedenze generate da vecchi duplicati vengono ignorate nel saldo operativo e mostrate solo nei dettagli di controllo.
+- La competenza mensile ha priorità sulla data di incasso: una quota di giugno pagata a luglio resta attribuita a giugno.
+
+4. COMPENSI INSEGNANTI
+- I compensi percentuali usano l'importo realmente incassato e non vecchie righe duplicate.
+- I pagamenti parziali vengono ripartiti proporzionalmente sui corsi dell'allievo.
+- Riaprendo una quota, il relativo importo smette immediatamente di concorrere al compenso insegnante.
+
+AVVIO
+1. npm install
+2. npm run dev
+
+Non sono necessarie nuove tabelle o migrazioni SQL.

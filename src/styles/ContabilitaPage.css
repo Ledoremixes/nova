@@ -1280,3 +1280,155 @@
     width: 100%;
   }
 }
+
+/* Precisione contabile e trasferimenti interni */
+.contabilita-banner--success {
+  background: #eaf8f0;
+  color: #12623f;
+  border: 1px solid #bfe8d0;
+}
+
+.contabilita-banner__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+  color: currentColor;
+  cursor: pointer;
+}
+
+.contabilita-banner--financial-help {
+  align-items: flex-start;
+  line-height: 1.55;
+}
+
+.contabilita-link-btn--transfer {
+  border-color: #6d4aff;
+  color: #5b3bd8;
+  background: linear-gradient(135deg, #ffffff, #f7f3ff);
+}
+
+.rendiconto-criteria-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 2px 0 16px;
+  padding: 11px 13px;
+  border: 1px solid #e3dcff;
+  border-radius: 14px;
+  color: #5846a6;
+  background: #faf8ff;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.contabilita-table__warning td {
+  background: #fff9e9;
+}
+
+.financial-modal--transfer {
+  width: min(680px, 100%);
+}
+
+.transfer-balance-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+}
+
+.transfer-balance-grid > div:not(.transfer-balance-grid__arrow) {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 16px;
+  border: 1px solid #e4e8f1;
+  border-radius: 17px;
+  background: linear-gradient(180deg, #ffffff, #fafbff);
+}
+
+.transfer-balance-grid span,
+.transfer-preview span {
+  color: #6b768d;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.transfer-balance-grid strong,
+.transfer-preview strong {
+  color: #17233c;
+  font-size: 23px;
+  line-height: 1.1;
+}
+
+.transfer-balance-grid small,
+.transfer-preview small {
+  color: #8791a5;
+  font-size: 11px;
+}
+
+.transfer-balance-grid__arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6d4aff;
+}
+
+.transfer-preview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.transfer-preview > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 13px 14px;
+  border-radius: 15px;
+  background: #f4f6fb;
+}
+
+.transfer-preview strong.is-negative {
+  color: #b42318;
+}
+
+.transfer-info-banner {
+  padding: 12px 13px;
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .transfer-balance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .transfer-balance-grid__arrow {
+    transform: rotate(90deg);
+    min-height: 24px;
+  }
+
+  .transfer-preview {
+    grid-template-columns: 1fr;
+  }
+}
+
+.financial-position-readout {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 16px;
+  padding: 13px 14px;
+  border: 1px solid #dce2ef;
+  border-radius: 15px;
+  color: #556078;
+  background: #f8faff;
+  font-size: 13px;
+  line-height: 1.55;
+}

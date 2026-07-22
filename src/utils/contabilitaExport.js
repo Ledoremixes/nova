@@ -84,7 +84,6 @@ function sectionLabel(code, isIncome) {
     E: isIncome
       ? 'E) Entrate di supporto generale'
       : 'E) Uscite di supporto generale',
-    E: isIncome ? 'E) Entrate di supporto generale' : 'E) Uscite di supporto generale',
     Z: 'Z) Voci da classificare',
   }
 
@@ -453,7 +452,13 @@ export function exportRendicontoExcel({ periodLabel, rendiconto }) {
     ['Uscite istituzionali', Number(rendiconto.summary?.istituzionale?.totalOut || 0)],
     ['Entrate commerciali', Number(rendiconto.summary?.commerciale?.totalIn || 0)],
     ['Uscite commerciali', Number(rendiconto.summary?.commerciale?.totalOut || 0)],
-    ['Supporto generale - uscite', Number(rendiconto.summary?.supportoGenerale?.totalOut || 0)],
+    ['Entrate finanziarie / patrimoniali', Number(rendiconto.summary?.finanziaria?.totalIn || 0)],
+    ['Uscite finanziarie / patrimoniali', Number(rendiconto.summary?.finanziaria?.totalOut || 0)],
+    ['Entrate supporto generale', Number(rendiconto.summary?.supportoGenerale?.totalIn || 0)],
+    ['Uscite supporto generale', Number(rendiconto.summary?.supportoGenerale?.totalOut || 0)],
+    ['Entrate non classificate', Number(rendiconto.summary?.nonClassificate?.totalIn || 0)],
+    ['Uscite non classificate', Number(rendiconto.summary?.nonClassificate?.totalOut || 0)],
+    ['Trasferimenti interni (numero righe)', Number(rendiconto.summary?.trasferimenti?.rowsCount || 0)],
     ['Totale entrate', Number(rendiconto.summary?.totale?.totalIn || 0)],
     ['Totale uscite', Number(rendiconto.summary?.totale?.totalOut || 0)],
     ['Saldo', Number(rendiconto.summary?.totale?.saldo || 0)],
@@ -470,6 +475,8 @@ export function exportRendicontoExcel({ periodLabel, rendiconto }) {
     Natura_origine: row.nature || '',
     Natura_report: row.report_bucket || '',
     Riga_report: row.report_line_code || '',
+    Trasferimento_interno: row.is_internal_transfer ? 'Sì' : 'No',
+    Fonte_classificazione: row.classification_source || '',
     Note: row.note || '',
   }))
 
