@@ -208,28 +208,48 @@ export default function PagamentiPage() {
       </div>
 
       <div className="payments-summary-grid payments-student-summary-grid">
-        <div className="payments-summary-card payments-student-summary-card">
-          <div className="payments-summary-icon"><UserRoundCheck size={20} /></div>
-          <div><span className="payments-summary-label">Allievi/pacchetti</span><strong>{summary.count}</strong><small>nel mese selezionato</small></div>
-        </div>
-        <div className="payments-summary-card payments-student-summary-card payments-student-summary-card--gold">
-          <div className="payments-summary-icon"><Euro size={20} /></div>
-          <div className="payments-summary-main">
-            <span className="payments-summary-label">Da incassare</span>
-            <strong className="payments-summary-amount">{euro(summary.residue)}</strong>
-            <div className="payments-summary-detail">
-              <span className="payments-summary-count">{summary.dueCount}</span>
-              <small>{summary.dueCount === 1 ? 'saldo aperto' : 'saldi aperti'}</small>
+        <div className="payments-summary-card payments-student-summary-card payments-student-summary-card--students">
+          <div className="payments-summary-icon"><UserRoundCheck size={22} /></div>
+          <div className="payments-summary-content">
+            <span className="payments-summary-label">Allievi/pacchetti</span>
+            <strong className="payments-summary-value">{summary.count}</strong>
+            <div className="payments-summary-footer">
+              <small>Nel mese selezionato</small>
             </div>
           </div>
         </div>
-        <div className="payments-summary-card payments-student-summary-card">
-          <div className="payments-summary-icon"><CheckCircle2 size={20} /></div>
-          <div><span className="payments-summary-label">Incassato</span><strong>{euro(summary.paid)}</strong><small>{summary.paidCount} coperti · {summary.partialCount} parziali</small></div>
+
+        <div className="payments-summary-card payments-student-summary-card payments-student-summary-card--due">
+          <div className="payments-summary-icon"><Euro size={22} /></div>
+          <div className="payments-summary-content">
+            <span className="payments-summary-label">Da incassare</span>
+            <strong className="payments-summary-value payments-summary-amount">{euro(summary.residue)}</strong>
+            <div className="payments-summary-footer">
+              <small>{summary.dueCount} {summary.dueCount === 1 ? 'saldo aperto' : 'saldi aperti'}</small>
+            </div>
+          </div>
         </div>
-        <div className="payments-summary-card payments-student-summary-card">
-          <div className="payments-summary-icon"><XCircle size={20} /></div>
-          <div><span className="payments-summary-label">Sospesi/chiusi</span><strong>{summary.pausedCount}</strong><small>fuori dal residuo operativo</small></div>
+
+        <div className="payments-summary-card payments-student-summary-card payments-student-summary-card--paid">
+          <div className="payments-summary-icon"><CheckCircle2 size={22} /></div>
+          <div className="payments-summary-content">
+            <span className="payments-summary-label">Incassato</span>
+            <strong className="payments-summary-value payments-summary-amount">{euro(summary.paid)}</strong>
+            <div className="payments-summary-footer">
+              <small>{summary.paidCount} coperti <span aria-hidden="true">•</span> {summary.partialCount} parziali</small>
+            </div>
+          </div>
+        </div>
+
+        <div className="payments-summary-card payments-student-summary-card payments-student-summary-card--paused">
+          <div className="payments-summary-icon"><XCircle size={22} /></div>
+          <div className="payments-summary-content">
+            <span className="payments-summary-label">Sospesi/chiusi</span>
+            <strong className="payments-summary-value">{summary.pausedCount}</strong>
+            <div className="payments-summary-footer">
+              <small>Fuori dal residuo operativo</small>
+            </div>
+          </div>
         </div>
       </div>
 

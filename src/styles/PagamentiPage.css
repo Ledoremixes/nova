@@ -1764,3 +1764,170 @@
   justify-content: center;
   gap: 7px;
 }
+
+/* --------------------------------------------------------------------------
+   Riepilogo quote allievi - restyling Nova
+   -------------------------------------------------------------------------- */
+.payments-student-summary-grid {
+  gap: 18px;
+  align-items: stretch;
+}
+
+.payments-student-summary-grid .payments-student-summary-card,
+.payments-student-summary-grid .payments-student-summary-card.payments-student-summary-card--gold {
+  position: relative;
+  min-width: 0;
+  min-height: 154px;
+  padding: 22px;
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  align-items: start;
+  gap: 17px;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 95% 5%, rgba(124, 58, 237, 0.075), transparent 35%),
+    rgba(255, 255, 255, 0.96) !important;
+  border: 1px solid rgba(124, 58, 237, 0.13) !important;
+  border-radius: 24px;
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.065);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.payments-student-summary-grid .payments-student-summary-card::after {
+  content: '';
+  position: absolute;
+  inset: auto 22px 0;
+  height: 3px;
+  border-radius: 999px 999px 0 0;
+  background: linear-gradient(90deg, #d11e91 0%, #7c3aed 100%);
+  opacity: 0.72;
+  z-index: -1;
+}
+
+.payments-student-summary-grid .payments-student-summary-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(124, 58, 237, 0.22) !important;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.09);
+}
+
+.payments-student-summary-grid .payments-summary-icon {
+  width: 54px;
+  height: 54px;
+  flex: 0 0 54px;
+  border-radius: 18px;
+  color: #6d28d9;
+  background: linear-gradient(145deg, rgba(124, 58, 237, 0.13), rgba(209, 30, 145, 0.09));
+  border: 1px solid rgba(124, 58, 237, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.payments-summary-content {
+  min-width: 0;
+  min-height: 108px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.payments-student-summary-grid .payments-summary-label {
+  display: block;
+  margin: 1px 0 8px;
+  color: #64748b;
+  font-size: 0.83rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.payments-student-summary-grid .payments-summary-value,
+.payments-student-summary-grid .payments-summary-amount {
+  display: block;
+  max-width: 100%;
+  margin: 0;
+  color: #0f172a;
+  font-size: clamp(1.65rem, 2.15vw, 2rem);
+  font-weight: 900;
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.payments-summary-footer {
+  width: 100%;
+  margin-top: auto;
+  padding-top: 13px;
+  border-top: 1px solid rgba(124, 58, 237, 0.105);
+}
+
+.payments-student-summary-grid .payments-summary-footer small {
+  display: block;
+  margin: 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.payments-student-summary-grid .payments-summary-footer small span {
+  display: inline-block;
+  padding: 0 4px;
+  color: #7c3aed;
+  font-weight: 900;
+}
+
+/* Il vecchio contatore giallo non viene più usato, ma resta neutralizzato
+   per evitare che riappaia da cache o da vecchi componenti. */
+.payments-student-summary-grid .payments-summary-count,
+.payments-student-summary-grid .payments-summary-detail {
+  display: none !important;
+}
+
+@media (max-width: 1280px) {
+  .payments-student-summary-grid .payments-student-summary-card,
+  .payments-student-summary-grid .payments-student-summary-card.payments-student-summary-card--gold {
+    padding: 20px;
+    grid-template-columns: 50px minmax(0, 1fr);
+    gap: 15px;
+  }
+
+  .payments-student-summary-grid .payments-summary-icon {
+    width: 50px;
+    height: 50px;
+    flex-basis: 50px;
+    border-radius: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .payments-student-summary-grid {
+    gap: 14px;
+  }
+
+  .payments-student-summary-grid .payments-student-summary-card,
+  .payments-student-summary-grid .payments-student-summary-card.payments-student-summary-card--gold {
+    min-height: 136px;
+    padding: 19px;
+  }
+}
+
+@media (max-width: 420px) {
+  .payments-student-summary-grid .payments-student-summary-card,
+  .payments-student-summary-grid .payments-student-summary-card.payments-student-summary-card--gold {
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 13px;
+  }
+
+  .payments-student-summary-grid .payments-summary-icon {
+    width: 46px;
+    height: 46px;
+    flex-basis: 46px;
+    border-radius: 15px;
+  }
+
+  .payments-student-summary-grid .payments-summary-value,
+  .payments-student-summary-grid .payments-summary-amount {
+    font-size: 1.55rem;
+  }
+}
