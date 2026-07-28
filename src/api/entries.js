@@ -28,6 +28,15 @@ function cleanText(value) {
   return String(value ?? '').trim()
 }
 
+function normalizeVatRateFilter(value) {
+  const cleaned = cleanText(value).replace('%', '').replace(',', '.')
+
+  if (!cleaned) return null
+
+  const parsed = Number(cleaned)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 function isInternalTransferEntry(row) {
   const nature = cleanText(row?.nature).toLowerCase()
   const source = cleanText(row?.source).toLowerCase()
@@ -63,6 +72,7 @@ function applyEntryFilters(query, filters = {}) {
     onlyWithoutNature = false,
     accountCode = '',
     ivaFilter = '',
+    vatRate = '',
     method = '',
     nature = '',
   } = filters
@@ -99,6 +109,12 @@ function applyEntryFilters(query, filters = {}) {
 
   if (ivaFilter === 'without_vat') {
     query = query.or('vat_rate.is.null,vat_rate.eq.0')
+  }
+
+  const vatRateValue = normalizeVatRateFilter(vatRate)
+
+  if (vatRateValue !== null) {
+    query = query.eq('vat_rate', vatRateValue)
   }
 
   const methodValue = cleanText(method)
@@ -165,6 +181,7 @@ export async function fetchEntries({
   onlyWithoutNature = false,
   accountCode = '',
   ivaFilter = '',
+  vatRate = '',
   method = '',
   nature = '',
   page = 1,
@@ -187,6 +204,7 @@ export async function fetchEntries({
     onlyWithoutNature,
     accountCode,
     ivaFilter,
+    vatRate,
     method,
     nature,
   })
@@ -449,48 +467,47 @@ export async function bulkUpdateEntries({
     return { updated_rows: 0 }
   }
 
-  const chunks = chunkArray(targetIds, 500)
+  // La RPC storica usa NULL come valore "non modificare il campo".
+  // Questo impediva di azzerare davvero IVA, natura, conto o altri campi
+  // quando la modifica veniva applicata a tutta la ricerca.
+  // Aggiorniamo quindi direttamente le righe già individuate: in questo modo
+  // NULL viene salvato come valore reale e la rimozione dell'IVA funziona.
+  const cleanUpdates = { ...updates }
+
+  delete cleanUpdates.id
+  delete cleanUpdates.entry_key
+  delete cleanUpdates.id_key
+  delete cleanUpdates.import_group_key
+  delete cleanUpdates.import_occurrence
+  delete cleanUpdates.import_batch_id
+
+  Object.keys(cleanUpdates).forEach((key) => {
+    if (cleanUpdates[key] === undefined) {
+      delete cleanUpdates[key]
+    }
+  })
+
+  if (!Object.keys(cleanUpdates).length) {
+    return { updated_rows: 0 }
+  }
+
+  // Con .in(...) gli ID passano nella query string: blocchi contenuti evitano
+  // limiti di lunghezza su browser, Vercel e PostgREST.
+  const chunks = chunkArray(targetIds, 100)
   let updatedRows = 0
 
   for (const chunk of chunks) {
-    const { data, error } = await supabase.rpc('entries_bulk_update_filtered', {
-      // Passiamo sempre gli ID esatti da aggiornare.
-      // Così la modifica massiva rispetta anche Metodo e ricerca descrizione,
-      // senza dover modificare la funzione SQL su Supabase.
-      p_ids: chunk,
-
-      // Filtri neutralizzati: gli ID sono già stati calcolati sopra.
-      p_search: null,
-      p_from_date: null,
-      p_from_time: null,
-      p_to_date: null,
-      p_to_time: null,
-      p_only_without_account: false,
-      p_only_without_nature: false,
-      p_account_code: null,
-      p_iva_filter: null,
-
-      p_set_date: updates.date ?? null,
-      p_set_operation_datetime: updates.operation_datetime ?? null,
-      p_set_description: updates.description ?? null,
-      p_set_amount_in: updates.amount_in ?? null,
-      p_set_amount_out: updates.amount_out ?? null,
-      p_set_account_code: updates.account_code ?? null,
-      p_set_nature: updates.nature ?? null,
-      p_set_method: updates.method ?? null,
-      p_set_center: updates.center ?? null,
-      p_set_note: updates.note ?? null,
-      p_set_vat_rate: updates.vat_rate ?? null,
-      p_set_vat_amount: updates.vat_amount ?? null,
-      p_set_vat_side: updates.vat_side ?? null,
-      p_set_source: updates.source ?? null,
-    })
+    const { data, error } = await supabase
+      .from('entries')
+      .update(cleanUpdates)
+      .in('id', chunk)
+      .select('id')
 
     if (error) {
       throw entryMutationError(error, 'Errore modifica massiva movimenti')
     }
 
-    updatedRows += Number(data?.[0]?.updated_rows || 0)
+    updatedRows += data?.length || 0
   }
 
   return { updated_rows: updatedRows }

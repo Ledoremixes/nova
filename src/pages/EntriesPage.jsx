@@ -255,6 +255,7 @@ export default function EntriesPage() {
   const [onlyWithoutNatureDraft, setOnlyWithoutNatureDraft] = useState(false)
   const [accountCodeDraft, setAccountCodeDraft] = useState('')
   const [ivaFilterDraft, setIvaFilterDraft] = useState('')
+  const [vatRateDraft, setVatRateDraft] = useState('')
   const [methodDraft, setMethodDraft] = useState('')
   const [natureDraft, setNatureDraft] = useState('')
   const [applyScope, setApplyScope] = useState('single')
@@ -269,6 +270,7 @@ export default function EntriesPage() {
     onlyWithoutNature: false,
     accountCode: '',
     ivaFilter: '',
+    vatRate: '',
     method: '',
     nature: '',
   })
@@ -441,6 +443,7 @@ export default function EntriesPage() {
       onlyWithoutNature: onlyWithoutNatureDraft,
       accountCode: onlyWithoutAccountDraft ? '' : accountCodeDraft,
       ivaFilter: ivaFilterDraft,
+      vatRate: vatRateDraft,
       method: methodDraft,
       nature: onlyWithoutNatureDraft ? '' : natureDraft,
     })
@@ -456,6 +459,7 @@ export default function EntriesPage() {
     setOnlyWithoutNatureDraft(false)
     setAccountCodeDraft('')
     setIvaFilterDraft('')
+    setVatRateDraft('')
     setMethodDraft('')
     setNatureDraft('')
     setPage(1)
@@ -470,6 +474,7 @@ export default function EntriesPage() {
       onlyWithoutNature: false,
       accountCode: '',
       ivaFilter: '',
+      vatRate: '',
       method: '',
       nature: '',
     })
@@ -477,7 +482,19 @@ export default function EntriesPage() {
 
   function onChange(e) {
     const { name, value } = e.target
-    setForm((prev) => ({ ...prev, [name]: value }))
+
+    setForm((prev) => {
+      if (name === 'vat_mode' && value === 'none') {
+        return {
+          ...prev,
+          vat_mode: 'none',
+          vat_rate: '',
+          vat_amount: '',
+        }
+      }
+
+      return { ...prev, [name]: value }
+    })
   }
 
   function clearAmounts() {
@@ -831,11 +848,44 @@ export default function EntriesPage() {
 
           <div className="entries-field">
             <label>IVA</label>
-            <select value={ivaFilterDraft} onChange={(e) => setIvaFilterDraft(e.target.value)}>
+            <select
+              value={ivaFilterDraft}
+              onChange={(e) => {
+                const value = e.target.value
+                setIvaFilterDraft(value)
+
+                if (value === 'without_vat') {
+                  setVatRateDraft('')
+                }
+              }}
+            >
               <option value="">Tutte</option>
               <option value="with_vat">Solo con IVA</option>
               <option value="without_vat">Solo senza IVA</option>
             </select>
+          </div>
+
+          <div className="entries-field">
+            <label>Aliquota IVA %</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="Es. 22"
+              value={vatRateDraft}
+              disabled={ivaFilterDraft === 'without_vat'}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^0-9.,]/g, '')
+                const numericValue = Number(value.replace(',', '.'))
+
+                setVatRateDraft(value)
+
+                if (value && Number.isFinite(numericValue) && numericValue > 0) {
+                  setIvaFilterDraft('with_vat')
+                } else if (value && numericValue === 0) {
+                  setIvaFilterDraft('')
+                }
+              }}
+            />
           </div>
 
           <div className="entries-field">
@@ -1207,7 +1257,12 @@ export default function EntriesPage() {
                 <div className="entry-modal-grid entry-modal-grid--2">
                   <div className="entry-modal-field">
                     <label>Aliquota IVA %</label>
-                    <select name="vat_rate" value={form.vat_rate} onChange={onChange}>
+                    <select
+                      name="vat_rate"
+                      value={form.vat_rate}
+                      onChange={onChange}
+                      disabled={form.vat_mode === 'none'}
+                    >
                       <option value="">Seleziona aliquota</option>
                       {VAT_RATE_OPTIONS.map((v) => (
                         <option key={v} value={v}>
@@ -1219,7 +1274,13 @@ export default function EntriesPage() {
 
                   <div className="entry-modal-field">
                     <label>Importo IVA</label>
-                    <input name="vat_amount" placeholder="0,00" value={form.vat_amount} onChange={onChange} />
+                    <input
+                      name="vat_amount"
+                      placeholder="0,00"
+                      value={form.vat_amount}
+                      onChange={onChange}
+                      disabled={form.vat_mode === 'none'}
+                    />
                   </div>
                 </div>
               </div>

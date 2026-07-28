@@ -1,0 +1,14 @@
+FIX IVA MASSIVA - 28/07/2026
+
+Problema corretto
+- La funzione SQL usata per le modifiche massive interpretava NULL come "non modificare".
+- Quando si sceglieva "Nessuna IVA", Nova inviava vat_rate, vat_amount e vat_side a NULL.
+- La singola voce veniva corretta, ma sulle modifiche massive i vecchi valori IVA restavano invariati.
+
+Correzioni
+- Le modifiche massive ora aggiornano direttamente gli ID esatti dei risultati filtrati.
+- I valori NULL vengono realmente salvati e quindi l'IVA viene rimossa.
+- La modifica continua a rispettare ricerca, date, conto, metodo, natura e filtro IVA.
+- Se si seleziona "Nessuna IVA", aliquota e importo IVA vengono svuotati automaticamente.
+- I campi aliquota/importo restano disabilitati finché la modalità IVA è "Nessuna".
+- Nessuna migrazione SQL richiesta.
