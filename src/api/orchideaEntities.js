@@ -238,7 +238,12 @@ export async function fetchCourseParticipants(courseId) {
   }))
 }
 
-export async function updateOrchideaCourse(id, payload) {
+function cleanCoursePayload(payload = {}, { includeUpdatedAt = false } = {}) {
+  const rawPrice = payload.prezzo_mensile
+  const numericPrice = rawPrice === '' || rawPrice === null || rawPrice === undefined
+    ? null
+    : Number(rawPrice)
+
   const clean = {
     nome: payload.nome?.trim() || null,
     disciplina: payload.disciplina?.trim() || null,
@@ -246,14 +251,62 @@ export async function updateOrchideaCourse(id, payload) {
     giorno_settimana: payload.giorno_settimana?.trim() || null,
     ora_inizio: payload.ora_inizio || null,
     ora_fine: payload.ora_fine || null,
-    prezzo_mensile: payload.prezzo_mensile === '' ? null : Number(payload.prezzo_mensile || 0),
+    prezzo_mensile: Number.isFinite(numericPrice) ? Math.max(0, numericPrice) : null,
     sala: payload.sala?.trim() || null,
     insegnante: payload.insegnante?.trim() || null,
     descrizione: payload.descrizione?.trim() || null,
     attivo: payload.attivo !== false,
     colore: payload.colore || '#6d5dfc',
-    updated_at: new Date().toISOString(),
   }
+
+  if (includeUpdatedAt) clean.updated_at = new Date().toISOString()
+  return clean
+}
+
+function normalizeRpcCourse(data) {
+  if (Array.isArray(data)) return normalizeCourse(data[0] || {})
+  if (typeof data === 'string') {
+    try {
+      return normalizeCourse(JSON.parse(data))
+    } catch {
+      return normalizeCourse({})
+    }
+  }
+  return normalizeCourse(data || {})
+}
+
+export async function createOrchideaCourse(payload) {
+  const clean = cleanCoursePayload(payload)
+  if (!clean.nome) throw new Error('Il nome del corso è obbligatorio.')
+
+  const { data, error } = await orchideaSupabase
+    .from('corsi')
+    .insert(clean)
+    .select('*')
+    .single()
+
+  if (error) {
+    if (isPermissionError(error)) {
+      const { data: rpcData, error: rpcError } = await orchideaSupabase.rpc('nova_create_corso', {
+        p_payload: clean,
+      })
+      if (rpcError) {
+        const message = `${rpcError.message || ''}`.toLowerCase()
+        if (message.includes('nova_create_corso') && (message.includes('function') || message.includes('schema cache'))) {
+          throw new Error('Creazione non autorizzata dal database. Esegui lo script update/nova_create_corso.sql su Supabase e riprova.')
+        }
+        throw new Error(rpcError.message || 'Errore creazione corso')
+      }
+      return normalizeRpcCourse(rpcData)
+    }
+    throw new Error(error.message || 'Errore creazione corso')
+  }
+
+  return normalizeCourse(data)
+}
+
+export async function updateOrchideaCourse(id, payload) {
+  const clean = cleanCoursePayload(payload, { includeUpdatedAt: true })
 
   const { data, error } = await orchideaSupabase
     .from('corsi')
@@ -269,11 +322,57 @@ export async function updateOrchideaCourse(id, payload) {
         p_payload: clean,
       })
       if (rpcError) throw new Error(rpcError.message || 'Errore modifica corso')
-      return normalizeCourse(rpcData)
+      return normalizeRpcCourse(rpcData)
     }
     throw new Error(error.message || 'Errore modifica corso')
   }
   return normalizeCourse(data)
+}
+
+function isCourseDependencyError(error) {
+  const msg = `${error?.code || ''} ${error?.message || ''} ${error?.details || ''}`.toLowerCase()
+  return (
+    msg.includes('foreign key') ||
+    msg.includes('violates foreign key constraint') ||
+    msg.includes('still referenced') ||
+    msg.includes('iscrizioni_corsi') ||
+    msg.includes('insegnanti_corsi')
+  )
+}
+
+export async function deleteOrchideaCourse(id) {
+  if (!id) throw new Error('Corso non selezionato.')
+
+  const { data: deletedRows, error } = await orchideaSupabase
+    .from('corsi')
+    .delete()
+    .eq('id', id)
+    .select('id')
+
+  if (!error && Array.isArray(deletedRows) && deletedRows.length > 0) return true
+
+  if (!error || isPermissionError(error)) {
+    const { data: rpcData, error: rpcError } = await orchideaSupabase.rpc('nova_delete_corso', {
+      p_id: String(id),
+    })
+
+    if (!rpcError) return rpcData ?? true
+
+    const message = `${rpcError.message || ''}`.toLowerCase()
+    if (message.includes('nova_delete_corso') && (message.includes('function') || message.includes('schema cache'))) {
+      throw new Error('Eliminazione non autorizzata dal database. Esegui lo script update/nova_delete_corso.sql su Supabase e riprova.')
+    }
+    if (isCourseDependencyError(rpcError)) {
+      throw new Error('Il corso ha iscrizioni o dati collegati e non può essere eliminato. Disattivalo dalla modifica oppure rimuovi prima le associazioni.')
+    }
+    throw new Error(rpcError.message || 'Errore eliminazione corso')
+  }
+
+  if (isCourseDependencyError(error)) {
+    throw new Error('Il corso ha iscrizioni o dati collegati e non può essere eliminato. Disattivalo dalla modifica oppure rimuovi prima le associazioni.')
+  }
+
+  throw new Error(error.message || 'Errore eliminazione corso')
 }
 
 export async function assignCourseToTeacher({ courseId, teacherId, teacherName }) {

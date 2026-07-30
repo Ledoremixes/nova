@@ -1,8 +1,17 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Search, Users, X } from 'lucide-react'
+import { AlertTriangle, Pencil, Plus, Search, Trash2, Users, X } from 'lucide-react'
 import { useAuth } from '../context/AuthProvider'
-import { addCourseParticipant, fetchCourseParticipants, fetchOrchideaCourses, fetchOrchideaStudents, removeCourseParticipant, updateOrchideaCourse } from '../api/orchideaEntities'
+import {
+  addCourseParticipant,
+  createOrchideaCourse,
+  deleteOrchideaCourse,
+  fetchCourseParticipants,
+  fetchOrchideaCourses,
+  fetchOrchideaStudents,
+  removeCourseParticipant,
+  updateOrchideaCourse,
+} from '../api/orchideaEntities'
 import '../styles/GruppiPage.css'
 
 const emptyForm = {
@@ -19,6 +28,8 @@ const emptyForm = {
   colore: '#6d5dfc',
   attivo: true,
 }
+
+const weekDays = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica']
 
 function money(value) {
   if (value === null || value === undefined || value === '') return '—'
@@ -38,11 +49,15 @@ export default function GruppiPage() {
 
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState(null)
+  const [creating, setCreating] = useState(false)
   const [form, setForm] = useState(emptyForm)
+  const [formError, setFormError] = useState('')
+  const [notice, setNotice] = useState('')
   const [selectedCourse, setSelectedCourse] = useState(null)
   const [participantSearch, setParticipantSearch] = useState('')
   const [studentToAdd, setStudentToAdd] = useState('')
   const [studentPickerSearch, setStudentPickerSearch] = useState('')
+  const [courseToDelete, setCourseToDelete] = useState(null)
 
   const coursesQuery = useQuery({
     queryKey: ['orchidea-corsi'],
@@ -61,11 +76,43 @@ export default function GruppiPage() {
     enabled: Boolean(selectedCourse?.id),
   })
 
+  function closeCourseEditor() {
+    setEditing(null)
+    setCreating(false)
+    setForm(emptyForm)
+    setFormError('')
+    createMutation.reset()
+    updateMutation.reset()
+  }
+
+  const createMutation = useMutation({
+    mutationFn: createOrchideaCourse,
+    onSuccess: (course) => {
+      queryClient.invalidateQueries({ queryKey: ['orchidea-corsi'] })
+      setNotice(`Corso “${course?.nome || form.nome}” creato correttamente.`)
+      closeCourseEditor()
+    },
+  })
+
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }) => updateOrchideaCourse(id, payload),
-    onSuccess: () => {
+    onSuccess: (course) => {
       queryClient.invalidateQueries({ queryKey: ['orchidea-corsi'] })
-      setEditing(null)
+      setNotice(`Corso “${course?.nome || form.nome}” aggiornato correttamente.`)
+      closeCourseEditor()
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (courseId) => deleteOrchideaCourse(courseId),
+    onSuccess: (_, courseId) => {
+      const deletedName = courseToDelete?.nome || 'Corso'
+      queryClient.invalidateQueries({ queryKey: ['orchidea-corsi'] })
+      queryClient.removeQueries({ queryKey: ['orchidea-corso-partecipanti', courseId] })
+      if (selectedCourse?.id === courseId) setSelectedCourse(null)
+      if (editing?.id === courseId) closeCourseEditor()
+      setCourseToDelete(null)
+      setNotice(`Corso “${deletedName}” eliminato correttamente.`)
     },
   })
 
@@ -134,8 +181,24 @@ export default function GruppiPage() {
       .slice(0, 80)
   }, [studentsQuery.data, participants, studentPickerSearch])
 
+  function openCreate() {
+    if (!canManageCourses) return
+    setNotice('')
+    setEditing(null)
+    setCreating(true)
+    setForm({ ...emptyForm })
+    setFormError('')
+    createMutation.reset()
+    updateMutation.reset()
+  }
+
   function openEdit(course) {
+    setNotice('')
+    setCreating(false)
     setEditing(course)
+    setFormError('')
+    createMutation.reset()
+    updateMutation.reset()
     setForm({
       nome: course.nome || '',
       disciplina: course.disciplina || '',
@@ -154,8 +217,34 @@ export default function GruppiPage() {
 
   function handleSubmit(e) {
     e.preventDefault()
-    if (!editing?.id || !canManageCourses) return
-    updateMutation.mutate({ id: editing.id, payload: form })
+    if (!canManageCourses) return
+
+    const nome = form.nome.trim()
+    const numericPrice = form.prezzo_mensile === '' ? null : Number(form.prezzo_mensile)
+
+    if (!nome) {
+      setFormError('Inserisci il nome del corso.')
+      return
+    }
+
+    if (numericPrice !== null && (!Number.isFinite(numericPrice) || numericPrice < 0)) {
+      setFormError('Il prezzo mensile deve essere un valore valido e non negativo.')
+      return
+    }
+
+    setFormError('')
+    const payload = {
+      ...form,
+      nome,
+      prezzo_mensile: numericPrice === null ? '' : numericPrice,
+    }
+
+    if (editing?.id) {
+      updateMutation.mutate({ id: editing.id, payload })
+      return
+    }
+
+    if (creating) createMutation.mutate(payload)
   }
 
   function handleAddParticipant(e) {
@@ -168,22 +257,38 @@ export default function GruppiPage() {
     })
   }
 
+  const editorOpen = creating || Boolean(editing)
+  const savingCourse = createMutation.isPending || updateMutation.isPending
+  const courseMutationError = createMutation.error || updateMutation.error
+
   return (
     <section className="page">
       <div className="dashboard-hero">
         <div>
           <div className="dashboard-hero__eyebrow">Corsi Orchidea</div>
           <h2 className="dashboard-hero__title">Corsi e partecipanti</h2>
-          <p className="dashboard-hero__text">Qui vedi i corsi del portale allievi, i partecipanti iscritti e puoi modificare i dati principali.</p>
+          <p className="dashboard-hero__text">Crea e gestisci i corsi del portale allievi, controlla i partecipanti iscritti e aggiorna prezzi, orari e stato.</p>
         </div>
       </div>
 
+      {notice ? (
+        <div className="course-notice" role="status" aria-live="polite">
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice('')} aria-label="Chiudi messaggio"><X size={16} /></button>
+        </div>
+      ) : null}
+
       <div className="page-card">
-        <div className="section-head">
+        <div className="section-head course-section-head">
           <div>
             <h2>Corsi</h2>
             <p>{filteredCourses.length} corsi trovati.</p>
           </div>
+          {canManageCourses ? (
+            <button className="topbar__button topbar__button--primary course-create-button" type="button" onClick={openCreate}>
+              <Plus size={17} /> Nuovo corso
+            </button>
+          ) : null}
         </div>
 
         <div className="toolbar">
@@ -195,6 +300,18 @@ export default function GruppiPage() {
 
         {coursesQuery.isLoading ? <p>Caricamento corsi…</p> : null}
         {coursesQuery.error ? <p className="form-error">Errore: {coursesQuery.error.message}</p> : null}
+
+        {!coursesQuery.isLoading && !coursesQuery.error && filteredCourses.length === 0 ? (
+          <div className="course-empty-state">
+            <div>
+              <strong>{search ? 'Nessun corso corrisponde alla ricerca.' : 'Non hai ancora creato corsi.'}</strong>
+              <p>{search ? 'Prova a modificare il testo cercato.' : 'Crea il primo corso per iniziare ad aggiungere partecipanti e gestire le quote.'}</p>
+            </div>
+            {!search && canManageCourses ? (
+              <button className="topbar__button topbar__button--primary" type="button" onClick={openCreate}><Plus size={17} /> Crea il primo corso</button>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="cardsGrid course-cards-grid">
           {filteredCourses.map((course) => (
@@ -213,9 +330,24 @@ export default function GruppiPage() {
                 <span><strong>Iscritti</strong>{course.participants_count || 0}</span>
               </div>
               <p className="simple-list__meta">{course.descrizione || 'Nessuna descrizione.'}</p>
-              <div className="rowActions">
-                <button className="actionBtn" onClick={() => setSelectedCourse(course)}><Users size={15} /> Partecipanti</button>
-                {canManageCourses ? <button className="actionBtn" onClick={() => openEdit(course)}><Pencil size={15} /> Modifica</button> : null}
+              <div className="rowActions course-card-actions">
+                <button className="actionBtn" type="button" onClick={() => setSelectedCourse(course)}><Users size={15} /> Partecipanti</button>
+                {canManageCourses ? (
+                  <>
+                    <button className="actionBtn" type="button" onClick={() => openEdit(course)}><Pencil size={15} /> Modifica</button>
+                    <button
+                      className="actionBtn actionBtn--danger course-delete-trigger"
+                      type="button"
+                      onClick={() => {
+                        setNotice('')
+                        deleteMutation.reset()
+                        setCourseToDelete(course)
+                      }}
+                    >
+                      <Trash2 size={15} /> Elimina
+                    </button>
+                  </>
+                ) : null}
               </div>
             </article>
           ))}
@@ -291,27 +423,106 @@ export default function GruppiPage() {
         </div>
       ) : null}
 
-      {editing ? (
-        <div className="modalOverlay" onClick={() => setEditing(null)}>
-          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-            <div className="section-head"><div><h3>Modifica corso</h3><p>{editing.nome}</p></div></div>
-            <form className="formGrid" onSubmit={handleSubmit}>
-              <label>Nome<input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} required /></label>
-              <label>Disciplina<input value={form.disciplina} onChange={(e) => setForm({ ...form, disciplina: e.target.value })} /></label>
-              <label>Livello<input value={form.livello} onChange={(e) => setForm({ ...form, livello: e.target.value })} /></label>
-              <label>Giorno<input value={form.giorno_settimana} onChange={(e) => setForm({ ...form, giorno_settimana: e.target.value })} /></label>
+      {courseToDelete ? (
+        <div
+          className="modalOverlay"
+          role="presentation"
+          onClick={() => {
+            if (!deleteMutation.isPending) setCourseToDelete(null)
+          }}
+        >
+          <div
+            className="modalCard course-delete-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="course-delete-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="course-delete-icon" aria-hidden="true">
+              <AlertTriangle size={26} />
+            </div>
+            <div className="course-delete-copy">
+              <div className="course-editor-eyebrow course-delete-eyebrow">Elimina corso</div>
+              <h3 id="course-delete-title">Sei sicuro di voler eliminare questo corso?</h3>
+              <p>
+                Stai per eliminare <strong>“{courseToDelete.nome}”</strong>.
+                Questa operazione è definitiva e il corso non sarà più disponibile nelle iscrizioni e nelle nuove assegnazioni.
+              </p>
+              {Number(courseToDelete.participants_count || 0) > 0 ? (
+                <div className="course-delete-warning">
+                  Il corso risulta associato a <strong>{courseToDelete.participants_count}</strong>{' '}
+                  {Number(courseToDelete.participants_count) === 1 ? 'allievo' : 'allievi'}.
+                  Se il database protegge i dati collegati, Nova impedirà l’eliminazione e potrai disattivare il corso dalla modifica.
+                </div>
+              ) : null}
+              {deleteMutation.error ? (
+                <p className="form-error course-delete-error">{deleteMutation.error.message}</p>
+              ) : null}
+            </div>
+            <div className="modalActions course-delete-actions">
+              <button
+                type="button"
+                className="topbar__button"
+                onClick={() => setCourseToDelete(null)}
+                disabled={deleteMutation.isPending}
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                className="topbar__button course-confirm-delete"
+                onClick={() => deleteMutation.mutate(courseToDelete.id)}
+                disabled={deleteMutation.isPending}
+              >
+                <Trash2 size={17} />
+                {deleteMutation.isPending ? 'Eliminazione…' : 'Sì, elimina corso'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editorOpen ? (
+        <div className="modalOverlay" onClick={closeCourseEditor}>
+          <div className="modalCard course-editor-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="section-head course-editor-header">
+              <div>
+                <div className="course-editor-eyebrow">{creating ? 'Nuovo corso' : 'Modifica corso'}</div>
+                <h3>{creating ? 'Crea un nuovo corso' : editing?.nome}</h3>
+                <p>{creating ? 'Inserisci i dati principali. Potrai aggiungere gli allievi subito dopo la creazione.' : 'Aggiorna i dati che vengono usati in corsi, iscrizioni e pagamenti.'}</p>
+              </div>
+              <button type="button" className="course-editor-close" onClick={closeCourseEditor} aria-label="Chiudi"><X size={19} /></button>
+            </div>
+
+            <form className="formGrid course-editor-form" onSubmit={handleSubmit}>
+              <label>Nome corso *<input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} placeholder="Es. Bachata Base" required autoFocus /></label>
+              <label>Disciplina<input value={form.disciplina} onChange={(e) => setForm({ ...form, disciplina: e.target.value })} placeholder="Es. Bachata" /></label>
+              <label>Livello<input value={form.livello} onChange={(e) => setForm({ ...form, livello: e.target.value })} placeholder="Es. Base, Intermedio…" /></label>
+              <label>Giorno<input list="course-weekdays" value={form.giorno_settimana} onChange={(e) => setForm({ ...form, giorno_settimana: e.target.value })} placeholder="Es. Lunedì" />
+                <datalist id="course-weekdays">{weekDays.map((day) => <option value={day} key={day} />)}</datalist>
+              </label>
               <label>Ora inizio<input type="time" value={form.ora_inizio} onChange={(e) => setForm({ ...form, ora_inizio: e.target.value })} /></label>
               <label>Ora fine<input type="time" value={form.ora_fine} onChange={(e) => setForm({ ...form, ora_fine: e.target.value })} /></label>
-              <label>Prezzo mensile<input type="number" step="0.01" value={form.prezzo_mensile} onChange={(e) => setForm({ ...form, prezzo_mensile: e.target.value })} /></label>
-              <label>Sala<input value={form.sala} onChange={(e) => setForm({ ...form, sala: e.target.value })} /></label>
-              <label>Insegnante<input value={form.insegnante} onChange={(e) => setForm({ ...form, insegnante: e.target.value })} /></label>
-              <label>Colore<input type="color" value={form.colore} onChange={(e) => setForm({ ...form, colore: e.target.value })} /></label>
-              <label className="formFull">Descrizione<textarea className="formTextarea" value={form.descrizione} onChange={(e) => setForm({ ...form, descrizione: e.target.value })} /></label>
-              <label className="check-card"><input type="checkbox" checked={form.attivo} onChange={(e) => setForm({ ...form, attivo: e.target.checked })} /> Corso attivo</label>
-              {updateMutation.error ? <p className="form-error">{updateMutation.error.message}</p> : null}
+              <label>Prezzo mensile<input type="number" min="0" step="0.01" value={form.prezzo_mensile} onChange={(e) => setForm({ ...form, prezzo_mensile: e.target.value })} placeholder="0,00" /></label>
+              <label>Sala<input value={form.sala} onChange={(e) => setForm({ ...form, sala: e.target.value })} placeholder="Es. Sala 1" /></label>
+              <label>Insegnante/i<input value={form.insegnante} onChange={(e) => setForm({ ...form, insegnante: e.target.value })} placeholder="Es. Laura, Manuel" /></label>
+              <label className="course-color-field">Colore corso
+                <span className="course-color-control">
+                  <input type="color" value={form.colore} onChange={(e) => setForm({ ...form, colore: e.target.value })} />
+                  <span>{form.colore.toUpperCase()}</span>
+                </span>
+              </label>
+              <label className="formFull">Descrizione<textarea className="formTextarea" value={form.descrizione} onChange={(e) => setForm({ ...form, descrizione: e.target.value })} placeholder="Informazioni utili sul corso…" /></label>
+              <label className="check-card"><input type="checkbox" checked={form.attivo} onChange={(e) => setForm({ ...form, attivo: e.target.checked })} /> Corso attivo e disponibile</label>
+
+              {formError ? <p className="form-error course-form-message">{formError}</p> : null}
+              {courseMutationError ? <p className="form-error course-form-message">{courseMutationError.message}</p> : null}
+
               <div className="modalActions">
-                <button type="button" className="topbar__button" onClick={() => setEditing(null)}>Annulla</button>
-                <button className="topbar__button topbar__button--primary" disabled={updateMutation.isPending}>{updateMutation.isPending ? 'Salvo…' : 'Salva corso'}</button>
+                <button type="button" className="topbar__button" onClick={closeCourseEditor} disabled={savingCourse}>Annulla</button>
+                <button className="topbar__button topbar__button--primary" disabled={savingCourse}>
+                  {savingCourse ? (creating ? 'Creazione…' : 'Salvataggio…') : (creating ? 'Crea corso' : 'Salva corso')}
+                </button>
               </div>
             </form>
           </div>

@@ -1,0 +1,14 @@
+NOVA - FILTRO NUMERICO ALIQUOTA IVA
+Data: 28/07/2026
+
+Modifiche applicate nella sezione Prima nota:
+
+- aggiunto il filtro numerico "Aliquota IVA %";
+- supportati sia il punto sia la virgola decimale (es. 22, 10, 22,01);
+- il filtro cerca l'aliquota esatta registrata nel campo vat_rate;
+- inserendo un valore maggiore di zero viene selezionato automaticamente "Solo con IVA";
+- selezionando "Solo senza IVA" il valore numerico viene svuotato e disabilitato;
+- il filtro viene rispettato anche nei totali e nella modifica massiva applicata a tutti i risultati della ricerca;
+- il pulsante Reset azzera anche il filtro aliquota.
+
+Non è richiesta alcuna migrazione SQL.

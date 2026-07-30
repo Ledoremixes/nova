@@ -1,0 +1,27 @@
+NOVA GESTIONALE ASD - CREAZIONE NUOVI CORSI
+Data: 30/07/2026
+
+MODIFICHE IMPLEMENTATE
+- Aggiunto il pulsante "Nuovo corso" nella sezione Corsi e gruppi.
+- Aggiunto un modale completo per creare un corso.
+- Campi disponibili: nome, disciplina, livello, giorno, orari, prezzo mensile,
+  sala, insegnante/i, colore, descrizione e stato attivo.
+- Validazione del nome obbligatorio e del prezzo mensile.
+- Aggiornamento automatico della lista corsi dopo la creazione.
+- Messaggio di conferma dopo creazione o modifica.
+- Stato vuoto con pulsante "Crea il primo corso" quando non ci sono corsi.
+- Riutilizzato lo stesso modale per creazione e modifica, con testi e pulsanti corretti.
+- Aggiunta funzione API createOrchideaCourse con fallback RPC per database protetti da RLS.
+
+SUPABASE
+La creazione prova prima l'INSERT diretto. Se le policy RLS lo impediscono, usa la
+funzione nova_create_corso. In quel caso eseguire una sola volta nel SQL Editor del
+progetto Orchidea Allievi il file:
+
+update/nova_create_corso.sql
+
+FILE PRINCIPALI MODIFICATI
+- src/pages/GruppiPage.jsx
+- src/api/orchideaEntities.js
+- src/styles/GruppiPage.css
+- update/nova_create_corso.sql
