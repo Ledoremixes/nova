@@ -650,3 +650,40 @@ button.tesserati-password-button:disabled {
   cursor: not-allowed !important;
   box-shadow: 0 10px 22px rgba(209, 30, 145, 0.18) !important;
 }
+
+/* 2026-07-31 - colonna azioni leggibile anche per utenti non admin */
+.tesserati-table th:last-child,
+.tesserati-table td:last-child {
+  min-width: 220px;
+  width: 220px;
+}
+
+.tesserati-table td:last-child {
+  padding-right: 18px;
+}
+
+.tesserati-table .rowActions {
+  min-width: max-content;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.tesserati-table .actionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: max-content;
+  white-space: nowrap;
+  line-height: 1.15;
+}
+
+@media (max-width: 900px) {
+  .tesserati-table {
+    min-width: 1320px;
+  }
+}
+
+/* Mantiene uno spazio reale per l'intera colonna Azioni anche su desktop. */
+.tesserati-table {
+  min-width: 1320px;
+}

@@ -2326,3 +2326,439 @@
   align-items: center;
   gap: 6px;
 }
+
+/* =========================================================
+   Insegnanti - anagrafica fiscale e contratti Co.Co.Co.
+   ========================================================= */
+.teacher-admin-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px dashed rgba(124, 58, 237, 0.24);
+  border-radius: 14px;
+  color: #5b21b6;
+  background: rgba(245, 243, 255, 0.78);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.teacher-admin-status svg {
+  flex: 0 0 auto;
+}
+
+.teacher-admin-status span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.teacher-card-actions--admin {
+  grid-template-columns: minmax(0, 1.2fr) auto auto auto;
+}
+
+.teacher-contract-quick,
+.teacher-contract-button {
+  color: #6d28d9 !important;
+  border-color: rgba(124, 58, 237, 0.22) !important;
+  background: linear-gradient(135deg, #fff, #faf5ff) !important;
+}
+
+.teacher-detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.teacher-detail-actions .topbar__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.teacher-personal-panel {
+  grid-column: 1 / -1;
+  background:
+    radial-gradient(circle at top right, rgba(209, 30, 145, 0.07), transparent 36%),
+    linear-gradient(180deg, #fff, #fdfaff);
+}
+
+.teacher-panel-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-bottom: 14px;
+}
+
+.teacher-panel-title svg {
+  flex: 0 0 auto;
+  color: #c51f91;
+}
+
+.teacher-panel-title h3,
+.teacher-panel-title p {
+  margin: 0;
+}
+
+.teacher-panel-title p {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+.teacher-personal-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.teacher-personal-summary p {
+  min-width: 0;
+  margin: 0;
+  padding: 12px 13px;
+  border: 1px solid #e8e9f0;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.teacher-personal-summary strong,
+.teacher-personal-summary span {
+  display: block;
+  min-width: 0;
+}
+
+.teacher-personal-summary strong {
+  color: #64748b;
+  font-size: 0.7rem;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.teacher-personal-summary span {
+  margin-top: 5px;
+  color: #172033;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.teachers-page .teacher-edit-modal {
+  max-width: 1080px !important;
+  max-height: min(94vh, 980px) !important;
+  overflow: auto !important;
+}
+
+.teacher-master-form {
+  align-items: start;
+}
+
+.teacher-form-section-title {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 14px 16px;
+  margin-top: 5px;
+  border: 1px solid rgba(124, 58, 237, 0.13);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(250, 232, 255, 0.72), rgba(255, 255, 255, 0.95));
+}
+
+.teacher-form-section-title svg {
+  margin-top: 2px;
+  color: #c51f91;
+  flex: 0 0 auto;
+}
+
+.teacher-form-section-title strong,
+.teacher-form-section-title span {
+  display: block;
+}
+
+.teacher-form-section-title strong {
+  color: #211437;
+  font-size: 1rem;
+}
+
+.teacher-form-section-title span {
+  margin-top: 3px;
+  color: #6b7280;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.teacher-contract-overlay {
+  z-index: 1200;
+}
+
+.teacher-contract-modal {
+  width: min(1180px, calc(100vw - 34px));
+  max-width: 1180px;
+  max-height: min(95vh, 1020px);
+  overflow: auto;
+  padding: 0;
+  border: 1px solid rgba(124, 58, 237, 0.16);
+  border-radius: 30px;
+  background: #f7f7fb;
+  box-shadow: 0 36px 100px rgba(15, 23, 42, 0.26);
+}
+
+.teacher-contract-hero {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px 28px;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.14);
+  background:
+    radial-gradient(circle at top right, rgba(209, 30, 145, 0.12), transparent 38%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.97), rgba(248, 244, 255, 0.97));
+  backdrop-filter: blur(15px);
+}
+
+.teacher-contract-hero h3 {
+  margin: 7px 0 5px;
+  color: #141d33;
+  font-size: clamp(1.45rem, 3vw, 2.1rem);
+}
+
+.teacher-contract-hero p {
+  margin: 0;
+  color: #64748b;
+}
+
+.teacher-contract-hero .topbar__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
+.teacher-contract-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 20px 26px 0;
+  padding: 15px 17px;
+  border: 1px solid rgba(124, 58, 237, 0.18);
+  border-radius: 18px;
+  color: #4c1d95;
+  background: linear-gradient(135deg, #faf5ff, #fff);
+}
+
+.teacher-contract-warning svg {
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
+.teacher-contract-warning strong,
+.teacher-contract-warning span {
+  display: block;
+}
+
+.teacher-contract-warning span {
+  margin-top: 4px;
+  color: #67578a;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.teacher-contract-form {
+  display: grid;
+  gap: 16px;
+  padding: 20px 26px 26px;
+}
+
+.contract-form-section {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+  padding: 20px;
+  border: 1px solid #e6e8ef;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 38px rgba(15, 23, 42, 0.05);
+}
+
+.contract-form-section__title {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.contract-form-section__title svg {
+  margin-top: 2px;
+  color: #c51f91;
+  flex: 0 0 auto;
+}
+
+.contract-form-section__title strong,
+.contract-form-section__title span {
+  display: block;
+}
+
+.contract-form-section__title strong {
+  color: #172033;
+  font-size: 1.02rem;
+}
+
+.contract-form-section__title span {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.contract-form-section label {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  color: #29334a;
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.contract-form-section input,
+.contract-form-section select,
+.contract-form-section textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #e1e5ed;
+  border-radius: 14px;
+  background: #fbfdff;
+  color: #172033;
+  font: inherit;
+  font-size: 0.94rem;
+  font-weight: 700;
+  outline: none;
+}
+
+.contract-form-section input,
+.contract-form-section select {
+  min-height: 48px;
+  padding: 0 13px;
+}
+
+.contract-form-section textarea {
+  min-height: 92px;
+  padding: 12px 13px;
+  resize: vertical;
+}
+
+.contract-form-section input:focus,
+.contract-form-section select:focus,
+.contract-form-section textarea:focus {
+  border-color: rgba(209, 30, 145, 0.42);
+  box-shadow: 0 0 0 4px rgba(209, 30, 145, 0.08);
+}
+
+.contract-span-2 {
+  grid-column: 1 / -1;
+}
+
+.contract-error {
+  margin: 0;
+  padding: 13px 15px;
+  border: 1px solid rgba(220, 38, 38, 0.18);
+  border-radius: 15px;
+  background: #fff7f7;
+}
+
+.teacher-contract-actions {
+  position: sticky;
+  bottom: -1px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 15px 17px;
+  border: 1px solid rgba(124, 58, 237, 0.14);
+  border-radius: 19px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 -12px 35px rgba(15, 23, 42, 0.09);
+  backdrop-filter: blur(14px);
+}
+
+.teacher-contract-actions > span {
+  margin-right: auto;
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.teacher-contract-actions .topbar__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  .teacher-personal-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .teacher-card-actions--admin {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .teacher-card-actions--admin .actionBtn--danger {
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .teacher-detail-actions,
+  .teacher-contract-hero,
+  .teacher-contract-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .teacher-detail-actions .topbar__button,
+  .teacher-contract-hero .topbar__button,
+  .teacher-contract-actions .topbar__button {
+    width: 100%;
+  }
+
+  .teacher-personal-summary,
+  .contract-form-section {
+    grid-template-columns: 1fr;
+  }
+
+  .contract-span-2 {
+    grid-column: auto;
+  }
+
+  .teacher-contract-modal {
+    width: 100vw;
+    max-height: 96vh;
+    border-radius: 24px 24px 0 0;
+  }
+
+  .teacher-contract-hero,
+  .teacher-contract-form {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .teacher-contract-warning {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+}

@@ -17,6 +17,7 @@ import {
   BookOpen,
   Receipt,
   ShieldCheck,
+  HandHeart,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthProvider'
 
@@ -26,6 +27,7 @@ const items = [
   { to: '/gruppi', label: 'Corsi e gruppi', icon: Users, roles: ['admin', 'user'] },
   { to: '/atleti', label: 'Atleti', icon: UserSquare2, roles: ['admin', 'user'] },
   { to: '/insegnanti', label: 'Insegnanti', icon: GraduationCap, roles: ['admin', 'user'] },
+  { to: '/volontari', label: 'Volontari sportivi', icon: HandHeart, roles: ['admin', 'user'] },
   { to: '/visite-mediche', label: 'Visite mediche', icon: HeartPulse, roles: ['admin'] },
   { to: '/calendario', label: 'Calendario', icon: CalendarDays, roles: ['admin'] },
   { to: '/pagamenti', label: 'Pagamenti', icon: Wallet, roles: ['admin', 'user'] },

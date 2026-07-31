@@ -1,0 +1,23 @@
+NOVA - VOLONTARI SPORTIVI
+
+- Nuova voce laterale "Volontari sportivi", disponibile ad amministratori e utenti normali.
+- Gestione completa delle anagrafiche: dati personali, codice fiscale, nascita, residenza, contatti e note.
+- Ruoli previsti: barman, cameriere, barlady, ballerino, animatore, videomaker e fotografo.
+- Ruolo principale e ruoli aggiuntivi per ogni volontario.
+- Nessun campo o calcolo relativo a compensi.
+- Date di inizio/fine accordo modificabili per ogni stagione.
+- Generazione PDF A4 con logo Orchidea e spazi firma.
+- Inserite sei anagrafiche storiche ricavate dai contratti forniti.
+
+INSTALLAZIONE DATABASE
+1. Aprire Supabase > SQL Editor nel progetto Nova.
+2. Eseguire sport_volunteers.sql.
+3. Aggiornare Nova con Ctrl+F5.
+
+
+AGGIORNAMENTO ACCESSO UTENTI NORMALI
+- Gli utenti normali vedono la voce nel menu e possono aprire la sezione.
+- Possono consultare nome, ruolo, contatti, mansioni, sede e periodo dell’accordo.
+- Codice fiscale, nascita e residenza non vengono richiesti al database per gli utenti normali.
+- Creazione, modifica, eliminazione e generazione PDF restano riservate agli admin.
+- Per database già configurati eseguire update/sport_volunteers_user_access.sql.

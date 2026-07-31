@@ -4,6 +4,7 @@ import ProtectedRoute from '../components/auth/ProtectedRoute'
 import DashboardPage from '../pages/DashboardPage'
 import TesseratiPage from '../pages/TesseratiPage'
 import InsegnantiPage from '../pages/InsegnantiPage'
+import VolontariPage from '../pages/VolontariPage'
 import EntriesPage from '../pages/EntriesPage'
 import AdminUsersPage from '../pages/AdminUsersPage'
 import AuditPage from '../pages/AuditPage'
@@ -59,6 +60,7 @@ export const router = createBrowserRouter([
 
       { path: 'tesserati', element: <TesseratiPage /> },
       { path: 'insegnanti', element: <InsegnantiPage /> },
+      { path: 'volontari', element: (<ProtectedRoute roles={['admin', 'user']}><VolontariPage /></ProtectedRoute>) },
       { path: 'prima-nota', element: (<ProtectedRoute roles={['admin']}><EntriesPage /></ProtectedRoute>) },
       { path: 'conti', element: (<ProtectedRoute roles={['admin']}><ContiPage /></ProtectedRoute>) },
       { path: 'contabilita', element: (<ProtectedRoute roles={['admin']}><ContabilitaPage /></ProtectedRoute>) },

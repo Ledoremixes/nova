@@ -49,7 +49,7 @@ export default function AdminUsersPage() {
                   <td><strong>{user.email}</strong><br /><small>{user.id}</small></td>
                   <td><span className={user.role === 'admin' ? 'nova-pill nova-pill--ok' : 'nova-pill nova-pill--neutral'}>{user.role || 'user'}</span></td>
                   <td>{user.is_active !== false ? 'Attivo' : 'Disattivato'}</td>
-                  <td>{user.role === 'admin' ? 'Tutte le sezioni' : 'Dashboard senza cifre, tesserati, gruppi, atleti, insegnanti'}</td>
+                  <td>{user.role === 'admin' ? 'Tutte le sezioni' : 'Dashboard senza cifre, tesserati, gruppi, atleti, insegnanti e volontari'}</td>
                   <td><button className="actionBtn" onClick={() => openEdit(user)}><UserCog size={15} /> Permessi</button></td>
                 </tr>
               ))}
@@ -104,7 +104,7 @@ export default function AdminUsersPage() {
               <div className="admin-user-permissions-summary">
                 <div className="admin-user-permissions-summary__card">
                   <strong>Sezioni visibili</strong>
-                  <p>{form.role === 'admin' ? 'Tutte le sezioni del gestionale, contabilità inclusa.' : 'Dashboard senza cifre, tesserati, corsi e gruppi, atleti, insegnanti, account.'}</p>
+                  <p>{form.role === 'admin' ? 'Tutte le sezioni del gestionale, contabilità inclusa.' : 'Dashboard senza cifre, tesserati, corsi e gruppi, atleti, insegnanti, volontari sportivi e account.'}</p>
                 </div>
                 <div className="admin-user-permissions-summary__card">
                   <strong>Tipo profilo</strong>
