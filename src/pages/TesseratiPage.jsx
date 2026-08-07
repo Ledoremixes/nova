@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthProvider'
 import {
@@ -143,6 +143,7 @@ export default function TesseratiPage() {
   const queryClient = useQueryClient()
 
   const [search, setSearch] = useState('')
+  const searchBeforeDetailRef = useRef('')
   const [stagione, setStagione] = useState('')
   const [status, setStatus] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
@@ -248,12 +249,14 @@ export default function TesseratiPage() {
   })
 
   function openStudentDetail(student) {
+    searchBeforeDetailRef.current = search
     setSelectedStudent(student)
     setStudentForm(buildStudentForm(student))
     setPasswordForm({ password: '', password2: '' })
   }
 
   function closeStudentDetail() {
+    setSearch(searchBeforeDetailRef.current)
     setSelectedStudent(null)
     setStudentForm(emptyStudentForm)
     setPasswordForm({ password: '', password2: '' })
@@ -354,10 +357,19 @@ export default function TesseratiPage() {
         <div className="toolbar toolbar--wrap tesserati-toolbar">
           <input
             className="searchInput"
-            type="text"
+            type="search"
+            name="nova-tesserati-search"
             placeholder="Cerca nome, cognome, email, codice fiscale, telefono o tessera"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            data-lpignore="true"
+            data-1p-ignore="true"
+            onChange={(e) => {
+              if (!selectedStudent) setSearch(e.target.value)
+            }}
           />
 
           <select className="filterSelect" value={stagione} onChange={(e) => setStagione(e.target.value)}>
@@ -510,7 +522,7 @@ export default function TesseratiPage() {
               <button className="student-profile-close" type="button" onClick={closeStudentDetail}>Chiudi</button>
             </div>
 
-            <form className="formGrid tesserati-detail-form student-editor-card" onSubmit={handleSubmit}>
+            <form className="formGrid tesserati-detail-form student-editor-card" onSubmit={handleSubmit} autoComplete="off">
               <div className="student-form-title">
                 <div>
                   <h3>Anagrafica e tessera</h3>
@@ -525,7 +537,16 @@ export default function TesseratiPage() {
                 <input value={studentForm.cognome} onChange={(e) => handleChange('cognome', e.target.value)} disabled={!canEditStudent} required />
               </label>
               <label>Email
-                <input type="email" value={studentForm.email} onChange={(e) => handleChange('email', e.target.value)} disabled={!canEditStudent} />
+                <input
+                  type="email"
+                  name="nova-tesserato-email"
+                  value={studentForm.email}
+                  onChange={(e) => handleChange('email', e.target.value)}
+                  disabled={!canEditStudent}
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                />
               </label>
               <label>Telefono
                 <input value={studentForm.telefono} onChange={(e) => handleChange('telefono', e.target.value)} disabled={!canEditStudent} />
@@ -615,10 +636,28 @@ export default function TesseratiPage() {
                 </div>
                 <div className="formGrid">
                   <label>Nuova password
-                    <input type="password" value={passwordForm.password} onChange={(e) => setPasswordForm({ ...passwordForm, password: e.target.value })} disabled={!canResetSelectedPassword} />
+                    <input
+                      type="password"
+                      name="nova-tesserato-new-password"
+                      value={passwordForm.password}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, password: e.target.value })}
+                      disabled={!canResetSelectedPassword}
+                      autoComplete="new-password"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                    />
                   </label>
                   <label>Ripeti password
-                    <input type="password" value={passwordForm.password2} onChange={(e) => setPasswordForm({ ...passwordForm, password2: e.target.value })} disabled={!canResetSelectedPassword} />
+                    <input
+                      type="password"
+                      name="nova-tesserato-confirm-password"
+                      value={passwordForm.password2}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, password2: e.target.value })}
+                      disabled={!canResetSelectedPassword}
+                      autoComplete="new-password"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                    />
                   </label>
                 </div>
                 {passwordMutation.error ? <p className="form-error">{passwordMutation.error.message}</p> : null}
