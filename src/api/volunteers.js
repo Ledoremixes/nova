@@ -29,7 +29,7 @@ function normalize(row = {}) {
   }
 }
 
-export async function fetchVolunteers({ includePrivate = false } = {}) {
+export async function fetchVolunteers({ includePrivate = true } = {}) {
   const publicFields = 'id,full_name,email,phone,role,additional_roles,duties,venue,contract_start_date,contract_end_date,active,created_at,updated_at'
   const { data, error } = await supabase
     .from('sport_volunteers')

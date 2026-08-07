@@ -41,7 +41,7 @@ function roleLabel(role) {
   return map[role] || val(role, 'Volontario sportivo')
 }
 
-export async function generateVolunteerContractPdf(volunteer, settings = {}) {
+async function buildVolunteerContractPdf(volunteer, settings = {}) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const logo = await imageData('/orchidea.png')
   const W = doc.internal.pageSize.getWidth()
@@ -118,5 +118,19 @@ export async function generateVolunteerContractPdf(volunteer, settings = {}) {
   doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUTED); doc.setFontSize(8)
   doc.text('firma e timbro', mx + col / 2, y + 5, { align: 'center' }); doc.text('firma', rx + col / 2, y + 5, { align: 'center' })
   footer()
-  doc.save(`Contratto_volontariato_${filename(volunteer.full_name)}_${String(volunteer.contract_start_date || '').slice(0, 4)}.pdf`)
+  return doc
+}
+
+export function volunteerContractFilename(volunteer) {
+  return `Contratto_volontariato_${filename(volunteer?.full_name)}_${String(volunteer?.contract_start_date || '').slice(0, 4)}.pdf`
+}
+
+export async function createVolunteerContractPdfBlob(volunteer, settings = {}) {
+  const doc = await buildVolunteerContractPdf(volunteer, settings)
+  return doc.output('blob')
+}
+
+export async function generateVolunteerContractPdf(volunteer, settings = {}) {
+  const doc = await buildVolunteerContractPdf(volunteer, settings)
+  doc.save(volunteerContractFilename(volunteer))
 }

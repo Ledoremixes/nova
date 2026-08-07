@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   BadgeCheck,
   Camera,
   Download,
   Eye,
+  FileText,
   Film,
   GlassWater,
   Martini,
@@ -17,7 +18,7 @@ import {
   X,
 } from 'lucide-react'
 import { createVolunteer, deleteVolunteer, fetchVolunteers, updateVolunteer } from '../api/volunteers'
-import { generateVolunteerContractPdf } from '../utils/volunteerContractPdf'
+import { createVolunteerContractPdfBlob, generateVolunteerContractPdf } from '../utils/volunteerContractPdf'
 import { useAuth } from '../context/AuthProvider'
 import '../styles/VolontariPage.css'
 
@@ -69,10 +70,14 @@ export default function VolontariPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [error, setError] = useState('')
+  const [contractPreviewRow, setContractPreviewRow] = useState(null)
+  const [contractPreviewUrl, setContractPreviewUrl] = useState('')
+  const [contractPreviewLoading, setContractPreviewLoading] = useState(false)
+  const [contractPreviewError, setContractPreviewError] = useState('')
 
   const query = useQuery({
-    queryKey: ['sport-volunteers', isAdmin ? 'admin' : 'user'],
-    queryFn: () => fetchVolunteers({ includePrivate: isAdmin }),
+    queryKey: ['sport-volunteers', 'full-access'],
+    queryFn: () => fetchVolunteers({ includePrivate: true }),
   })
   const save = useMutation({
     mutationFn: (payload) => editing?.id ? updateVolunteer(editing.id, payload) : createVolunteer(payload),
@@ -119,6 +124,34 @@ export default function VolontariPage() {
     if (window.confirm(`Sei sicuro di voler eliminare il volontario ${row.full_name}? L'operazione è definitiva.`)) remove.mutate(row.id)
   }
 
+  useEffect(() => {
+    return () => {
+      if (contractPreviewUrl) URL.revokeObjectURL(contractPreviewUrl)
+    }
+  }, [contractPreviewUrl])
+
+  async function openContractPreview(row) {
+    setContractPreviewRow(row)
+    setContractPreviewUrl('')
+    setContractPreviewError('')
+    setContractPreviewLoading(true)
+    try {
+      const blob = await createVolunteerContractPdfBlob(row, organization)
+      setContractPreviewUrl(URL.createObjectURL(blob))
+    } catch (err) {
+      setContractPreviewError(err?.message || 'Impossibile generare l’anteprima del contratto.')
+    } finally {
+      setContractPreviewLoading(false)
+    }
+  }
+
+  function closeContractPreview() {
+    setContractPreviewRow(null)
+    setContractPreviewUrl('')
+    setContractPreviewError('')
+    setContractPreviewLoading(false)
+  }
+
 
   return (
     <div className="vol-page">
@@ -131,7 +164,7 @@ export default function VolontariPage() {
         {isAdmin ? (
           <button className="vol-primary" onClick={openNew}><Plus size={18} /> Nuovo volontario</button>
         ) : (
-          <span className="vol-readonly-badge">Profilo operatore · sola lettura</span>
+          <span className="vol-readonly-badge">Profilo operatore · consultazione completa</span>
         )}
       </section>
 
@@ -142,7 +175,7 @@ export default function VolontariPage() {
       </section>
 
       <section className="vol-toolbar">
-        <label className="vol-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={isAdmin ? "Cerca nome, codice fiscale, telefono o ruolo" : "Cerca nome, telefono o ruolo"} /></label>
+        <label className="vol-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cerca nome, codice fiscale, telefono o ruolo" /></label>
         <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
           <option value="tutti">Tutti i ruoli</option>{ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
         </select>
@@ -161,17 +194,17 @@ export default function VolontariPage() {
               </div>
               <div className="vol-card__body">
                 <dl>
-                  {isAdmin ? <div><dt>Codice fiscale</dt><dd>{row.tax_code || '—'}</dd></div> : null}
-                  <div><dt>Contatti</dt><dd>{row.email || row.phone || '—'}</dd></div>
-                  {isAdmin ? <div><dt>Residenza</dt><dd>{[row.residence_city, row.residence_province].filter(Boolean).join(' ') || '—'}</dd></div> : null}
+                  <div><dt>Codice fiscale</dt><dd>{row.tax_code || '—'}</dd></div>
+                  <div><dt>Contatti</dt><dd>{[row.email, row.phone].filter(Boolean).join(' · ') || '—'}</dd></div>
+                  <div><dt>Residenza</dt><dd>{[row.residence_city, row.residence_province].filter(Boolean).join(' ') || '—'}</dd></div>
                   <div><dt>Accordo</dt><dd>{humanDate(row.contract_start_date)} – {humanDate(row.contract_end_date)}</dd></div>
-                  {!isAdmin ? <div className="wide"><dt>Attività</dt><dd>{row.duties || 'Nessuna mansione indicata'}</dd></div> : null}
+                  <div className="wide"><dt>Attività</dt><dd>{row.duties || 'Nessuna mansione indicata'}</dd></div>
                 </dl>
                 {row.additional_roles?.length > 0 && <div className="vol-tags">{row.additional_roles.map((r) => <span key={r}>{roleMeta(r).label}</span>)}</div>}
               </div>
               <div className="vol-card__actions">
                 <button onClick={() => setViewing(row)}><Eye size={16} /> Apri scheda</button>
-                {isAdmin ? <button onClick={() => generateVolunteerContractPdf(row, organization)}><Download size={16} /> Contratto PDF</button> : null}
+                <button onClick={() => openContractPreview(row)}><FileText size={16} /> Anteprima contratto</button>
                 {isAdmin ? <button onClick={() => openEdit(row)}><Pencil size={16} /> Modifica</button> : null}
                 {isAdmin ? <button className="danger" onClick={() => confirmDelete(row)}><Trash2 size={16} /></button> : null}
               </div>
@@ -200,19 +233,57 @@ export default function VolontariPage() {
               </dl>
               {viewing.additional_roles?.length > 0 && <div className="vol-tags">{viewing.additional_roles.map((r) => <span key={r}>{roleMeta(r).label}</span>)}</div>}
             </section>
-            {isAdmin ? <section>
-              <h3>Dati amministrativi riservati</h3>
+            <section>
+              <h3>Dati anagrafici e amministrativi</h3>
               <dl className="vol-profile-grid">
                 <div><dt>Codice fiscale</dt><dd>{viewing.tax_code || '—'}</dd></div>
-                <div><dt>Nascita</dt><dd>{[viewing.birth_place, humanDate(viewing.birth_date)].filter(Boolean).join(' · ') || '—'}</dd></div>
-                <div className="wide"><dt>Residenza</dt><dd>{[viewing.residence_address, viewing.residence_postal_code, viewing.residence_city, viewing.residence_province].filter(Boolean).join(', ') || '—'}</dd></div>
+                <div><dt>Data di nascita</dt><dd>{humanDate(viewing.birth_date)}</dd></div>
+                <div><dt>Luogo di nascita</dt><dd>{[viewing.birth_place, viewing.birth_province ? `(${viewing.birth_province})` : ''].filter(Boolean).join(' ') || '—'}</dd></div>
+                <div><dt>Email</dt><dd>{viewing.email || '—'}</dd></div>
+                <div><dt>Telefono</dt><dd>{viewing.phone || '—'}</dd></div>
+                <div><dt>Preavviso</dt><dd>{Number(viewing.notice_days || 15)} giorni</dd></div>
+                <div className="wide"><dt>Residenza completa</dt><dd>{[viewing.residence_address, viewing.residence_postal_code, viewing.residence_city, viewing.residence_province ? `(${viewing.residence_province})` : ''].filter(Boolean).join(', ') || '—'}</dd></div>
+                <div><dt>Luogo firma</dt><dd>{viewing.signing_place || '—'}</dd></div>
+                <div><dt>Ultimo aggiornamento</dt><dd>{viewing.updated_at ? new Date(viewing.updated_at).toLocaleString('it-IT') : '—'}</dd></div>
+                <div className="wide"><dt>Note interne</dt><dd>{viewing.notes || 'Nessuna nota'}</dd></div>
               </dl>
-            </section> : <div className="vol-privacy-note">I dati fiscali, la residenza e la generazione del contratto sono riservati agli amministratori.</div>}
+            </section>
           </div>
           <footer className="vol-profile-actions">
             <button type="button" onClick={() => setViewing(null)}>Chiudi</button>
-            {isAdmin ? <button type="button" onClick={() => generateVolunteerContractPdf(viewing, organization)}><Download size={16} /> Genera contratto PDF</button> : null}
+            <button type="button" onClick={() => { const row = viewing; setViewing(null); openContractPreview(row) }}><FileText size={16} /> Anteprima contratto</button>
             {isAdmin ? <button type="button" className="vol-primary" onClick={() => { const row = viewing; setViewing(null); openEdit(row) }}><Pencil size={16} /> Modifica dati</button> : null}
+          </footer>
+        </div>
+      </div>}
+
+
+      {contractPreviewRow && <div className="vol-modal vol-contract-preview-modal" role="dialog" aria-modal="true" onClick={closeContractPreview}>
+        <div className="vol-modal__panel vol-contract-preview-panel" onClick={(e) => e.stopPropagation()}>
+          <header>
+            <div>
+              <span className="vol-eyebrow">DOCUMENTO RIGENERABILE</span>
+              <h2>Anteprima contratto di volontariato</h2>
+              <p>{contractPreviewRow.full_name} · {roleMeta(contractPreviewRow.role).label}</p>
+            </div>
+            <button onClick={closeContractPreview} aria-label="Chiudi anteprima"><X /></button>
+          </header>
+          <div className="vol-contract-preview-body">
+            {contractPreviewLoading ? <div className="vol-contract-loading">Sto preparando il documento…</div> : null}
+            {contractPreviewError ? <div className="vol-error">{contractPreviewError}</div> : null}
+            {contractPreviewUrl ? (
+              <iframe
+                className="vol-contract-frame"
+                src={`${contractPreviewUrl}#toolbar=1&navpanes=0&view=FitH`}
+                title={`Contratto volontariato ${contractPreviewRow.full_name}`}
+              />
+            ) : null}
+          </div>
+          <footer className="vol-profile-actions vol-contract-preview-actions">
+            <button type="button" onClick={closeContractPreview}>Chiudi</button>
+            <button type="button" className="vol-primary" onClick={() => generateVolunteerContractPdf(contractPreviewRow, organization)} disabled={contractPreviewLoading}>
+              <Download size={16} /> Scarica PDF
+            </button>
           </footer>
         </div>
       </div>}

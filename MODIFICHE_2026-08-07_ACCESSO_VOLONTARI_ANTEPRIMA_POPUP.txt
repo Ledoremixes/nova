@@ -1,0 +1,10 @@
+NOVA - aggiornamento 07/08/2026
+
+- Mantiene TesseratiPage con fix autofill/ricerca.
+- Utenti normali: consultazione completa di tutti i dati dei volontari sportivi.
+- Utenti normali: accesso all'anteprima del contratto di volontariato.
+- Anteprima contratto PDF dentro Nova tramite popup/iframe, senza download automatico.
+- Download PDF resta disponibile solo come azione esplicita dall'anteprima.
+- Creazione/modifica/eliminazione volontari restano riservate agli admin.
+- SIAE: sostituito window.confirm del browser con popup interno Nova per eliminazione C1.
+- Nessuna nuova migrazione SQL richiesta se sport_volunteers_user_access.sql e' gia stato eseguito.

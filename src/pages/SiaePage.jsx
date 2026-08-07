@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertTriangle,
   CalendarDays,
   Download,
   Euro,
@@ -80,6 +81,8 @@ export default function SiaePage() {
   const [form, setForm] = useState(createEmptyForm)
   const [formError, setFormError] = useState('')
   const [exportingKey, setExportingKey] = useState('')
+  const [pendingDelete, setPendingDelete] = useState(null)
+  const [deleteError, setDeleteError] = useState('')
 
   const query = useQuery({
     queryKey: ['siae-c1-events'],
@@ -100,8 +103,12 @@ export default function SiaePage() {
 
   const deleteMutation = useMutation({
     mutationFn: deleteSiaeEvent,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['siae-c1-events'] }),
-    onError: (error) => window.alert(error?.message || 'Impossibile eliminare l’evento.'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['siae-c1-events'] })
+      setPendingDelete(null)
+      setDeleteError('')
+    },
+    onError: (error) => setDeleteError(error?.message || 'Impossibile eliminare l’evento.'),
   })
 
   const allEvents = useMemo(() => query.data || [], [query.data])
@@ -195,8 +202,19 @@ export default function SiaePage() {
   }
 
   function confirmDelete(row) {
-    const confirmed = window.confirm(`Sei sicuro di voler eliminare il modello C1 del ${formatDate(row.event_date)} - ${row.event_title}?`)
-    if (confirmed) deleteMutation.mutate(row.id)
+    setPendingDelete(row)
+    setDeleteError('')
+  }
+
+  function closeDeleteDialog() {
+    if (deleteMutation.isPending) return
+    setPendingDelete(null)
+    setDeleteError('')
+  }
+
+  function executeDelete() {
+    if (!pendingDelete || deleteMutation.isPending) return
+    deleteMutation.mutate(pendingDelete.id)
   }
 
   async function exportSingle(row) {
@@ -299,6 +317,28 @@ export default function SiaePage() {
           {!archive.length && !query.isLoading && <div className="siae-empty">Lo storico si popolerà quando registrerai i primi eventi.</div>}
         </div>
       </section>
+
+
+      {pendingDelete && (
+        <div className="siae-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="siae-delete-title" onClick={closeDeleteDialog}>
+          <div className="siae-confirm-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="siae-confirm-icon"><AlertTriangle size={28} /></div>
+            <div className="siae-confirm-copy">
+              <span className="siae-eyebrow">CONFERMA ELIMINAZIONE</span>
+              <h2 id="siae-delete-title">Eliminare questo modello C1?</h2>
+              <p>Stai per eliminare il modello del <strong>{formatDate(pendingDelete.event_date)}</strong> relativo a <strong>{pendingDelete.event_title}</strong>.</p>
+              <div className="siae-confirm-warning">L’operazione rimuove i dati dallo storico e non può essere annullata.</div>
+              {deleteError ? <div className="siae-error compact">{deleteError}</div> : null}
+            </div>
+            <div className="siae-confirm-actions">
+              <button type="button" className="siae-secondary" onClick={closeDeleteDialog} disabled={deleteMutation.isPending}>Annulla</button>
+              <button type="button" className="siae-danger-button" onClick={executeDelete} disabled={deleteMutation.isPending}>
+                <Trash2 size={17} /> {deleteMutation.isPending ? 'Eliminazione…' : 'Elimina modello C1'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isModalOpen && (
         <div className="siae-modal" role="dialog" aria-modal="true" onClick={closeModal}>
