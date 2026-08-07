@@ -24,6 +24,7 @@ import GestioneEventiPage from '../pages/GestioneEventiPage'
 import ShopPage from '../pages/ShopPage'
 import MarketingPage from '../pages/MarketingPage'
 import GuidaTutorialPage from '../pages/GuidaTutorialPage'
+import SiaePage from '../pages/SiaePage'
 
 export const router = createBrowserRouter([
   {
@@ -52,6 +53,7 @@ export const router = createBrowserRouter([
       { path: 'pagamenti', element: <PagamentiPage /> },
       { path: 'pacchetti', element: <PacchettiPage /> },
       { path: 'gestione-eventi', element: (<ProtectedRoute roles={['admin']}><GestioneEventiPage /></ProtectedRoute>) },
+      { path: 'siae', element: (<ProtectedRoute roles={['admin', 'user']}><SiaePage /></ProtectedRoute>) },
       { path: 'shop', element: (<ProtectedRoute roles={['admin']}><ShopPage /></ProtectedRoute>) },
       { path: 'marketing', element: (<ProtectedRoute roles={['admin']}><MarketingPage /></ProtectedRoute>) },
       { path: 'utilita', element: (<ProtectedRoute roles={['admin']}><UtilitaPage /></ProtectedRoute>) },

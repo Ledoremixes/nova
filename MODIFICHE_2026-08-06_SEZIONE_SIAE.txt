@@ -1,0 +1,30 @@
+NOVA - SEZIONE SIAE / MODELLI C1
+Data: 06/08/2026
+
+NOVITA'
+- Nuova voce SIAE nel menu laterale, accessibile ad admin e utenti normali.
+- Inserimento eventi tramite data, tipologia, orario, ingressi e prezzo unitario.
+- Preset fissi: Serata caraibica, Serata Country, Pomeriggio Social Kizomba.
+- Calcolo automatico:
+  incasso lordo = ingressi x prezzo;
+  imponibile = incasso lordo / 1,38;
+  IVA = imponibile x 22%;
+  imposta intrattenimenti = imponibile x 16%.
+- Nessun arrotondamento intermedio: ogni valore finale viene arrotondato ai centesimi.
+- Generazione PDF sul modello C1 ufficiale SIAE/Agenzia delle Entrate.
+- Download del singolo evento o dell'intero mese, una pagina per evento.
+- Archivio storico rigenerabile: il PDF non viene salvato, vengono salvati solo i dati.
+- Importazione iniziale dei modelli storici forniti (ottobre/novembre 2025, giugno/luglio 2026).
+
+INSTALLAZIONE
+1. Pubblicare lo ZIP aggiornato.
+2. Eseguire update/siae_c1_events.sql nel SQL Editor di Supabase.
+3. Aggiornare l'app con Ctrl+F5.
+
+FILE PRINCIPALI
+- src/pages/SiaePage.jsx
+- src/styles/SiaePage.css
+- src/api/siae.js
+- src/utils/siaeC1Pdf.js
+- public/siae-c1-template.png
+- siae_c1_events.sql

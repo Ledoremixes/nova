@@ -18,6 +18,7 @@ import {
   Receipt,
   ShieldCheck,
   HandHeart,
+  FileText,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthProvider'
 
@@ -35,6 +36,7 @@ const items = [
   { to: '/contabilita', label: 'Contabilità', icon: BarChart3, roles: ['admin'] },
   { to: '/prima-nota', label: 'Prima nota', icon: Receipt, roles: ['admin'] },
   { to: '/gestione-eventi', label: 'Gestione eventi', icon: PartyPopper, roles: ['admin'] },
+  { to: '/siae', label: 'SIAE', icon: FileText, roles: ['admin', 'user'] },
   { to: '/shop', label: 'Shop', icon: ShoppingCart, roles: ['admin'] },
   { to: '/marketing', label: 'Marketing', icon: Megaphone, roles: ['admin'] },
   { to: '/utilita', label: 'Utilità', icon: Wrench, roles: ['admin'] },
