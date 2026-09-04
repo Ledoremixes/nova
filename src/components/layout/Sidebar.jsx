@@ -56,7 +56,7 @@ export default function Sidebar({ isOpen, onNavigate }) {
     <aside className={`sidebar ${isOpen ? 'sidebar--open' : ''}`}>
       <div className="sidebar__brand">
         <div className="sidebar__logo sidebar__logo--image">
-          <img src="/NOVA.png" alt="Logo Orchidea" className="sidebar__logo-img" />
+          <img src="/NOVA.png" alt="Logo Nova" className="sidebar__logo-img" />
         </div>
         <div>
           <div className="sidebar__title">Nova</div>

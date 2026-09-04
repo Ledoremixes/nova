@@ -1,0 +1,17 @@
+NOVA - PACCHETTI PER MESE DI COMPETENZA
+03/09/2026
+
+- Il totale pacchetto viene ripartito automaticamente sui corsi in proporzione al loro prezzo originale.
+- Rimossi i pulsanti manuali "Distribuisci per prezzo originale", "Applica regole insegnanti", "50% insegnante" e "40% insegnante".
+- Rimossi dall'editor i campi manuali relativi al compenso insegnante: la segreteria vede solo la quota assegnata automaticamente a ciascun corso.
+- Ogni salvataggio del pacchetto ha decorrenza dal mese selezionato nella pagina Pacchetti.
+- Aggiunta tabella nova_package_pricing_history per storicizzare le quote per mese di competenza.
+- La sezione Pagamenti usa lo storico: una quota di settembre pagata 60 € resta 60 € anche se da ottobre il pacchetto diventa 80 €.
+- Anche il calcolo dei compensi insegnanti legge le quote storiche del mese selezionato.
+- L'aggiunta di un corso dalla pagina Pacchetti decorre dal primo giorno del mese selezionato.
+- La rimozione di un corso dalla pagina Pacchetti chiude l'iscrizione alla fine del mese precedente, senza cancellare lo storico.
+- Mantenuto il fix TesseratiPage contro l'autofill della mail nella ricerca.
+- Mantenuto il nuovo logo Nova in public/NOVA.png.
+
+INSTALLAZIONE:
+Eseguire package_pricing_history.sql nel SQL Editor del progetto Supabase Orchidea Allievi prima di utilizzare il nuovo salvataggio pacchetti.

@@ -1,6 +1,7 @@
 import dayjs from 'dayjs'
 import { orchideaSupabase } from './orchideaSupabase'
 import { summarizeMonthlyTuitionPayments } from '../lib/paymentLedger'
+import { enrollmentIsActiveForMonth, resolveEnrollmentPricing } from '../lib/packagePricing'
 
 export function euro(value) {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
@@ -20,9 +21,6 @@ function safeCourses(value) {
   return []
 }
 
-function normalizeText(value) {
-  return String(value ?? '').trim().toLowerCase()
-}
 
 function normalizePaymentRow(row = {}) {
   const courses = safeCourses(row.corsi || row.courses || row.corsi_collegati)
@@ -61,19 +59,7 @@ function normalizePaymentRow(row = {}) {
   }
 }
 
-function isEnrollmentActive(row, monthStart, monthEnd) {
-  const state = normalizeText(row.stato || row.status)
-  if (['annullato', 'rimosso', 'cancellato', 'inactive', 'non_attivo'].includes(state)) return false
-  if (row.rinnovo_attivo === false) return false
-
-  const start = row.data_inizio || row.data_iscrizione || row.created_at
-  const end = row.data_fine || row.scadenza || null
-  if (start && dayjs(start).isValid() && dayjs(start).isAfter(monthEnd, 'day')) return false
-  if (end && dayjs(end).isValid() && dayjs(end).isBefore(monthStart, 'day')) return false
-  return true
-}
-
-function normalizeDirectRows({ enrollments = [], students = [], courses = [], payments = [], selectedMonth }) {
+function normalizeDirectRows({ enrollments = [], students = [], courses = [], payments = [], pricingHistory = [], selectedMonth }) {
   const monthStart = dayjs(`${selectedMonth}-01`)
   const monthEnd = monthStart.endOf('month')
   const studentsById = new Map(students.map((item) => [String(item.id), item]))
@@ -81,7 +67,7 @@ function normalizeDirectRows({ enrollments = [], students = [], courses = [], pa
   const groups = new Map()
 
   enrollments
-    .filter((row) => isEnrollmentActive(row, monthStart, monthEnd))
+    .filter((row) => enrollmentIsActiveForMonth(row, selectedMonth))
     .forEach((row) => {
       const studentId = String(row.tesseramento_id || row.allievo_id || row.student_id || '')
       const courseId = String(row.corso_id || row.course_id || '')
@@ -89,6 +75,7 @@ function normalizeDirectRows({ enrollments = [], students = [], courses = [], pa
       const student = studentsById.get(studentId)
       if (!student) return
       const course = coursesById.get(courseId) || {}
+      const pricedRow = resolveEnrollmentPricing(row, pricingHistory, selectedMonth, course)
 
       if (!groups.has(studentId)) {
         groups.set(studentId, {
@@ -109,15 +96,15 @@ function normalizeDirectRows({ enrollments = [], students = [], courses = [], pa
       }
 
       const target = groups.get(studentId)
-      const tariffa = Number(row.quota_allievo_mensile ?? row.tariffa_mensile ?? course.prezzo_mensile ?? course.prezzo ?? 0)
+      const tariffa = Number(pricedRow.quota_allievo_mensile ?? pricedRow.tariffa_mensile ?? course.prezzo_mensile ?? course.prezzo ?? 0)
       target.quota_mese += Number.isFinite(tariffa) ? tariffa : 0
       target.corsi.push({
         id: course.id || courseId,
         nome: course.nome || course.name || course.titolo || 'Corso',
         livello: course.livello || '',
         prezzo_mensile: tariffa,
-        quota_insegnante_mensile: row.quota_insegnante_mensile ?? null,
-        percentuale_insegnante: row.percentuale_insegnante ?? null,
+        quota_insegnante_mensile: pricedRow.quota_insegnante_mensile ?? null,
+        percentuale_insegnante: pricedRow.percentuale_insegnante ?? null,
         giorno_settimana: course.giorno_settimana || course.giorno || '',
         ora_inizio: course.ora_inizio || '',
         ora_fine: course.ora_fine || '',
@@ -156,11 +143,12 @@ function normalizeDirectRows({ enrollments = [], students = [], courses = [], pa
 
 async function fetchAllieviPaymentsMonthDirect({ month, search = '', courseId = 'all', status = 'all' }) {
   const selectedMonth = month || dayjs().format('YYYY-MM')
-  const [enrollmentsRes, studentsRes, coursesRes, paymentsRes] = await Promise.all([
+  const [enrollmentsRes, studentsRes, coursesRes, paymentsRes, pricingHistoryRes] = await Promise.all([
     orchideaSupabase.from('iscrizioni_corsi').select('*').limit(10000),
     orchideaSupabase.from('tesseramenti').select('*').limit(10000),
     orchideaSupabase.from('corsi').select('*').limit(2000),
     orchideaSupabase.from('pagamenti').select('*').limit(10000),
+    orchideaSupabase.from('nova_package_pricing_history').select('*').limit(20000),
   ])
 
   if (enrollmentsRes.error) throw new Error(enrollmentsRes.error.message || 'Errore caricamento iscrizioni corsi')
@@ -172,6 +160,7 @@ async function fetchAllieviPaymentsMonthDirect({ month, search = '', courseId = 
     students: studentsRes.data || [],
     courses: coursesRes.data || [],
     payments: paymentsRes.error ? [] : (paymentsRes.data || []),
+    pricingHistory: pricingHistoryRes.error ? [] : (pricingHistoryRes.data || []),
     selectedMonth,
   })
 

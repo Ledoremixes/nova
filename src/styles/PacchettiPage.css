@@ -665,3 +665,73 @@
     justify-self: end;
   }
 }
+
+/* 2026-09: pacchetti automatici e storicizzati per competenza */
+.package-add-course-form {
+  grid-template-columns: minmax(0, 1fr) 128px !important;
+}
+
+.package-editor-totals {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.package-course-editor-row {
+  grid-template-columns: minmax(260px, 1fr) minmax(150px, .42fr) 46px !important;
+  align-items: center;
+}
+
+.package-auto-share {
+  min-width: 0;
+  padding: 11px 14px;
+  border: 1px solid rgba(109, 93, 252, .14);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fff, #f8f6ff);
+  text-align: right;
+}
+
+.package-auto-share small,
+.package-auto-share strong,
+.package-auto-share span {
+  display: block;
+}
+
+.package-auto-share small {
+  color: #667085;
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.package-auto-share strong {
+  margin-top: 2px;
+  color: #111827;
+  font-size: 1.18rem;
+}
+
+.package-auto-share span,
+.package-competence-hint {
+  margin-top: 3px;
+  color: #7c3aed;
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.package-competence-hint {
+  display: block;
+  padding-left: 2px;
+}
+
+@media (max-width: 760px) {
+  .package-add-course-form,
+  .package-editor-totals,
+  .package-course-editor-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .package-auto-share {
+    text-align: left;
+  }
+}

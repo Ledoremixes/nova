@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import { orchideaSupabase } from './orchideaSupabase'
 import { fetchTesserati, updateTesserato } from './tesserati'
 import { summarizeMonthlyTuitionPayments } from '../lib/paymentLedger'
+import { enrollmentIsActiveForMonth, monthStartDate, resolveEnrollmentPricing } from '../lib/packagePricing'
 
 function text(value) {
   return String(value ?? '').trim()
@@ -456,16 +457,68 @@ export async function removeCourseTeacher({ courseId, teacherId, teacherName }) 
   return normalizeCourse(data)
 }
 
-export async function addCourseParticipant({ courseId, studentId, tariffaMensile = null }) {
+async function fetchPackagePricingHistoryForStudent(studentId) {
+  if (!studentId) return []
+
+  const { data, error } = await orchideaSupabase
+    .from('nova_package_pricing_history')
+    .select('*')
+    .eq('tesseramento_id', String(studentId))
+    .order('effective_from', { ascending: true })
+    .limit(5000)
+
+  if (error) {
+    if (isMissingTableError(error)) return []
+    throw new Error(error.message || 'Errore caricamento storico prezzi pacchetto.')
+  }
+
+  return data || []
+}
+
+async function upsertPackagePricingVersion({ enrollmentId, studentId, courseId, effectiveFrom, studentQuota, packageName, packageTotal, note }) {
+  const payload = {
+    enrollment_id: String(enrollmentId),
+    tesseramento_id: String(studentId),
+    corso_id: courseId ? String(courseId) : null,
+    effective_from: String(effectiveFrom).slice(0, 10),
+    quota_allievo_mensile: Math.max(0, Number(studentQuota || 0)),
+    pacchetto_nome: packageName?.trim?.() || null,
+    pacchetto_totale_mensile: packageTotal === '' || packageTotal === null || packageTotal === undefined
+      ? null
+      : Math.max(0, Number(packageTotal || 0)),
+    note_pacchetto: note?.trim?.() || null,
+    updated_at: new Date().toISOString(),
+  }
+
+  const { data, error } = await orchideaSupabase
+    .from('nova_package_pricing_history')
+    .upsert(payload, { onConflict: 'enrollment_id,effective_from' })
+    .select('*')
+    .single()
+
+  if (error) {
+    if (isMissingTableError(error)) {
+      throw new Error('Manca lo storico prezzi mensile. Esegui package_pricing_history.sql nel database Orchidea Allievi prima di salvare il pacchetto.')
+    }
+    throw new Error(error.message || 'Errore salvataggio storico prezzo pacchetto.')
+  }
+
+  return data
+}
+
+export async function addCourseParticipant({ courseId, studentId, tariffaMensile = null, effectiveMonth = null }) {
   if (!courseId || !studentId) throw new Error('Seleziona corso e allievo.')
 
+  const effectiveFrom = effectiveMonth ? monthStartDate(effectiveMonth) : new Date().toISOString().slice(0, 10)
+  const cleanQuota = tariffaMensile === '' || tariffaMensile === null ? null : Number(tariffaMensile || 0)
   const payload = {
     corso_id: courseId,
     tesseramento_id: studentId,
     stato: 'attivo',
-    data_iscrizione: new Date().toISOString().slice(0, 10),
-    tariffa_mensile: tariffaMensile === '' || tariffaMensile === null ? null : Number(tariffaMensile || 0),
-    quota_allievo_mensile: tariffaMensile === '' || tariffaMensile === null ? null : Number(tariffaMensile || 0),
+    data_iscrizione: effectiveFrom,
+    data_inizio: effectiveFrom,
+    tariffa_mensile: cleanQuota,
+    quota_allievo_mensile: cleanQuota,
     quota_insegnante_mensile: null,
     percentuale_insegnante: null,
     pacchetto_nome: null,
@@ -493,11 +546,45 @@ export async function addCourseParticipant({ courseId, studentId, tariffaMensile
     throw new Error(error.message || 'Errore iscrizione allievo')
   }
 
+  // Se il corso viene aggiunto dalla gestione pacchetti, la decorrenza è il mese
+  // selezionato e viene creata subito la prima versione tariffaria.
+  if (effectiveMonth && data?.id) {
+    await upsertPackagePricingVersion({
+      enrollmentId: data.id,
+      studentId,
+      courseId,
+      effectiveFrom,
+      studentQuota: cleanQuota || 0,
+      packageName: null,
+      packageTotal: null,
+      note: '',
+    })
+  }
+
   return data
 }
 
-export async function removeCourseParticipant(enrollmentId) {
+export async function removeCourseParticipant(enrollmentId, { effectiveMonth = null } = {}) {
   if (!enrollmentId) return null
+
+  // Dalla gestione pacchetti non cancelliamo la storia: il corso termina il
+  // giorno precedente al mese selezionato. I mesi precedenti restano invariati.
+  if (effectiveMonth) {
+    const endDate = monthStartDate(effectiveMonth)
+    const previousDay = new Date(`${endDate}T12:00:00`)
+    previousDay.setDate(previousDay.getDate() - 1)
+    const dataFine = previousDay.toISOString().slice(0, 10)
+
+    const { data, error } = await orchideaSupabase
+      .from('iscrizioni_corsi')
+      .update({ data_fine: dataFine, updated_at: new Date().toISOString() })
+      .eq('id', enrollmentId)
+      .select('*')
+      .single()
+
+    if (error) throw new Error(error.message || 'Errore chiusura iscrizione corso')
+    return data
+  }
 
   const { error } = await orchideaSupabase
     .from('iscrizioni_corsi')
@@ -569,11 +656,57 @@ export async function updateCourseEnrollmentPricing({ enrollmentId, payload = {}
   return data
 }
 
-export async function saveStudentPackage({ studentId, packageName = 'Pacchetto mensile', packageTotal = null, note = '', rows = [] }) {
+export async function saveStudentPackage({ studentId, effectiveMonth = '', packageName = 'Pacchetto mensile', packageTotal = null, note = '', rows = [] }) {
   if (!studentId) throw new Error('Allievo non selezionato.')
   if (!Array.isArray(rows) || rows.length === 0) throw new Error('Nessun corso da aggiornare.')
 
-  const total = packageTotal === '' || packageTotal === null || packageTotal === undefined ? null : Number(packageTotal || 0)
+  const selectedMonth = effectiveMonth || new Date().toISOString().slice(0, 7)
+  const effectiveFrom = monthStartDate(selectedMonth)
+  const total = packageTotal === '' || packageTotal === null || packageTotal === undefined ? null : Math.max(0, Number(packageTotal || 0))
+  const ids = rows.map((row) => row.id).filter(Boolean)
+
+  // Prima di modificare le colonne legacy, salviamo una baseline se questa
+  // iscrizione non ha ancora alcuna versione. È la garanzia che settembre resti
+  // 60 € anche quando ottobre viene portato a 80 €.
+  const [rawRes, history] = await Promise.all([
+    orchideaSupabase.from('iscrizioni_corsi').select('*').in('id', ids),
+    fetchPackagePricingHistoryForStudent(studentId),
+  ])
+
+  if (rawRes.error) throw new Error(rawRes.error.message || 'Errore lettura quote correnti.')
+  const rawById = new Map((rawRes.data || []).map((item) => [String(item.id), item]))
+
+  for (const row of rows) {
+    const existingVersions = history.filter((item) => String(item.enrollment_id) === String(row.id))
+    if (existingVersions.length === 0) {
+      const raw = rawById.get(String(row.id)) || {}
+      const baselineFrom = String(raw.data_inizio || raw.data_iscrizione || raw.created_at || effectiveFrom).slice(0, 10)
+      await upsertPackagePricingVersion({
+        enrollmentId: row.id,
+        studentId,
+        courseId: row.corso_id,
+        effectiveFrom: baselineFrom,
+        studentQuota: raw.quota_allievo_mensile ?? raw.tariffa_mensile ?? row.quota_allievo_mensile,
+        packageName: raw.pacchetto_nome ?? packageName,
+        packageTotal: raw.pacchetto_totale_mensile ?? total,
+        note: raw.note_pacchetto ?? note,
+      })
+    }
+
+    await upsertPackagePricingVersion({
+      enrollmentId: row.id,
+      studentId,
+      courseId: row.corso_id,
+      effectiveFrom,
+      studentQuota: row.quota_allievo_mensile,
+      packageName,
+      packageTotal: total,
+      note,
+    })
+  }
+
+  // Manteniamo aggiornate anche le colonne legacy per compatibilità con le altre
+  // sezioni, ma tutti i calcoli mensili autorevoli leggono lo storico sopra.
   const updates = rows.map((row) => updateCourseEnrollmentPricing({
     enrollmentId: row.id,
     payload: {
@@ -589,9 +722,9 @@ export async function saveStudentPackage({ studentId, packageName = 'Pacchetto m
   return Promise.all(updates)
 }
 
-
-export async function fetchStudentPackageDetails(studentId) {
+export async function fetchStudentPackageDetails(studentId, { month = '' } = {}) {
   if (!studentId) return { enrollments: [] }
+  const selectedMonth = month || new Date().toISOString().slice(0, 7)
 
   const fullSelect = `
     id,
@@ -653,7 +786,12 @@ export async function fetchStudentPackageDetails(studentId) {
     res = retry
   }
 
-  return { enrollments: res.data || [] }
+  const history = await fetchPackagePricingHistoryForStudent(studentId)
+  const enrollments = (res.data || [])
+    .filter((row) => enrollmentIsActiveForMonth(row, selectedMonth))
+    .map((row) => resolveEnrollmentPricing(row, history, selectedMonth, row.corsi || {}))
+
+  return { enrollments, pricingHistory: history }
 }
 
 function teacherPaymentConfig(row = {}) {
@@ -712,10 +850,8 @@ function monthlyCourseHours(course, selectedMonth) {
 
 export async function fetchTeacherMonthlyPayouts({ month = '' } = {}) {
   const selectedMonth = month || new Date().toISOString().slice(0, 7)
-  const monthStart = `${selectedMonth}-01`
-  const monthEnd = new Date(Number(selectedMonth.slice(0, 4)), Number(selectedMonth.slice(5, 7)), 0).toISOString().slice(0, 10)
 
-  const [enrollmentsRes, paymentsRes, teachers, courses] = await Promise.all([
+  const [enrollmentsRes, paymentsRes, pricingHistoryRes, teachers, courses] = await Promise.all([
     orchideaSupabase
       .from('iscrizioni_corsi')
       .select(`
@@ -727,6 +863,9 @@ export async function fetchTeacherMonthlyPayouts({ month = '' } = {}) {
         quota_allievo_mensile,
         quota_insegnante_mensile,
         percentuale_insegnante,
+        pacchetto_nome,
+        pacchetto_totale_mensile,
+        note_pacchetto,
         data_iscrizione,
         data_inizio,
         data_fine,
@@ -735,6 +874,7 @@ export async function fetchTeacherMonthlyPayouts({ month = '' } = {}) {
       `)
       .limit(10000),
     orchideaSupabase.from('pagamenti').select('*').limit(10000),
+    orchideaSupabase.from('nova_package_pricing_history').select('*').limit(20000),
     fetchOrchideaTeachers({ search: '' }).catch(() => []),
     fetchOrchideaCourses().catch(() => []),
   ])
@@ -745,21 +885,19 @@ export async function fetchTeacherMonthlyPayouts({ month = '' } = {}) {
   }
 
   const courseById = new Map((courses || []).map((course) => [String(course.id), course]))
-  const enrollmentRows = (enrollmentsRes.data || []).filter((row) => {
-    const state = lower(row.stato || '')
-    if (['annullato', 'rimosso', 'cancellato', 'inactive', 'non_attivo'].includes(state)) return false
-    if (row.rinnovo_attivo === false) return false
-    const start = row.data_inizio || row.data_iscrizione || null
-    const end = row.data_fine || null
-    if (start && String(start).slice(0, 10) > monthEnd) return false
-    if (end && String(end).slice(0, 10) < monthStart) return false
-    return true
-  }).map((row) => ({
-    ...row,
-    course: courseById.get(String(row.corso_id)) || null,
-    student_name: [row.tesseramenti?.nome, row.tesseramenti?.cognome].filter(Boolean).join(' ') || 'Allievo',
-    student_quota: Math.max(0, Number(row.quota_allievo_mensile ?? row.tariffa_mensile ?? courseById.get(String(row.corso_id))?.prezzo_mensile ?? 0)),
-  }))
+  const pricingHistory = pricingHistoryRes.error ? [] : (pricingHistoryRes.data || [])
+  const enrollmentRows = (enrollmentsRes.data || [])
+    .filter((row) => enrollmentIsActiveForMonth(row, selectedMonth))
+    .map((row) => {
+      const course = courseById.get(String(row.corso_id)) || null
+      const pricedRow = resolveEnrollmentPricing(row, pricingHistory, selectedMonth, course || {})
+      return {
+        ...pricedRow,
+        course,
+        student_name: [row.tesseramenti?.nome, row.tesseramenti?.cognome].filter(Boolean).join(' ') || 'Allievo',
+        student_quota: Math.max(0, Number(pricedRow.quota_allievo_mensile ?? pricedRow.tariffa_mensile ?? course?.prezzo_mensile ?? 0)),
+      }
+    })
 
   const dueByStudent = new Map()
   enrollmentRows.forEach((row) => {

@@ -14,3 +14,8 @@ Cosa cambia:
 
 Nota importante:
 la migrazione iniziale classifica molti conti in modo sensato, ma devi comunque rifinire le voci nella pagina Conti > Contabilità per avere un rendiconto davvero pulito.
+
+Aggiornamento pacchetti per mese di competenza (03/09/2026):
+- Esegui `package_pricing_history.sql` nel SQL Editor del progetto Supabase Orchidea Allievi.
+- Lo script crea lo storico delle quote e fotografa le quote correnti come baseline.
+- Da quel momento le modifiche ai pacchetti partono dal mese selezionato e non riscrivono i mesi precedenti.
