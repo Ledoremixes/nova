@@ -10,6 +10,7 @@ import {
   CreditCard,
   Euro,
   Eye,
+  PackageCheck,
   RotateCcw,
   Search,
   SlidersHorizontal,
@@ -20,7 +21,8 @@ import {
 } from 'lucide-react'
 import '../styles/PagamentiPage.css'
 import { fetchOrchideaCourses } from '../api/orchideaEntities'
-import { euro, fetchAllieviPaymentsMonth, setAllievoMonthlyPayment } from '../api/orchideaPayments'
+import { euro, fetchAllieviPaymentsMonth, setAllievoMonthlyPayment, setAllievoPackagePayment } from '../api/orchideaPayments'
+import { fetchPackagesCatalog } from '../api/packagesCatalog'
 
 const currentMonth = dayjs().format('YYYY-MM')
 
@@ -84,6 +86,8 @@ export default function PagamentiPage() {
   const [paymentAmount, setPaymentAmount] = useState('')
   const [paymentNote, setPaymentNote] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('Contanti')
+  const [selectedPackageId, setSelectedPackageId] = useState('')
+  const [coverageStartMonth, setCoverageStartMonth] = useState(currentMonth)
   const [feedback, setFeedback] = useState('')
 
   const coursesQuery = useQuery({
@@ -94,6 +98,11 @@ export default function PagamentiPage() {
   const paymentsQuery = useQuery({
     queryKey: ['orchidea-allievi-payments', { month, search, courseId, status }],
     queryFn: () => fetchAllieviPaymentsMonth({ month, search, courseId, status }),
+  })
+
+  const packagesQuery = useQuery({
+    queryKey: ['nova-packages-catalog', { activeOnly: true }],
+    queryFn: () => fetchPackagesCatalog({ includeInactive: false }),
   })
 
   const setPaymentMutation = useMutation({
@@ -107,8 +116,27 @@ export default function PagamentiPage() {
     },
   })
 
+  const packagePaymentMutation = useMutation({
+    mutationFn: setAllievoPackagePayment,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orchidea-allievi-payments'] })
+      queryClient.invalidateQueries({ queryKey: ['tesseramenti-orchidea'] })
+      queryClient.invalidateQueries({ queryKey: ['orchidea-teacher-payouts'] })
+      setPaymentEditor(null)
+      setSelectedRow(null)
+    },
+  })
+
   const rows = useMemo(() => paymentsQuery.data || [], [paymentsQuery.data])
   const courses = coursesQuery.data || []
+  const packages = packagesQuery.data || []
+  const selectedPackage = selectedPackageId === '__reduced__'
+    ? { id: null, special: true, nome: 'Quota ridotta del mese', tipo: 'ridotta', durata_mesi: 1, prezzo: Number(paymentEditor?.residuo || paymentEditor?.quota_mese || 0) }
+    : (packages.find((item) => String(item.id) === String(selectedPackageId)) || null)
+  const packageDuration = Math.max(1, Number(selectedPackage?.durata_mesi || 1))
+  const isTokenPackage = selectedPackage?.tipo === 'gettone'
+  const isCoveragePackage = Boolean(selectedPackage && !isTokenPackage)
+  const coverageEndMonth = dayjs(`${coverageStartMonth || month}-01`).add(packageDuration - 1, 'month').format('YYYY-MM')
 
   const summary = useMemo(() => rows.reduce((acc, row) => {
     acc.count += 1
@@ -126,7 +154,8 @@ export default function PagamentiPage() {
   const editorAmount = parseAmount(paymentAmount)
   const editorPaidAfter = paymentEditor ? Math.min(Number(paymentEditor.pagato || 0) + editorAmount, Number(paymentEditor.quota_mese || 0)) : 0
   const editorResidueAfter = paymentEditor ? Math.max(Number(paymentEditor.quota_mese || 0) - editorPaidAfter, 0) : 0
-  const editorError = paymentEditor && (editorAmount <= 0 || editorAmount > Number(paymentEditor.residuo || 0) + 0.001)
+  const editorError = paymentEditor && (editorAmount <= 0 || ((!selectedPackage || isTokenPackage) && editorAmount > Number(paymentEditor.residuo || 0) + 0.001))
+  const anyPaymentPending = setPaymentMutation.isPending || packagePaymentMutation.isPending
 
   function changeMonth(delta) {
     setMonth(dayjs(`${month}-01`).add(delta, 'month').format('YYYY-MM'))
@@ -141,25 +170,65 @@ export default function PagamentiPage() {
   function openPaymentEditor(row) {
     setFeedback('')
     setPaymentEditor(row)
+    setSelectedPackageId('')
+    setCoverageStartMonth(month)
     setPaymentAmount(Number(row.residuo || row.quota_mese || 0).toFixed(2))
     setPaymentMethod(row.metodo_pagamento || method)
     setPaymentNote('')
   }
 
+  function selectPaymentPackage(packageId) {
+    setSelectedPackageId(packageId)
+    if (packageId === '__reduced__') {
+      setCoverageStartMonth(month)
+      setPaymentAmount(Number(paymentEditor?.residuo || paymentEditor?.quota_mese || 0).toFixed(2))
+      return
+    }
+    const item = packages.find((pkg) => String(pkg.id) === String(packageId))
+    if (!item) {
+      setCoverageStartMonth(month)
+      setPaymentAmount(Number(paymentEditor?.residuo || paymentEditor?.quota_mese || 0).toFixed(2))
+      return
+    }
+    const duration = Math.max(1, Number(item.durata_mesi || 1))
+    const septemberMultiMonth = String(month).endsWith('-09') && duration > 1
+    setCoverageStartMonth(septemberMultiMonth ? dayjs(`${month}-01`).add(1, 'month').format('YYYY-MM') : month)
+    setPaymentAmount(Number(item.prezzo || 0).toFixed(2))
+  }
+
   function submitPayment(event) {
     event.preventDefault()
     if (!paymentEditor || editorError) return
-    const cumulativeAmount = Math.round((Number(paymentEditor.pagato || 0) + editorAmount) * 100) / 100
     setFeedback('')
+
+    if (selectedPackage && !isTokenPackage) {
+      packagePaymentMutation.mutate({
+        tesseramentoId: paymentEditor.tesseramento_id,
+        startMonth: coverageStartMonth,
+        packageItem: selectedPackage,
+        amount: editorAmount,
+        method: paymentMethod,
+        note: paymentNote.trim() || `${selectedPackage.nome} registrato da Nova`,
+      }, {
+        onSuccess: (result) => {
+          const range = result.months.length > 1 ? `${monthLabel(result.months[0])} – ${monthLabel(result.months[result.months.length - 1])}` : monthLabel(result.months[0])
+          const septemberNote = String(month).endsWith('-09') && coverageStartMonth !== month ? ' Settembre resta separato e può essere registrato con una quota ridotta.' : ''
+          setFeedback(`${selectedPackage.nome} registrato per ${paymentEditor.nomeCompleto}: ${euro(editorAmount)}, copertura ${range}.${septemberNote}`)
+        },
+      })
+      return
+    }
+
+    const cumulativeAmount = Math.round((Number(paymentEditor.pagato || 0) + editorAmount) * 100) / 100
     setPaymentMutation.mutate({
       tesseramentoId: paymentEditor.tesseramento_id,
       month,
       amount: cumulativeAmount,
       status: 'pagato',
       method: paymentMethod,
-      note: paymentNote.trim() || `Incasso ${euro(editorAmount)} registrato da Nova`,
+      note: paymentNote.trim() || (isTokenPackage ? `${selectedPackage.nome} · ${euro(editorAmount)}` : `Incasso ${euro(editorAmount)} registrato da Nova`),
     }, {
-      onSuccess: () => setFeedback(`Pagamento di ${euro(editorAmount)} registrato per ${paymentEditor.nomeCompleto}.`),
+      onSuccess: () => setFeedback(`${isTokenPackage ? selectedPackage.nome : 'Pagamento'} di ${euro(editorAmount)} registrato per ${paymentEditor.nomeCompleto}.`),
     })
   }
 
@@ -201,8 +270,8 @@ export default function PagamentiPage() {
       <div className="payments-students-hero">
         <div>
           <div className="payments-students-eyebrow">Segreteria pagamenti</div>
-          <h1>Quote allievi di {monthLabel(month)}</h1>
-          <p>Ogni allievo ha un solo saldo mensile autorevole. Aggiunte di corsi, riaperture e pagamenti parziali vengono ricalcolati senza sommare vecchi duplicati.</p>
+          <h1>Quote corsisti di {monthLabel(month)}</h1>
+          <p>Ogni corsista ha un solo saldo mensile autorevole. Aggiunte di corsi, riaperture e pagamenti parziali vengono ricalcolati senza sommare vecchi duplicati.</p>
         </div>
         <span className="payments-students-hero-pill"><WalletCards size={17} /> Saldi controllati</span>
       </div>
@@ -211,7 +280,7 @@ export default function PagamentiPage() {
         <div className="payments-summary-card payments-student-summary-card payments-student-summary-card--students">
           <div className="payments-summary-icon"><UserRoundCheck size={22} /></div>
           <div className="payments-summary-content">
-            <span className="payments-summary-label">Allievi/pacchetti</span>
+            <span className="payments-summary-label">Corsisti</span>
             <strong className="payments-summary-value">{summary.count}</strong>
             <div className="payments-summary-footer">
               <small>Nel mese selezionato</small>
@@ -257,7 +326,7 @@ export default function PagamentiPage() {
         <div className="payments-filter-panel__head">
           <div>
             <span className="payments-filter-icon"><SlidersHorizontal size={18} /></span>
-            <div><strong>Ricerca e filtri</strong><small>Trova rapidamente un allievo e lavora sul mese corretto.</small></div>
+            <div><strong>Ricerca e filtri</strong><small>Trova rapidamente un corsista e lavora sul mese corretto.</small></div>
           </div>
           <button type="button" className="payments-clear-filters" onClick={clearFilters} disabled={!activeFilters}>
             <RotateCcw size={15} /> Azzera filtri {activeFilters ? `(${activeFilters})` : ''}
@@ -279,7 +348,7 @@ export default function PagamentiPage() {
           </div>
 
           <label className="payments-search-modern">
-            <span>Cerca allievo</span>
+            <span>Cerca corsista</span>
             <div><Search size={18} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nome, email, codice fiscale o tessera…" /></div>
           </label>
         </div>
@@ -321,8 +390,8 @@ export default function PagamentiPage() {
       </div>
 
       {feedback ? <div className="payments-feedback"><Check size={17} /> {feedback}</div> : null}
-      {setPaymentMutation.error ? <div className="form-error">Errore salvataggio: {setPaymentMutation.error.message}</div> : null}
-      {paymentsQuery.isLoading ? <div className="payments-empty-state">Caricamento quote allievi…</div> : null}
+      {(setPaymentMutation.error || packagePaymentMutation.error) ? <div className="form-error">Errore salvataggio: {(setPaymentMutation.error || packagePaymentMutation.error).message}</div> : null}
+      {paymentsQuery.isLoading ? <div className="payments-empty-state">Caricamento quote corsisti…</div> : null}
       {paymentsQuery.error ? <div className="form-error">Errore: {paymentsQuery.error.message}</div> : null}
       {!paymentsQuery.isLoading && !paymentsQuery.error && rows.length === 0 ? (
         <div className="payments-empty-state payments-student-empty">Nessuna quota trovata per i filtri selezionati.</div>
@@ -362,17 +431,17 @@ export default function PagamentiPage() {
               {row.stato_pagamento === 'pagato' ? (
                 <button type="button" className="payments-paid-btn" disabled><CheckCircle2 size={17} /> Pagamento registrato</button>
               ) : row.stato_pagamento === 'sospeso' ? null : (
-                <button type="button" className="payments-primary-btn" disabled={setPaymentMutation.isPending || row.residuo <= 0} onClick={() => openPaymentEditor(row)}>
+                <button type="button" className="payments-primary-btn" disabled={anyPaymentPending || row.residuo <= 0} onClick={() => openPaymentEditor(row)}>
                   <CreditCard size={17} /> {row.stato_pagamento === 'parziale' ? 'Incassa residuo' : 'Registra pagamento'}
                 </button>
               )}
 
               {(row.stato_pagamento === 'pagato' || row.stato_pagamento === 'parziale' || row.stato_pagamento === 'sospeso') ? (
-                <button type="button" className="payments-secondary-btn" disabled={setPaymentMutation.isPending} onClick={() => markDue(row)}>
+                <button type="button" className="payments-secondary-btn" disabled={anyPaymentPending} onClick={() => markDue(row)}>
                   <RotateCcw size={16} /> Riapri pagamento
                 </button>
               ) : (
-                <button type="button" className="payments-secondary-btn payments-secondary-btn--muted" disabled={setPaymentMutation.isPending} onClick={() => markPaused(row)}>
+                <button type="button" className="payments-secondary-btn payments-secondary-btn--muted" disabled={anyPaymentPending} onClick={() => markPaused(row)}>
                   Sospendi/chiudi
                 </button>
               )}
@@ -397,11 +466,24 @@ export default function PagamentiPage() {
               <div><span>Residuo</span><strong>{euro(paymentEditor.residuo)}</strong></div>
             </div>
 
+            <div className="payments-package-choice">
+              <label className="payments-form-field payments-form-field-full">
+                <span>Pacchetto / formula di pagamento</span>
+                <select value={selectedPackageId} onChange={(event) => selectPaymentPackage(event.target.value)}>
+                  <option value="">Pagamento mensile / acconto</option>
+                  <option value="__reduced__">Quota ridotta del mese · saldo completo</option>
+                  {packages.map((item) => <option value={item.id} key={item.id}>{item.nome} · {euro(item.prezzo)} · {item.durata_mesi} {item.durata_mesi === 1 ? 'mese' : 'mesi'}</option>)}
+                </select>
+                {packagesQuery.error ? <small className="payments-inline-error">{packagesQuery.error.message}</small> : null}
+              </label>
+              {selectedPackage ? <div className="payments-package-selected"><PackageCheck size={18} /><div><strong>{selectedPackage.nome}</strong><span>{selectedPackage.durata_mesi} {selectedPackage.durata_mesi === 1 ? 'mese' : 'mesi'} di copertura · prezzo proposto {euro(selectedPackage.prezzo)}</span></div></div> : null}
+            </div>
+
             <div className="payments-form-grid">
               <label className="payments-form-field">
-                <span>Importo incassato adesso</span>
-                <input type="number" min="0.01" max={paymentEditor.residuo} step="0.01" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} autoFocus />
-                {editorError ? <small className="payments-inline-error">Inserisci un importo tra 0,01 € e {euro(paymentEditor.residuo)}.</small> : null}
+                <span>{selectedPackage ? (isTokenPackage ? 'Importo gettone incassato' : 'Prezzo pacchetto incassato') : 'Importo incassato adesso'}</span>
+                <input type="number" min="0.01" max={isCoveragePackage ? undefined : paymentEditor.residuo} step="0.01" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} autoFocus />
+                {editorError ? <small className="payments-inline-error">{isCoveragePackage ? 'Inserisci un prezzo maggiore di 0 €.' : `Inserisci un importo tra 0,01 € e ${euro(paymentEditor.residuo)}.`}</small> : null}
               </label>
               <label className="payments-form-field">
                 <span>Metodo di incasso</span>
@@ -409,21 +491,24 @@ export default function PagamentiPage() {
                   <option>Contanti</option><option>Bonifico</option><option>Carta</option><option>POS</option>
                 </select>
               </label>
-              <label className="payments-form-field payments-form-field-full">
+              {selectedPackage && !selectedPackage.special && !isTokenPackage ? <label className="payments-form-field"><span>Inizio copertura</span><input type="month" min={String(month).endsWith('-09') && packageDuration > 1 ? dayjs(`${month}-01`).add(1, 'month').format('YYYY-MM') : undefined} value={coverageStartMonth} onChange={(event) => setCoverageStartMonth(event.target.value)} /><small>Fine copertura: {monthLabel(coverageEndMonth)}</small></label> : null}
+              <label className={`payments-form-field ${selectedPackage ? '' : 'payments-form-field-full'}`}>
                 <span>Nota facoltativa</span>
-                <textarea value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} placeholder="Esempio: saldo aggiunta corso Bachata Fusion" />
+                <textarea value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} placeholder="Esempio: settembre ridotto / trimestrale ottobre-dicembre" />
               </label>
             </div>
 
+            {selectedPackage && String(month).endsWith('-09') && packageDuration > 1 ? <div className="payments-september-hint"><CalendarDays size={19} /><div><strong>Settembre resta separato</strong><span>Per i pacchetti multi-mese Nova propone automaticamente ottobre come inizio. Registra prima settembre con “Quota ridotta del mese · saldo completo”, poi il trimestre da ottobre.</span></div></div> : null}
+
             <div className="payments-register-result">
               <span>Dopo il salvataggio</span>
-              <strong>{euro(editorPaidAfter)} incassati · {euro(editorResidueAfter)} residui</strong>
+              {isCoveragePackage ? <strong>{euro(editorAmount)} incassati · copertura {monthLabel(coverageStartMonth)} → {monthLabel(coverageEndMonth)}</strong> : <strong>{euro(editorPaidAfter)} incassati · {euro(editorResidueAfter)} residui</strong>}
             </div>
 
             <div className="payments-form-actions">
               <button type="button" className="payments-secondary-btn" onClick={() => setPaymentEditor(null)}>Annulla</button>
-              <button type="submit" className="payments-primary-btn" disabled={Boolean(editorError) || setPaymentMutation.isPending}>
-                <CreditCard size={17} /> {setPaymentMutation.isPending ? 'Salvataggio…' : 'Conferma incasso'}
+              <button type="submit" className="payments-primary-btn" disabled={Boolean(editorError) || anyPaymentPending}>
+                <CreditCard size={17} /> {anyPaymentPending ? 'Salvataggio…' : 'Conferma incasso'}
               </button>
             </div>
           </form>

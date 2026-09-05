@@ -19,3 +19,8 @@ Aggiornamento pacchetti per mese di competenza (03/09/2026):
 - Esegui `package_pricing_history.sql` nel SQL Editor del progetto Supabase Orchidea Allievi.
 - Lo script crea lo storico delle quote e fotografa le quote correnti come baseline.
 - Da quel momento le modifiche ai pacchetti partono dal mese selezionato e non riscrivono i mesi precedenti.
+
+Aggiornamento catalogo pacchetti e coperture (06/09/2026):
+- Esegui `packages_and_payment_coverage.sql` nel SQL Editor del progetto Supabase Orchidea Allievi.
+- Imposta su Vercel le service role key seguendo `VERCEL_ADMIN_AUTH_SETUP.md` nella root del progetto.
+- Fai un nuovo deploy dopo aver aggiunto le variabili ambiente.

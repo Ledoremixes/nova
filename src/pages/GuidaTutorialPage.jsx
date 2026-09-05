@@ -34,7 +34,7 @@ const tutorials = [
     duration: '4 min',
     level: 'Base',
     description: 'Assegna corsi e pacchetti e registra correttamente una quota.',
-    steps: ['Apri Pagamenti e cerca l’allievo.', 'Seleziona il corso o il pacchetto acquistato.', 'Controlla importo, periodo e metodo di pagamento.', 'Conferma la registrazione e verifica il riepilogo.'],
+    steps: ['Apri Pagamenti e cerca il corsista.', 'Seleziona il corso o il pacchetto acquistato.', 'Controlla importo, periodo e metodo di pagamento.', 'Conferma la registrazione e verifica il riepilogo.'],
   },
   {
     id: 'tut-event',

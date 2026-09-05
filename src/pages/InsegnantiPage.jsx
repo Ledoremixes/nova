@@ -489,7 +489,7 @@ export default function InsegnantiPage() {
 
                 <div className="teacher-payout-card-inline">
                   <Euro size={18} />
-                  <div><span>Da pagare nel mese</span><strong>{money(payout.total)}</strong><small>{payout.students_count || 0} allievi paganti · {assigned.length || 0} corsi assegnati</small></div>
+                  <div><span>Da pagare nel mese</span><strong>{money(payout.total)}</strong><small>{payout.students_count || 0} corsisti paganti · {assigned.length || 0} corsi assegnati</small></div>
                 </div>
 
                 <div className="teacher-contact-grid">

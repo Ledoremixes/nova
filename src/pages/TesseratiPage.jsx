@@ -478,7 +478,7 @@ export default function TesseratiPage() {
                             ) : null}
                             {canEditStudent ? (
                               <button
-                                className="actionBtn"
+                                className={`actionBtn tesserati-corsista-action ${student.is_corsista ? 'is-remove' : 'is-add'}`}
                                 type="button"
                                 onClick={() => toggleCorsistaMutation.mutate(student)}
                                 disabled={toggleCorsistaMutation.isPending}
@@ -505,7 +505,7 @@ export default function TesseratiPage() {
               <div className="student-profile-identity">
                 <span className="student-profile-avatar">{initials(selectedStudent)}</span>
                 <div>
-                  <div className="dashboard-hero__eyebrow">Scheda allievo</div>
+                  <div className="dashboard-hero__eyebrow">Scheda corsista</div>
                   <h3>{fullName(selectedStudent)}</h3>
                   <p>Profilo completo, tessera, corsi collegati e strumenti admin in un’unica vista.</p>
                   <div className="student-profile-chips">
@@ -607,7 +607,7 @@ export default function TesseratiPage() {
               <div className="modalActions">
                 {canEditStudent ? (
                   <button type="submit" className="topbar__button topbar__button--primary" disabled={updateMutation.isPending}>
-                    {updateMutation.isPending ? 'Salvataggio…' : 'Salva scheda allievo'}
+                    {updateMutation.isPending ? 'Salvataggio…' : 'Salva scheda corsista'}
                   </button>
                 ) : null}
                 {isAdmin && !hasCustomMembershipNumber(selectedStudent) ? (
@@ -627,8 +627,8 @@ export default function TesseratiPage() {
               <div className="page-card tesserati-password-card">
                 <div className="section-head section-head--compact">
                   <div>
-                    <h3>Reset password allievo</h3>
-                    <p>Disponibile solo admin. Se manca auth_user_id, Nova prova a collegare l’allievo tramite email.</p>
+                    <h3>Reset password corsista</h3>
+                    <p>Disponibile solo admin. Se manca auth_user_id, Nova prova a collegare il corsista tramite email.</p>
                   </div>
                   <span className={canResetSelectedPassword ? 'nova-pill nova-pill--ok' : 'nova-pill nova-pill--warn'}>
                     {selectedStudent.auth_user_id ? 'Auth collegato' : selectedStudent.email ? 'Reset via email' : 'Auth mancante'}
@@ -663,7 +663,7 @@ export default function TesseratiPage() {
                 {passwordMutation.error ? <p className="form-error">{passwordMutation.error.message}</p> : null}
                 {passwordMutation.isSuccess ? <p className="success-text">Password aggiornata correttamente.</p> : null}
                 <button type="button" className="topbar__button tesserati-password-button" onClick={handlePasswordChange} disabled={!canResetSelectedPassword || passwordMutation.isPending}>
-                  {passwordMutation.isPending ? 'Aggiorno…' : 'Aggiorna password allievo'}
+                  {passwordMutation.isPending ? 'Aggiorno…' : 'Aggiorna password corsista'}
                 </button>
               </div>
             ) : null}
@@ -673,7 +673,7 @@ export default function TesseratiPage() {
                 <div className="section-head section-head--compact">
                   <div>
                     <h3>Iscrizioni e prezzi</h3>
-                    <p>Corsi collegati alla scheda allievo.</p>
+                    <p>Corsi collegati alla scheda corsista.</p>
                   </div>
                   <span className="nova-pill nova-pill--neutral">{details.enrollments.length}</span>
                 </div>

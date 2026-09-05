@@ -2762,3 +2762,12 @@
     margin-right: 16px;
   }
 }
+
+/* Gestione utenti admin - CRUD */
+.admin-user-current-pill { margin-left: 8px; }
+.admin-user-delete-btn { color: #c32748 !important; border-color: rgba(195,39,72,.2) !important; }
+.admin-user-delete-btn:disabled { opacity: .4; cursor: not-allowed; }
+.admin-user-field input { width: 100%; border: 1px solid rgba(62,54,97,.15); border-radius: 14px; background: #fbfcff; padding: 13px 14px; font: inherit; color: #161a2c; }
+.admin-user-confirm-modal { width: min(520px, calc(100vw - 32px)); text-align: center; }
+.admin-user-confirm-modal h3 { font-size: 24px; margin: 0 0 10px; }
+.admin-user-confirm-modal p { color: var(--muted); line-height: 1.6; }

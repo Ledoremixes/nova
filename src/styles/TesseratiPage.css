@@ -687,3 +687,8 @@ button.tesserati-password-button:disabled {
 .tesserati-table {
   min-width: 1320px;
 }
+
+/* Azione corsista ben visibile in tesseramenti */
+.tesserati-corsista-action { font-weight: 900 !important; border-width: 1px !important; }
+.tesserati-corsista-action.is-add { background: linear-gradient(135deg, #6d4df3, #a63ce4) !important; color: #fff !important; border-color: transparent !important; box-shadow: 0 8px 20px rgba(109,77,243,.18); }
+.tesserati-corsista-action.is-remove { background: #fff0f5 !important; color: #c21f6f !important; border-color: #f4b8d6 !important; }

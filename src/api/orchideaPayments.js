@@ -39,10 +39,10 @@ function normalizePaymentRow(row = {}) {
     cf: row.cf || row.codice_fiscale || '',
     telefono: row.telefono || '',
     numero_tessera: row.numero_tessera || row.codice_tessera || '',
-    formula: row.formula || (courses.length > 1 ? 'Multicorso' : 'Mensile'),
-    tipo_pacchetto: row.tipo_pacchetto || (courses.length > 1 ? 'Pacchetto multicorso' : 'Corso singolo'),
-    copertura_dal: row.copertura_dal || dayjs(`${row.mese || dayjs().format('YYYY-MM')}-01`).format('YYYY-MM-DD'),
-    copertura_al: row.copertura_al || dayjs(`${row.mese || dayjs().format('YYYY-MM')}-01`).endOf('month').format('YYYY-MM-DD'),
+    formula: row.nova_package_type || row.formula || (courses.length > 1 ? 'Multicorso' : 'Mensile'),
+    tipo_pacchetto: row.nova_package_name || row.tipo_pacchetto || (courses.length > 1 ? 'Pacchetto multicorso' : 'Corso singolo'),
+    copertura_dal: row.nova_coverage_from || row.copertura_dal || dayjs(`${row.mese || dayjs().format('YYYY-MM')}-01`).format('YYYY-MM-DD'),
+    copertura_al: row.nova_coverage_to || row.copertura_al || dayjs(`${row.mese || dayjs().format('YYYY-MM')}-01`).endOf('month').format('YYYY-MM-DD'),
     mese: row.mese || dayjs().format('YYYY-MM'),
     quota_mese: total,
     pagato: paid,
@@ -55,6 +55,14 @@ function normalizePaymentRow(row = {}) {
     payment_source: row.payment_source || 'none',
     payment_records_count: Number(row.payment_records_count || 0),
     payment_ignored_excess: Number(row.payment_ignored_excess || 0),
+    package_coverage_complete: row.package_coverage_complete === true,
+    nova_package_id: row.nova_package_id || null,
+    nova_package_name: row.nova_package_name || '',
+    nova_package_type: row.nova_package_type || '',
+    nova_package_total: Number(row.nova_package_total || 0),
+    nova_package_duration_months: Number(row.nova_package_duration_months || 0),
+    nova_payment_group_id: row.nova_payment_group_id || null,
+    nova_cash_amount: Number(row.nova_cash_amount || 0),
     corsi: courses,
   }
 }
@@ -137,6 +145,16 @@ function normalizeDirectRows({ enrollments = [], students = [], courses = [], pa
       payment_source: ledger.source,
       payment_records_count: ledger.relevantCount,
       payment_ignored_excess: ledger.ignoredExcess,
+      package_coverage_complete: ledger.packageCoverageComplete,
+      nova_package_id: ledger.packageId,
+      nova_package_name: ledger.packageName,
+      nova_package_type: ledger.packageType,
+      nova_package_total: ledger.packageTotal,
+      nova_package_duration_months: ledger.packageDurationMonths,
+      nova_payment_group_id: ledger.paymentGroupId,
+      nova_cash_amount: ledger.cashAmount,
+      nova_coverage_from: ledger.coverageFrom,
+      nova_coverage_to: ledger.coverageTo,
     })
   }).sort((a, b) => a.nomeCompleto.localeCompare(b.nomeCompleto))
 }
@@ -211,6 +229,16 @@ async function setAllievoMonthlyPaymentDirect({ tesseramentoId, month, amount, s
     pagato_il: cleanStatus === 'pagato' ? dayjs().format('YYYY-MM-DD') : null,
     data_pagamento: cleanStatus === 'pagato' ? dayjs().format('YYYY-MM-DD') : null,
     updated_at: now,
+    nova_package_id: null,
+    nova_package_name: null,
+    nova_package_type: null,
+    nova_package_total: null,
+    nova_package_duration_months: null,
+    nova_payment_group_id: null,
+    nova_coverage_from: null,
+    nova_coverage_to: null,
+    nova_coverage_complete: false,
+    nova_cash_amount: cleanStatus === 'pagato' ? normalizedAmount : 0,
   }
 
   // Un solo record Nova autorevole per allievo e mese. I vecchi record per-corso
@@ -247,6 +275,122 @@ async function setAllievoMonthlyPaymentDirect({ tesseramentoId, month, amount, s
 
   if (error) throw new Error(error.message || 'Errore creazione pagamento. Verifica la tabella pagamenti di Orchidea Allievi.')
   return data
+}
+
+
+function moneyRound(value) {
+  return Math.round(Number(value || 0) * 100) / 100
+}
+
+async function fetchStudentMonthlyDue(tesseramentoId, selectedMonth) {
+  const [enrollmentsRes, coursesRes, pricingHistoryRes] = await Promise.all([
+    orchideaSupabase.from('iscrizioni_corsi').select('*').eq('tesseramento_id', tesseramentoId).limit(1000),
+    orchideaSupabase.from('corsi').select('*').limit(2000),
+    orchideaSupabase.from('nova_package_pricing_history').select('*').eq('tesseramento_id', tesseramentoId).limit(5000),
+  ])
+  if (enrollmentsRes.error) throw new Error(enrollmentsRes.error.message || 'Errore lettura corsi del corsista')
+  if (coursesRes.error) throw new Error(coursesRes.error.message || 'Errore lettura corsi')
+  const coursesById = new Map((coursesRes.data || []).map((item) => [String(item.id), item]))
+  const history = pricingHistoryRes.error ? [] : (pricingHistoryRes.data || [])
+  return moneyRound((enrollmentsRes.data || [])
+    .filter((row) => enrollmentIsActiveForMonth(row, selectedMonth))
+    .reduce((sum, row) => {
+      const course = coursesById.get(String(row.corso_id || row.course_id || '')) || {}
+      const priced = resolveEnrollmentPricing(row, history, selectedMonth, course)
+      const amount = Number(priced.quota_allievo_mensile ?? priced.tariffa_mensile ?? course.prezzo_mensile ?? course.prezzo ?? 0)
+      return sum + (Number.isFinite(amount) ? Math.max(0, amount) : 0)
+    }, 0))
+}
+
+function allocatePackageAmount(totalAmount, dues) {
+  const cleanTotal = moneyRound(Math.max(0, Number(totalAmount || 0)))
+  const totalDue = dues.reduce((sum, item) => sum + Math.max(0, Number(item || 0)), 0)
+  if (!dues.length) return []
+  if (totalDue <= 0) {
+    const base = moneyRound(cleanTotal / dues.length)
+    const values = dues.map(() => base)
+    values[values.length - 1] = moneyRound(cleanTotal - values.slice(0, -1).reduce((a, b) => a + b, 0))
+    return values
+  }
+  const values = dues.map((due) => moneyRound(cleanTotal * Math.max(0, Number(due || 0)) / totalDue))
+  values[values.length - 1] = moneyRound(cleanTotal - values.slice(0, -1).reduce((a, b) => a + b, 0))
+  return values
+}
+
+export async function setAllievoPackagePayment({
+  tesseramentoId,
+  startMonth,
+  packageItem,
+  amount,
+  method = 'Contanti',
+  note = '',
+}) {
+  if (!tesseramentoId) throw new Error('Corsista non selezionato')
+  if (!packageItem?.id && !packageItem?.special) throw new Error('Seleziona un pacchetto')
+  const selectedStart = startMonth || dayjs().format('YYYY-MM')
+  const duration = Math.max(1, Number(packageItem.durata_mesi || 1))
+  const months = Array.from({ length: duration }, (_, index) => dayjs(`${selectedStart}-01`).add(index, 'month').format('YYYY-MM'))
+  const dues = []
+  for (const itemMonth of months) dues.push(await fetchStudentMonthlyDue(tesseramentoId, itemMonth))
+  const allocations = allocatePackageAmount(amount, dues)
+  const groupId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const coverageFrom = `${months[0]}-01`
+  const coverageTo = dayjs(`${months[months.length - 1]}-01`).endOf('month').format('YYYY-MM-DD')
+  const now = new Date().toISOString()
+  const cashAmount = moneyRound(amount)
+
+  const saved = []
+  for (let index = 0; index < months.length; index += 1) {
+    const itemMonth = months[index]
+    const monthStart = `${itemMonth}-01`
+    const monthEnd = dayjs(monthStart).endOf('month').format('YYYY-MM-DD')
+    const payload = {
+      tesseramento_id: tesseramentoId,
+      importo: allocations[index] || 0,
+      periodo: itemMonth,
+      mese: monthStart,
+      scadenza: monthEnd,
+      stato: 'pagato',
+      metodo: method || null,
+      descrizione: `${packageItem.nome} · copertura ${selectedStart} / ${months[months.length - 1]}`,
+      note: note || null,
+      tipo: 'quota_mensile',
+      pagato_il: dayjs().format('YYYY-MM-DD'),
+      data_pagamento: dayjs().format('YYYY-MM-DD'),
+      updated_at: now,
+      nova_package_id: packageItem.id || null,
+      nova_package_name: packageItem.nome,
+      nova_package_type: packageItem.tipo || 'altro',
+      nova_package_total: cashAmount,
+      nova_package_duration_months: duration,
+      nova_payment_group_id: groupId,
+      nova_coverage_from: coverageFrom,
+      nova_coverage_to: coverageTo,
+      nova_coverage_complete: true,
+      nova_cash_amount: index === 0 ? cashAmount : 0,
+    }
+
+    const existing = await orchideaSupabase
+      .from('pagamenti')
+      .select('id')
+      .eq('tesseramento_id', tesseramentoId)
+      .eq('periodo', itemMonth)
+      .eq('tipo', 'quota_mensile')
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .limit(1)
+
+    if (existing.error) throw new Error(existing.error.message || `Errore verifica pagamento ${itemMonth}`)
+    if (existing.data?.[0]?.id) {
+      const { data, error } = await orchideaSupabase.from('pagamenti').update(payload).eq('id', existing.data[0].id).select().single()
+      if (error) throw new Error(error.message || `Errore aggiornamento pagamento ${itemMonth}`)
+      saved.push(data)
+    } else {
+      const { data, error } = await orchideaSupabase.from('pagamenti').insert([{ ...payload, created_at: now }]).select().single()
+      if (error) throw new Error(error.message || `Errore creazione pagamento ${itemMonth}`)
+      saved.push(data)
+    }
+  }
+  return { rows: saved, months, groupId, coverageFrom, coverageTo, cashAmount }
 }
 
 export async function setAllievoMonthlyPayment({ tesseramentoId, month, amount, status, note = '', method = 'Contanti' }) {

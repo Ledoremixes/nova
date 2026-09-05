@@ -1,0 +1,38 @@
+NOVA - aggiornamento 06/09/2026
+
+1. Reset password corsista
+- rimosso il vecchio RPC che dipendeva da public.users sul database Orchidea;
+- nuova API server Vercel che usa Supabase Admin in modo protetto;
+- ricerca account tramite auth_user_id o email.
+
+2. Pacchetti
+- la pagina Pacchetti non mostra più i corsisti;
+- è diventata un catalogo listino (a gettone, mensile, trimestrale, annuale, All You Can Dance, altro);
+- nome, prezzo, durata, descrizione e stato sono modificabili;
+- creazione/modifica/eliminazione disponibili a segreteria e admin.
+
+3. Pagamenti
+- nuovo menu pacchetto nel modale Registra pagamento;
+- prezzo proposto dal catalogo ma sempre modificabile;
+- metodo di pagamento mantenuto;
+- pacchetti multi-mese registrano la copertura su tutti i mesi interessati;
+- storico salvato come snapshot, quindi le future modifiche del listino non alterano i pagamenti passati;
+- opzione Quota ridotta del mese: permette a settembre di registrare un importo ridotto come saldo completo;
+- a settembre i pacchetti multi-mese propongono ottobre come inizio copertura.
+
+4. Corsisti
+- voce laterale Atleti rinominata Corsisti;
+- terminologia operativa aggiornata;
+- pulsanti Corsista / Rimuovi corsista resi molto più visibili in Tesserati.
+
+5. Utenti Nova
+- admin può creare, modificare ed eliminare utenti;
+- modifica email, ruolo, stato e password;
+- impossibile eliminare l'account con cui si è attualmente connessi.
+
+6. Correzioni permanenti mantenute
+- TesseratiPage: fix autofill della mail nella barra di ricerca;
+- logo nuovo: public/NOVA.png;
+- accesso completo volontari e anteprima contratti;
+- popup SIAE interno;
+- modello C1 allineato.

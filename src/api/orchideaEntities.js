@@ -1215,19 +1215,28 @@ export async function deleteOrchideaTeacher(row) {
 
 export async function changeTesseratoPassword({ student, newPassword }) {
   if (!student?.auth_user_id && !student?.email) {
-    throw new Error('Questo allievo non ha auth_user_id né email collegabile.')
+    throw new Error('Questo corsista non ha auth_user_id né email collegabile.')
   }
   if (!newPassword || newPassword.length < 6) throw new Error('La password deve avere almeno 6 caratteri.')
 
-  const rpcName = student?.auth_user_id ? 'admin_set_allievo_password' : 'admin_set_allievo_password_by_email'
-  const params = student?.auth_user_id
-    ? { p_user_id: student.auth_user_id, p_new_password: newPassword }
-    : { p_email: String(student.email || '').trim().toLowerCase(), p_new_password: newPassword }
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('Sessione admin Nova non disponibile.')
 
-  const { data, error } = await orchideaSupabase.rpc(rpcName, params)
-
-  if (error) throw new Error(error.message || 'Errore modifica password allievo')
-  return data
+  const response = await fetch('/api/orchidea-auth-users', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      user_id: student.auth_user_id || null,
+      email: String(student.email || '').trim().toLowerCase(),
+      password: newPassword,
+    }),
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(payload.error || 'Errore modifica password corsista')
+  return payload
 }
 
 export { updateTesserato }

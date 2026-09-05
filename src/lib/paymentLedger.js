@@ -112,11 +112,13 @@ export function summarizeMonthlyTuitionPayments({ payments = [], selectedMonth, 
   // dei vecchi duplicati viene tracciata ma non altera saldo e compensi.
   const paid = due > 0 ? Math.min(rawPaid, due) : rawPaid
   const calculatedResidue = Math.max(due - paid, 0)
+  const packageCoverageComplete = authoritative?.nova_coverage_complete === true
   let status = 'da_pagare'
   if (paused) status = 'sospeso'
+  else if (packageCoverageComplete) status = 'pagato'
   else if (due > 0 && paid >= due) status = 'pagato'
   else if (paid > 0) status = 'parziale'
-  const residue = paused ? 0 : calculatedResidue
+  const residue = paused || packageCoverageComplete ? 0 : calculatedResidue
 
   return {
     paid,
@@ -133,5 +135,15 @@ export function summarizeMonthlyTuitionPayments({ payments = [], selectedMonth, 
     note: authoritative?.note || '',
     paidAt: authoritative?.data_pagamento || authoritative?.pagato_il || null,
     updatedAt: authoritative?.updated_at || authoritative?.created_at || null,
+    packageCoverageComplete,
+    packageId: authoritative?.nova_package_id || null,
+    packageName: authoritative?.nova_package_name || '',
+    packageType: authoritative?.nova_package_type || '',
+    packageTotal: asAmount(authoritative?.nova_package_total),
+    packageDurationMonths: Number(authoritative?.nova_package_duration_months || 0),
+    paymentGroupId: authoritative?.nova_payment_group_id || null,
+    coverageFrom: authoritative?.nova_coverage_from || null,
+    coverageTo: authoritative?.nova_coverage_to || null,
+    cashAmount: asAmount(authoritative?.nova_cash_amount),
   }
 }

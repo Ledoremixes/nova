@@ -121,9 +121,9 @@ export default function AtletiPage() {
     <section className="page">
       <div className="dashboard-hero">
         <div>
-          <div className="dashboard-hero__eyebrow">Atleti / corsisti</div>
+          <div className="dashboard-hero__eyebrow">Corsisti</div>
           <h2 className="dashboard-hero__title">Archivio corsisti da Orchidea Allievi</h2>
-          <p className="dashboard-hero__text">Cerca gli allievi, gestisci il ruolo corsista e assegna uno o più corsi direttamente dalla scheda atleta.</p>
+          <p className="dashboard-hero__text">Cerca i corsisti, gestisci il ruolo corsista e assegna uno o più corsi direttamente dalla scheda atleta.</p>
         </div>
       </div>
 
@@ -136,7 +136,7 @@ export default function AtletiPage() {
       <div className="page-card">
         <div className="section-head">
           <div>
-            <h2>Atleti</h2>
+            <h2>Corsisti</h2>
             <p>Cerca per nome, cognome, email, telefono, codice fiscale o tessera.</p>
           </div>
         </div>
@@ -217,7 +217,7 @@ export default function AtletiPage() {
                 <div className="atleti-package-icon"><BookOpenCheck size={26} /></div>
                 <span>Pacchetto mensile</span>
                 <strong>{money(monthlyTotal)}</strong>
-                <p>{details.enrollments?.length || 0} corsi attivi collegati all’allievo.</p>
+                <p>{details.enrollments?.length || 0} corsi attivi collegati al corsista.</p>
               </div>
             </div>
 
@@ -263,7 +263,7 @@ export default function AtletiPage() {
               <div className="atleti-linked-courses-head">
                 <div>
                   <h3>Corsi collegati</h3>
-                  <p>Riepilogo corsi inclusi nel pacchetto dell’allievo.</p>
+                  <p>Riepilogo corsi inclusi nel pacchetto del corsista.</p>
                 </div>
                 <span className="nova-pill nova-pill--neutral">{details.enrollments?.length || 0} totali</span>
               </div>
@@ -273,7 +273,7 @@ export default function AtletiPage() {
                 <div className="atleti-empty-courses">
                   <BookOpenCheck size={28} />
                   <strong>Nessun corso collegato</strong>
-                  <p>Seleziona un corso dal box sopra per creare il pacchetto dell’allievo.</p>
+                  <p>Seleziona un corso dal box sopra per creare il pacchetto del corsista.</p>
                 </div>
               ) : null}
 

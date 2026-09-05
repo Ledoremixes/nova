@@ -367,12 +367,12 @@ export default function GruppiPage() {
             {canManageCourses ? (
               <form className="course-enroll-box" onSubmit={handleAddParticipant}>
                 <div>
-                  <strong>Aggiungi allievo al corso</strong>
+                  <strong>Aggiungi corsista al corso</strong>
                   <p>Seleziona un tesserato/corsista dal database Orchidea Allievi.</p>
                 </div>
-                <input className="searchInput" value={studentPickerSearch} onChange={(e) => setStudentPickerSearch(e.target.value)} placeholder="Cerca allievo da aggiungere…" />
+                <input className="searchInput" value={studentPickerSearch} onChange={(e) => setStudentPickerSearch(e.target.value)} placeholder="Cerca corsista da aggiungere…" />
                 <select className="filterSelect" value={studentToAdd} onChange={(e) => setStudentToAdd(e.target.value)}>
-                  <option value="">— Seleziona allievo —</option>
+                  <option value="">— Seleziona corsista —</option>
                   {availableStudents.map((student) => (
                     <option key={student.id} value={student.id}>
                       {student.nomeCompleto || `${student.nome || ''} ${student.cognome || ''}`.trim() || student.email || 'Senza nome'}{student.email ? ` · ${student.email}` : ''}
@@ -382,7 +382,7 @@ export default function GruppiPage() {
                 <button className="topbar__button topbar__button--primary" disabled={!studentToAdd || addParticipantMutation.isPending}>
                   {addParticipantMutation.isPending ? 'Aggiungo…' : 'Aggiungi al corso'}
                 </button>
-                {studentsQuery.error ? <p className="form-error">Errore allievi: {studentsQuery.error.message}</p> : null}
+                {studentsQuery.error ? <p className="form-error">Errore corsisti: {studentsQuery.error.message}</p> : null}
                 {addParticipantMutation.error ? <p className="form-error">Errore iscrizione: {addParticipantMutation.error.message}</p> : null}
               </form>
             ) : null}
@@ -451,7 +451,7 @@ export default function GruppiPage() {
               {Number(courseToDelete.participants_count || 0) > 0 ? (
                 <div className="course-delete-warning">
                   Il corso risulta associato a <strong>{courseToDelete.participants_count}</strong>{' '}
-                  {Number(courseToDelete.participants_count) === 1 ? 'allievo' : 'allievi'}.
+                  {Number(courseToDelete.participants_count) === 1 ? 'corsista' : 'corsisti'}.
                   Se il database protegge i dati collegati, Nova impedirà l’eliminazione e potrai disattivare il corso dalla modifica.
                 </div>
               ) : null}
@@ -489,7 +489,7 @@ export default function GruppiPage() {
               <div>
                 <div className="course-editor-eyebrow">{creating ? 'Nuovo corso' : 'Modifica corso'}</div>
                 <h3>{creating ? 'Crea un nuovo corso' : editing?.nome}</h3>
-                <p>{creating ? 'Inserisci i dati principali. Potrai aggiungere gli allievi subito dopo la creazione.' : 'Aggiorna i dati che vengono usati in corsi, iscrizioni e pagamenti.'}</p>
+                <p>{creating ? 'Inserisci i dati principali. Potrai aggiungere i corsisti subito dopo la creazione.' : 'Aggiorna i dati che vengono usati in corsi, iscrizioni e pagamenti.'}</p>
               </div>
               <button type="button" className="course-editor-close" onClick={closeCourseEditor} aria-label="Chiudi"><X size={19} /></button>
             </div>

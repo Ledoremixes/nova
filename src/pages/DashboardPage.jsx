@@ -132,7 +132,7 @@ function DonutChart({ rows = [] }) {
   return (
     <div className="nova-donut-layout">
       <div className="nova-donut-chart">
-        <svg viewBox="0 0 220 220" role="img" aria-label="Grafico a torta dello stato degli allievi">
+        <svg viewBox="0 0 220 220" role="img" aria-label="Grafico a torta dello stato dei corsisti">
           <circle className="nova-donut-chart__track" cx="110" cy="110" r="78" pathLength="100" />
           {segments.map((segment) => {
             const visiblePercentage = Math.max(segment.percentage - 1.2, 0.8)
@@ -153,7 +153,7 @@ function DonutChart({ rows = [] }) {
             )
           })}
         </svg>
-        <div className="nova-donut-chart__center"><strong>{total}</strong><span>allievi</span></div>
+        <div className="nova-donut-chart__center"><strong>{total}</strong><span>corsisti</span></div>
       </div>
 
       <div className="nova-donut-legend">
@@ -245,7 +245,7 @@ export default function DashboardPage() {
           <div className="dashboard-hero__eyebrow">Panoramica operativa</div>
           <h2 className="dashboard-hero__title">Nova Orchidea</h2>
           <p className="dashboard-hero__text">
-            Qui trovi solo dati operativi: allievi, corsi, tesseramenti e attività della scuola. I valori economici sono spostati nella sezione Contabilità.
+            Qui trovi solo dati operativi: corsisti, corsi, tesseramenti e attività della scuola. I valori economici sono spostati nella sezione Contabilità.
           </p>
         </div>
         <span className="nova-pill nova-pill--neutral">{isAdmin ? 'Vista admin' : 'Vista operatore'}</span>
@@ -253,7 +253,7 @@ export default function DashboardPage() {
 
       <div className="stats-grid">
         <StatCard title="Tesserati" value={registry.totalTesserati} hint="Anagrafiche totali" accent />
-        <StatCard title="Corsisti" value={registry.totalCorsisti} hint="Allievi collegati ai corsi" />
+        <StatCard title="Corsisti" value={registry.totalCorsisti} hint="Corsisti collegati ai corsi" />
         <StatCard title="Tessere attive" value={registry.totalTessereAttive} hint="Tessere valide" />
         <StatCard title="Corsi" value={registry.totalCorsi} hint="Corsi configurati" />
         <StatCard title="Insegnanti" value={registry.totalInsegnanti} hint="Team didattico" />
@@ -275,7 +275,7 @@ export default function DashboardPage() {
         <div className="page-card nova-chart-card nova-chart-card--donut">
           <div className="section-head">
             <div>
-              <h3>Stato allievi</h3>
+              <h3>Stato corsisti</h3>
               <p>Distribuzione tra corsisti, tesserati e situazioni da controllare.</p>
             </div>
             <span className="nova-chart-badge nova-chart-badge--pink">Composizione</span>

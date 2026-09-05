@@ -1931,3 +1931,14 @@
     font-size: 1.55rem;
   }
 }
+
+/* Selezione pacchetto nel modale pagamenti */
+.payments-package-choice { display: grid; gap: 12px; margin: 18px 0 6px; }
+.payments-package-selected { display: flex; align-items: center; gap: 12px; padding: 13px 15px; border-radius: 15px; background: linear-gradient(135deg, #f7edff, #f1efff); border: 1px solid rgba(116,75,240,.16); color: #4f2aad; }
+.payments-package-selected > div { display: grid; gap: 2px; }
+.payments-package-selected strong { color: #24203a; }
+.payments-package-selected span { font-size: 13px; color: #68617e; }
+.payments-september-hint { display: flex; align-items: flex-start; gap: 12px; margin: 14px 0; padding: 14px 16px; border-radius: 15px; border: 1px solid rgba(223,151,22,.22); background: #fff8e9; color: #72520f; }
+.payments-september-hint > div { display: grid; gap: 3px; }
+.payments-september-hint strong { color: #513906; }
+.payments-september-hint span { font-size: 13px; line-height: 1.45; }

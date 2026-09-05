@@ -1,26 +1,33 @@
 import { supabase } from './supabase'
 
-export async function fetchGestionaleUsers() {
-  const { data, error } = await supabase
-    .from('users')
-    .select('id, email, role, is_active, created_at')
-    .order('email', { ascending: true })
+async function adminRequest(method, body) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('Sessione admin non disponibile.')
+  const response = await fetch('/api/admin-users', {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(payload.error || 'Errore gestione utenti')
+  return payload
+}
 
-  if (error) throw new Error(error.message || 'Errore caricamento utenti')
-  return data || []
+export async function fetchGestionaleUsers() {
+  return adminRequest('GET')
+}
+
+export async function createGestionaleUser(payload) {
+  return adminRequest('POST', payload)
 }
 
 export async function updateGestionaleUser(id, payload) {
-  const { data, error } = await supabase
-    .from('users')
-    .update({
-      role: payload.role,
-      is_active: payload.is_active,
-    })
-    .eq('id', id)
-    .select('id, email, role, is_active, created_at')
-    .single()
+  return adminRequest('PATCH', { id, ...payload })
+}
 
-  if (error) throw new Error(error.message || 'Errore modifica utente')
-  return data
+export async function deleteGestionaleUser(id) {
+  return adminRequest('DELETE', { id })
 }
