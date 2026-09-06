@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import { createVolunteer, deleteVolunteer, fetchVolunteers, updateVolunteer } from '../api/volunteers'
 import { createVolunteerContractPdfBlob, generateVolunteerContractPdf } from '../utils/volunteerContractPdf'
-import { useAuth } from '../context/AuthProvider'
+import { useAuth } from '../context/authContext'
 import '../styles/VolontariPage.css'
 
 const ROLES = [

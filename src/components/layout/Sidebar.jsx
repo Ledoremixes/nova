@@ -1,3 +1,4 @@
+import { createElement } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -20,7 +21,7 @@ import {
   HandHeart,
   FileText,
 } from 'lucide-react'
-import { useAuth } from '../../context/AuthProvider'
+import { useAuth } from '../../context/authContext'
 
 const items = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'user'] },
@@ -65,10 +66,10 @@ export default function Sidebar({ isOpen, onNavigate }) {
       </div>
 
       <nav className="sidebar__nav">
-        {visibleItems.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} onClick={onNavigate} className={({ isActive }) => isActive ? 'sidebar__link sidebar__link--active' : 'sidebar__link'}>
-            <Icon size={18} />
-            <span>{label}</span>
+        {visibleItems.map((item) => (
+          <NavLink key={item.to} to={item.to} onClick={onNavigate} className={({ isActive }) => isActive ? 'sidebar__link sidebar__link--active' : 'sidebar__link'}>
+            {createElement(item.icon, { size: 18 })}
+            <span>{item.label}</span>
           </NavLink>
         ))}
       </nav>

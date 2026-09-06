@@ -751,3 +751,69 @@
   .module-detail, .tutorial-detail { padding: 17px 16px 18px; }
   .campaign-planning__head { align-items: flex-start; flex-direction: column; }
 }
+
+/* Eventi - riepilogo economico dettagliato */
+.event-economics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.event-economics-grid > div,
+.event-finance-preview > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 12px;
+  border: 1px solid rgba(23, 32, 51, 0.07);
+  border-radius: 12px;
+  background: #fafafe;
+}
+
+.event-economics-grid small,
+.event-finance-preview small {
+  color: #858b98;
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .045em;
+}
+
+.event-economics-grid strong { font-size: 14px; }
+.event-economics-grid span,
+.event-finance-preview span { color: #8a909c; font-size: 9px; line-height: 1.35; }
+.event-economics-grid .is-positive,
+.event-finance-preview .is-positive { border-color: rgba(16, 185, 129, .22); background: #effbf6; }
+.event-economics-grid .is-positive strong,
+.event-finance-preview .is-positive strong { color: #08795b; }
+.event-economics-grid .is-negative,
+.event-finance-preview .is-negative { border-color: rgba(220, 38, 38, .18); background: #fff4f4; }
+.event-economics-grid .is-negative strong,
+.event-finance-preview .is-negative strong { color: #b4232c; }
+.event-card__footer--actions { justify-content: flex-end; margin-top: 10px; padding-top: 10px; }
+.event-card__footer--actions .event-card__actions { margin-left: 0; }
+
+.event-finance-preview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid rgba(109, 74, 255, .14);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(109, 74, 255, .055), rgba(226, 51, 179, .035));
+}
+
+.event-finance-preview > div { background: rgba(255, 255, 255, .86); }
+.event-finance-preview strong { font-size: 18px; letter-spacing: -.02em; }
+
+@media (max-width: 920px) {
+  .event-economics-grid,
+  .event-finance-preview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .event-economics-grid,
+  .event-finance-preview { grid-template-columns: 1fr; }
+}

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { HeartPulse, Plus, Search, Trash2 } from 'lucide-react'
 import { createMedicalVisit, deleteMedicalVisit, fetchMedicalStudents, fetchMedicalVisits } from '../api/medicalVisits'
-import { useAuth } from '../context/AuthProvider'
+import { useAuth } from '../context/authContext'
 
 const emptyForm = { tesseramento_id: '', issued_at: '', expires_at: '', doctor: '', notes: '', status: 'valida' }
 
@@ -42,7 +42,7 @@ export default function VisiteMedichePage() {
   })
   const deleteMutation = useMutation({ mutationFn: deleteMedicalVisit, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['medical-visits'] }) })
 
-  const visits = visitsQuery.data || []
+  const visits = useMemo(() => visitsQuery.data || [], [visitsQuery.data])
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
     if (!term) return visits

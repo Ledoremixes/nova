@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as XLSX from 'xlsx'
 import { LockKeyhole } from 'lucide-react'
-import { useAuth } from '../context/AuthProvider'
+import { useAuth } from '../context/authContext'
 import {
   fetchEntries,
   fetchAccounts,

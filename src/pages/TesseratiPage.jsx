@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useAuth } from '../context/AuthProvider'
+import { useAuth } from '../context/authContext'
 import {
   fetchTesserati,
   fetchTesseratoDetails,
@@ -10,8 +10,8 @@ import {
   generateMissingMembershipNumbers,
 } from '../api/tesserati'
 import { hasCustomMembershipNumber, membershipCode } from '../lib/membership'
-import { getOrchideaConfigStatus, getOrchideaAuthStatus } from '../api/orchideaSupabase'
 import { changeTesseratoPassword } from '../api/orchideaEntities'
+import { markConvertedCorsistaMembership } from '../api/membershipFees'
 import '../styles/TesseratiPage.css'
 
 const emptyStudentForm = {
@@ -136,7 +136,7 @@ function billingLabel(value) {
 }
 
 export default function TesseratiPage() {
-  const { role, orchideaAuthWarning } = useAuth()
+  const { role } = useAuth()
   const currentRole = String(role || '').trim().toLowerCase()
   const isAdmin = currentRole === 'admin'
   const canEditStudent = isAdmin || currentRole === 'user'
@@ -150,11 +150,6 @@ export default function TesseratiPage() {
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [studentForm, setStudentForm] = useState(emptyStudentForm)
   const [passwordForm, setPasswordForm] = useState({ password: '', password2: '' })
-
-  const { data: authStatus } = useQuery({
-    queryKey: ['orchidea-auth-status'],
-    queryFn: getOrchideaAuthStatus,
-  })
 
   const { data: students = [], isLoading, error } = useQuery({
     queryKey: ['tesseramenti-orchidea'],
@@ -217,7 +212,16 @@ export default function TesseratiPage() {
   })
 
   const toggleCorsistaMutation = useMutation({
-    mutationFn: toggleCorsista,
+    mutationFn: async (student) => {
+      if (!student.is_corsista) {
+        try {
+          await markConvertedCorsistaMembership(student)
+        } catch (error) {
+          console.warn('Quota tessera corsista non inizializzata:', error)
+        }
+      }
+      return toggleCorsista(student)
+    },
     onSuccess: (updated) => {
       if (selectedStudent?.id === updated.id) {
         setSelectedStudent(updated)
@@ -266,10 +270,17 @@ export default function TesseratiPage() {
     setStudentForm((current) => ({ ...current, [field]: value }))
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     if (!selectedStudent || !canEditStudent) return
 
+    if (!selectedStudent.is_corsista && studentForm.is_corsista) {
+      try {
+        await markConvertedCorsistaMembership(selectedStudent)
+      } catch (error) {
+        console.warn('Quota tessera corsista non inizializzata:', error)
+      }
+    }
     updateMutation.mutate({ id: selectedStudent.id, payload: studentForm })
   }
 
@@ -284,20 +295,7 @@ export default function TesseratiPage() {
 
   const details = detailsQuery.data || { enrollments: [], payments: [] }
   const canResetSelectedPassword = Boolean(selectedStudent?.auth_user_id || selectedStudent?.email)
-  const configStatus = getOrchideaConfigStatus()
-  const isLegacySource = students.sourceTable === 'tesserati'
-  const sourceLabel = students.sourceLabel || (isLegacySource ? 'Nova legacy' : 'Orchidea Allievi')
-  const hasOrchideaAuthProblem = configStatus.mode === 'dedicated' && authStatus && !authStatus.authenticated
-  const sourceAlertClass = isLegacySource || hasOrchideaAuthProblem || orchideaAuthWarning
-    ? 'nova-source-alert nova-source-alert--warn'
-    : 'nova-source-alert nova-source-alert--ok'
-  const sourceMessage = isLegacySource
-    ? configStatus.message
-    : hasOrchideaAuthProblem
-      ? 'Database configurato, ma manca la sessione sul portale allievi: fai logout e rientra con l’account admin di orchidea-allievi.'
-      : authStatus?.authenticated
-        ? `Sessione allievi attiva${authStatus.email ? ` con ${authStatus.email}` : ''}.`
-        : configStatus.message
+
 
   return (
     <section className="page">
@@ -309,11 +307,6 @@ export default function TesseratiPage() {
             Questa sezione legge la tabella ufficiale <strong>tesseramenti</strong> usata dal sito e da orchidea-allievi, senza creare doppioni.
           </p>
         </div>
-      </div>
-
-      <div className={sourceAlertClass}>
-        <strong>Sorgente dati:</strong> {sourceLabel}. {sourceMessage}
-        {orchideaAuthWarning ? <span className="source-alert-detail"> {orchideaAuthWarning}</span> : null}
       </div>
 
       <div className="stats-grid">
@@ -408,7 +401,7 @@ export default function TesseratiPage() {
             <div className="student-list-toolbar">
               <div>
                 <strong>{filteredStudents.length} tesserati trovati</strong>
-                <small>Fonte dati: {sourceLabel}</small>
+                <small>Archivio operativo stagione corrente</small>
               </div>
             </div>
 

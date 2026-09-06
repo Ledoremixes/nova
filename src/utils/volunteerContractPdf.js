@@ -53,7 +53,7 @@ async function buildVolunteerContractPdf(volunteer, settings = {}) {
   function header() {
     doc.setFillColor(...SOFT); doc.rect(0, 0, W, 28, 'F')
     doc.setFillColor(...BRAND); doc.rect(0, 0, 4, 28, 'F')
-    if (logo) { try { doc.addImage(logo, 'PNG', mx, 5, 17, 17, undefined, 'FAST') } catch {} }
+    if (logo) { try { doc.addImage(logo, 'PNG', mx, 5, 17, 17, undefined, 'FAST') } catch { /* logo opzionale: il PDF resta valido anche senza immagine */ } }
     doc.setFont('helvetica', 'bold'); doc.setTextColor(...INK); doc.setFontSize(12)
     doc.text('CLUB ORCHIDEA ASD', logo ? 39 : mx, 11)
     doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUTED); doc.setFontSize(8.5)

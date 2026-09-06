@@ -13,4 +13,6 @@ Dopo aver aggiunto le variabili fai un nuovo deploy su Vercel.
 
 Le API `/api/admin-users` e `/api/orchidea-auth-users` verificano prima che la sessione corrente appartenga a un utente Nova con ruolo `admin` e `is_active = true`.
 
-Con entrambe le service role configurate, quando l'admin crea/modifica/elimina un utente Nova, Nova sincronizza anche l'account Auth sul progetto Orchidea Allievi con la stessa email/password. Questo evita che il nuovo operatore entri in Nova ma non riesca ad aprire Tesserati, Corsi o Pagamenti.
+Con entrambe le service role configurate, quando l'admin crea/modifica/elimina un utente Nova, Nova prova a sincronizzare anche l'account Auth sul progetto Orchidea Allievi con la stessa email/password. La sincronizzazione è secondaria: un problema sul progetto Orchidea non annulla più una modifica Nova già riuscita.
+
+Il reset diretto della password di un corsista del portale Orchidea richiede invece `ORCHIDEA_SUPABASE_SERVICE_ROLE_KEY`: per sicurezza Nova non prova più a usare la service-role del progetto Nova su un progetto Supabase diverso.

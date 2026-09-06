@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getNovaModulesData, subscribeNovaModules, updateNovaModulesData } from '../lib/novaModulesStore'
-import { useAuth } from '../context/AuthProvider'
+import { useAuth } from '../context/authContext'
 
 export default function useNovaModules() {
   const { user } = useAuth()

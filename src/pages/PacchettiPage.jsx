@@ -28,7 +28,10 @@ function typeLabel(value) {
 }
 
 function emptyForm() {
-  return { nome: '', tipo: 'mensile', durata_mesi: 1, prezzo: '', descrizione: '', attivo: true, ordine: 0 }
+  return {
+    nome: '', tipo: 'mensile', durata_mesi: 1, prezzo: '', descrizione: '', attivo: true, ordine: 0,
+    pricing_key: null, pricing_group: null, pricing_period: null,
+  }
 }
 
 export default function PacchettiPage() {
@@ -93,6 +96,9 @@ export default function PacchettiPage() {
       descrizione: item.descrizione || '',
       attivo: item.attivo !== false,
       ordine: Number(item.ordine || 0),
+      pricing_key: item.pricing_key || null,
+      pricing_group: item.pricing_group || null,
+      pricing_period: item.pricing_period || null,
     })
     setEditor({ mode: 'edit', item })
   }
@@ -137,17 +143,17 @@ export default function PacchettiPage() {
             <div className="packages-catalog-card__head">
               <div className="packages-catalog-card__icon"><PackageCheck size={21} /></div>
               <div>
-                <span className="packages-catalog-type">{typeLabel(item.tipo)}</span>
+                <span className="packages-catalog-type">{typeLabel(item.tipo)}{item.pricing_key ? ' · Listino 2026/2027' : ''}</span>
                 <h3>{item.nome}</h3>
               </div>
               <span className={item.attivo ? 'nova-pill nova-pill--ok' : 'nova-pill nova-pill--neutral'}>{item.attivo ? 'Attivo' : 'Disattivato'}</span>
             </div>
             <div className="packages-catalog-card__price"><Euro size={18} /><strong>{euro(item.prezzo)}</strong></div>
-            <div className="packages-catalog-card__coverage"><CalendarRange size={17} /><span>{item.durata_mesi === 1 ? '1 mese di copertura' : `${item.durata_mesi} mesi di copertura`}</span></div>
+            <div className="packages-catalog-card__coverage"><CalendarRange size={17} /><span>{item.tipo === 'gettone' ? '1 lezione singola · nessuna copertura mensile' : item.durata_mesi === 1 ? '1 mese di copertura' : `${item.durata_mesi} mesi di copertura`}</span></div>
             <p>{item.descrizione || 'Nessuna descrizione interna.'}</p>
             <div className="packages-catalog-card__actions">
               <button className="actionBtn" type="button" onClick={() => openEdit(item)}><Edit3 size={15} /> Modifica</button>
-              <button className="actionBtn packages-delete-btn" type="button" onClick={() => setDeleteTarget(item)}><Trash2 size={15} /> Elimina</button>
+              {!item.pricing_key ? <button className="actionBtn packages-delete-btn" type="button" onClick={() => setDeleteTarget(item)}><Trash2 size={15} /> Elimina</button> : null}
             </div>
           </article>
         ))}
@@ -159,15 +165,15 @@ export default function PacchettiPage() {
         <div className="modalOverlay" onClick={() => setEditor(null)}>
           <form className="modalCard packages-catalog-modal" onSubmit={submit} onClick={(e) => e.stopPropagation()}>
             <div className="packages-catalog-modal__hero">
-              <div><div className="dashboard-hero__eyebrow">{editor.mode === 'create' ? 'Nuova formula' : 'Modifica formula'}</div><h3>{editor.mode === 'create' ? 'Crea pacchetto' : form.nome}</h3><p>Il prezzo sarà proposto automaticamente in Pagamenti, ma resterà sempre modificabile al momento dell’incasso.</p></div>
+              <div><div className="dashboard-hero__eyebrow">{editor.mode === 'create' ? 'Nuova formula' : 'Modifica formula'}</div><h3>{editor.mode === 'create' ? 'Crea pacchetto' : form.nome}</h3><p>Il prezzo sarà proposto automaticamente in Pagamenti, ma resterà sempre modificabile al momento dell’incasso. I pacchetti “A gettone” valgono una sola lezione e non saldano il mese.</p></div>
               <button type="button" className="package-editor-close" onClick={() => setEditor(null)}><X size={20} /></button>
             </div>
 
             <div className="packages-catalog-form">
               <label>Nome pacchetto<input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} placeholder="Es. Trimestrale 2 corsi" required /></label>
-              <label>Tipologia<select value={form.tipo} onChange={(e) => changeType(e.target.value)}>{TYPE_OPTIONS.map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label>
+              <label>Tipologia<select value={form.tipo} onChange={(e) => changeType(e.target.value)} disabled={Boolean(form.pricing_key)}>{TYPE_OPTIONS.map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select>{form.pricing_key ? <small>Formula del listino automatico 2026/2027: puoi modificarne nome e prezzo, mentre durata e tipologia restano collegate al calcolo automatico.</small> : null}</label>
               <label>Prezzo €<input type="number" min="0" step="0.01" value={form.prezzo} onChange={(e) => setForm({ ...form, prezzo: e.target.value })} required /></label>
-              <label>Mesi coperti<input type="number" min="1" max="24" step="1" value={form.durata_mesi} onChange={(e) => setForm({ ...form, durata_mesi: Number(e.target.value || 1) })} required /></label>
+              {form.tipo === 'gettone' ? <label>Copertura<input value="Lezione singola" disabled /><small>Il gettone non chiude e non copre l’intero mese.</small></label> : <label>Mesi coperti<input type="number" min="1" max="24" step="1" value={form.durata_mesi} onChange={(e) => setForm({ ...form, durata_mesi: Number(e.target.value || 1) })} required disabled={Boolean(form.pricing_key)} /></label>}
               <label className="packages-catalog-form__wide">Descrizione / note interne<textarea value={form.descrizione} onChange={(e) => setForm({ ...form, descrizione: e.target.value })} placeholder="Es. valido per tre mesi consecutivi…" /></label>
               <label className="check-card packages-catalog-active"><input type="checkbox" checked={form.attivo} onChange={(e) => setForm({ ...form, attivo: e.target.checked })} /><span>Pacchetto attivo</span><small>Se disattivato resta nello storico ma non viene proposto nei nuovi pagamenti.</small></label>
             </div>

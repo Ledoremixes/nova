@@ -35,10 +35,20 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Metodo non consentito' })
   try {
     await requireNovaAdmin(req)
-    const url = process.env.ORCHIDEA_SUPABASE_URL || process.env.VITE_ORCHIDEA_SUPABASE_URL || process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || ''
-    const key = process.env.ORCHIDEA_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-    if (!url || !key) throw Object.assign(new Error('Configura ORCHIDEA_SUPABASE_SERVICE_ROLE_KEY su Vercel.'), { status: 503 })
-    const orchidea = client(url, key)
+    const novaUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || ''
+    const orchideaUrl = process.env.ORCHIDEA_SUPABASE_URL || process.env.VITE_ORCHIDEA_SUPABASE_URL || novaUrl
+    const dedicatedOrchideaKey = process.env.ORCHIDEA_SUPABASE_SERVICE_ROLE_KEY || ''
+    const sharedNovaKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    // A service-role key belongs to a single Supabase project. Reusing Nova's key
+    // against a different Orchidea project causes the misleading "invalid JWT" error.
+    const orchideaKey = dedicatedOrchideaKey || (orchideaUrl && orchideaUrl === novaUrl ? sharedNovaKey : '')
+    if (!orchideaUrl || !orchideaKey) {
+      throw Object.assign(
+        new Error('Configura ORCHIDEA_SUPABASE_SERVICE_ROLE_KEY per il progetto Orchidea: la chiave service-role di Nova non può essere usata su un progetto Supabase diverso.'),
+        { status: 503 },
+      )
+    }
+    const orchidea = client(orchideaUrl, orchideaKey)
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
     const password = String(body.password || '')
     if (password.length < 6) return json(res, 400, { error: 'La password deve avere almeno 6 caratteri.' })

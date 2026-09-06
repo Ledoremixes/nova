@@ -1,7 +1,8 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Mail, Save, ShieldCheck } from 'lucide-react'
-import { useAuth } from '../context/AuthProvider'
+import { useAuth } from '../context/authContext'
 import { fetchAccountProfile, updateOwnEmail, updateOwnPassword, upsertAccountProfile } from '../api/account'
 
 export default function AccountPage() {

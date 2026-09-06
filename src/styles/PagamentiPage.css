@@ -34,7 +34,7 @@
 .payments-filters-card,
 .payments-table-card,
 .payments-modal {
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 1);
   border: 1px solid rgba(99, 102, 241, 0.12);
   box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
   border-radius: 24px;
@@ -1942,3 +1942,14 @@
 .payments-september-hint > div { display: grid; gap: 3px; }
 .payments-september-hint strong { color: #513906; }
 .payments-september-hint span { font-size: 13px; line-height: 1.45; }
+
+/* Pagamento a gettone: stato distinto dal saldo mensile. */
+.payments-student-status--token {
+  color: #6d28d9;
+  background: rgba(124, 58, 237, 0.11);
+  border: 1px solid rgba(124, 58, 237, 0.24);
+}
+
+.payments-student-card--gettone {
+  border-color: rgba(124, 58, 237, 0.22);
+}

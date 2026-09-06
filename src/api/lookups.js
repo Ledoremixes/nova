@@ -1,16 +1,5 @@
 import { supabase } from './supabase'
 
-async function getCurrentUserId() {
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
-
-  if (error) throw error
-  if (!user) throw new Error('Utente non autenticato')
-  return user.id
-}
-
 export async function fetchLookupOptions() {
   const { data, error } = await supabase
     .from('lookup_options')

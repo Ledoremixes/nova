@@ -1,16 +1,44 @@
-# React + Vite
+# Nova Gestionale ASD
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Gestionale React/Vite per Club Orchidea ASD.
 
-Currently, two official plugins are available:
+## Avvio locale
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+npm run dev
+```
 
-## React Compiler
+`npm run dev` espone anche le API locali usate da Nova (`/api/admin-users`, `/api/orchidea-auth-users`, `/api/packages-catalog`), quindi gestione utenti e funzioni admin non restituiscono più 404 durante lo sviluppo con Vite.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Variabili ambiente
 
-## Expanding the ESLint configuration
+Copia `.env.example` in `.env` e configura almeno:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` (solo backend/API)
+- `VITE_ORCHIDEA_SUPABASE_URL`
+- `VITE_ORCHIDEA_SUPABASE_ANON_KEY`
+- `ORCHIDEA_SUPABASE_SERVICE_ROLE_KEY` se vuoi permettere a Nova di modificare direttamente le password degli account Auth del portale Orchidea Allievi.
+
+Non usare mai una service-role con prefisso `VITE_`.
+
+## Pacchetti
+
+Il catalogo è salvato nelle `lookup_options` globali del database Nova. Al primo avvio con catalogo vuoto, Nova crea automaticamente:
+
+- **A gettone** — **12,00 €** — una singola lezione, senza copertura mensile.
+
+I gettoni vengono registrati come movimenti separati e non possono segnare il mese come pagato. Più gettoni nello stesso mese restano più lezioni singole, non una quota mensile.
+
+## Migrazione pagamenti
+
+`packages_and_payment_coverage.sql` va eseguito sul database Orchidea Allievi se non sono ancora presenti i campi `nova_*` nella tabella `pagamenti`.
+
+## Verifiche
+
+```bash
+npm run lint
+npm run build
+```

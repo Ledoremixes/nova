@@ -20,7 +20,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react'
-import { useAuth } from '../context/AuthProvider'
+import { useAuth } from '../context/authContext'
 import {
   assignCourseToTeacher,
   createOrchideaTeacher,

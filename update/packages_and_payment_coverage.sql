@@ -16,6 +16,26 @@ create table if not exists public.nova_packages_catalog (
   updated_at timestamptz not null default now()
 );
 
+
+-- Se la tabella esisteva già da una versione precedente, CREATE TABLE IF NOT EXISTS
+-- non aggiorna il default della colonna id. Forziamo quindi il default in modo idempotente.
+do $$
+declare
+  id_type text;
+begin
+  select data_type into id_type
+  from information_schema.columns
+  where table_schema = 'public'
+    and table_name = 'nova_packages_catalog'
+    and column_name = 'id';
+
+  if id_type = 'uuid' then
+    execute 'alter table public.nova_packages_catalog alter column id set default gen_random_uuid()';
+  elsif id_type in ('text', 'character varying', 'character') then
+    execute 'alter table public.nova_packages_catalog alter column id set default gen_random_uuid()::text';
+  end if;
+end $$;
+
 create index if not exists nova_packages_catalog_attivo_idx
   on public.nova_packages_catalog(attivo, ordine, nome);
 

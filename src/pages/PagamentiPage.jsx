@@ -23,6 +23,7 @@ import '../styles/PagamentiPage.css'
 import { fetchOrchideaCourses } from '../api/orchideaEntities'
 import { euro, fetchAllieviPaymentsMonth, setAllievoMonthlyPayment, setAllievoPackagePayment } from '../api/orchideaPayments'
 import { fetchPackagesCatalog } from '../api/packagesCatalog'
+import { packagesForCourseSelection, resolveCoursePricing } from '../lib/coursePriceList'
 
 const currentMonth = dayjs().format('YYYY-MM')
 
@@ -45,6 +46,7 @@ function monthLabel(month) {
 function statusLabel(status) {
   if (status === 'pagato') return 'Pagato'
   if (status === 'parziale') return 'Parziale'
+  if (status === 'gettone') return 'A gettone'
   if (status === 'sospeso') return 'Sospeso/chiuso'
   return 'Da pagare'
 }
@@ -52,6 +54,7 @@ function statusLabel(status) {
 function statusClass(status) {
   if (status === 'pagato') return 'payments-student-status payments-student-status--paid'
   if (status === 'parziale') return 'payments-student-status payments-student-status--partial'
+  if (status === 'gettone') return 'payments-student-status payments-student-status--token'
   if (status === 'sospeso') return 'payments-student-status payments-student-status--paused'
   return 'payments-student-status payments-student-status--due'
 }
@@ -68,6 +71,11 @@ function parseAmount(value) {
 }
 
 function paymentHeadline(row) {
+  if (row.stato_pagamento === 'gettone') {
+    const count = Number(row.token_payments_count || 0)
+    const label = count === 1 ? '1 lezione pagata' : `${count} lezioni pagate`
+    return `${label} · ${euro(row.token_paid || row.pagato)} incassati · nessuna copertura mensile`
+  }
   if (row.stato_pagamento === 'pagato') return 'Quota coperta per intero'
   if (row.stato_pagamento === 'parziale') return `${euro(row.residuo)} ancora da incassare`
   if (row.stato_pagamento === 'sospeso') return 'Quota sospesa: non genera residuo operativo'
@@ -130,9 +138,10 @@ export default function PagamentiPage() {
   const rows = useMemo(() => paymentsQuery.data || [], [paymentsQuery.data])
   const courses = coursesQuery.data || []
   const packages = packagesQuery.data || []
+  const paymentPackages = paymentEditor ? packagesForCourseSelection(paymentEditor.corsi || [], packages) : packages
   const selectedPackage = selectedPackageId === '__reduced__'
     ? { id: null, special: true, nome: 'Quota ridotta del mese', tipo: 'ridotta', durata_mesi: 1, prezzo: Number(paymentEditor?.residuo || paymentEditor?.quota_mese || 0) }
-    : (packages.find((item) => String(item.id) === String(selectedPackageId)) || null)
+    : (paymentPackages.find((item) => String(item.id) === String(selectedPackageId)) || null)
   const packageDuration = Math.max(1, Number(selectedPackage?.durata_mesi || 1))
   const isTokenPackage = selectedPackage?.tipo === 'gettone'
   const isCoveragePackage = Boolean(selectedPackage && !isTokenPackage)
@@ -140,21 +149,24 @@ export default function PagamentiPage() {
 
   const summary = useMemo(() => rows.reduce((acc, row) => {
     acc.count += 1
-    acc.totalDue += Number(row.quota_mese || 0)
     acc.paid += Number(row.pagato || 0)
-    acc.residue += Number(row.residuo || 0)
+    if (row.stato_pagamento !== 'gettone') {
+      acc.totalDue += Number(row.quota_mese || 0)
+      acc.residue += Number(row.residuo || 0)
+    }
     if (row.stato_pagamento === 'pagato') acc.paidCount += 1
     if (row.stato_pagamento === 'parziale') acc.partialCount += 1
+    if (row.stato_pagamento === 'gettone') acc.tokenCount += 1
     if (row.stato_pagamento === 'sospeso') acc.pausedCount += 1
     if (row.stato_pagamento === 'da_pagare' || row.stato_pagamento === 'parziale') acc.dueCount += 1
     return acc
-  }, { count: 0, totalDue: 0, paid: 0, residue: 0, paidCount: 0, partialCount: 0, dueCount: 0, pausedCount: 0 }), [rows])
+  }, { count: 0, totalDue: 0, paid: 0, residue: 0, paidCount: 0, partialCount: 0, tokenCount: 0, dueCount: 0, pausedCount: 0 }), [rows])
 
   const activeFilters = Number(courseId !== 'all') + Number(status !== 'all') + Number(Boolean(search.trim()))
   const editorAmount = parseAmount(paymentAmount)
   const editorPaidAfter = paymentEditor ? Math.min(Number(paymentEditor.pagato || 0) + editorAmount, Number(paymentEditor.quota_mese || 0)) : 0
   const editorResidueAfter = paymentEditor ? Math.max(Number(paymentEditor.quota_mese || 0) - editorPaidAfter, 0) : 0
-  const editorError = paymentEditor && (editorAmount <= 0 || ((!selectedPackage || isTokenPackage) && editorAmount > Number(paymentEditor.residuo || 0) + 0.001))
+  const editorError = paymentEditor && (editorAmount <= 0 || (!selectedPackage && editorAmount > Number(paymentEditor.residuo || 0) + 0.001))
   const anyPaymentPending = setPaymentMutation.isPending || packagePaymentMutation.isPending
 
   function changeMonth(delta) {
@@ -170,9 +182,17 @@ export default function PagamentiPage() {
   function openPaymentEditor(row) {
     setFeedback('')
     setPaymentEditor(row)
-    setSelectedPackageId('')
     setCoverageStartMonth(month)
-    setPaymentAmount(Number(row.residuo || row.quota_mese || 0).toFixed(2))
+    const rowPackages = packagesForCourseSelection(row.corsi || [], packages)
+    const tokenPackage = rowPackages.find((item) => item.tipo === 'gettone' && item.attivo !== false)
+    const recommendedMonthly = resolveCoursePricing(row.corsi || [], packages, 'mensile')
+    const defaultPackage = row.stato_pagamento === 'gettone'
+      ? tokenPackage
+      : row.stato_pagamento === 'da_pagare' && Number(row.pagato || 0) <= 0
+        ? recommendedMonthly
+        : null
+    setSelectedPackageId(defaultPackage?.id || '')
+    setPaymentAmount(Number(defaultPackage?.prezzo ?? row.residuo ?? row.quota_mese ?? 0).toFixed(2))
     setPaymentMethod(row.metodo_pagamento || method)
     setPaymentNote('')
   }
@@ -184,7 +204,7 @@ export default function PagamentiPage() {
       setPaymentAmount(Number(paymentEditor?.residuo || paymentEditor?.quota_mese || 0).toFixed(2))
       return
     }
-    const item = packages.find((pkg) => String(pkg.id) === String(packageId))
+    const item = paymentPackages.find((pkg) => String(pkg.id) === String(packageId))
     if (!item) {
       setCoverageStartMonth(month)
       setPaymentAmount(Number(paymentEditor?.residuo || paymentEditor?.quota_mese || 0).toFixed(2))
@@ -201,16 +221,20 @@ export default function PagamentiPage() {
     if (!paymentEditor || editorError) return
     setFeedback('')
 
-    if (selectedPackage && !isTokenPackage) {
+    if (selectedPackage) {
       packagePaymentMutation.mutate({
         tesseramentoId: paymentEditor.tesseramento_id,
-        startMonth: coverageStartMonth,
+        startMonth: isTokenPackage ? month : coverageStartMonth,
         packageItem: selectedPackage,
         amount: editorAmount,
         method: paymentMethod,
         note: paymentNote.trim() || `${selectedPackage.nome} registrato da Nova`,
       }, {
         onSuccess: (result) => {
+          if (result.kind === 'gettone') {
+            setFeedback(`${selectedPackage.nome} di ${euro(editorAmount)} registrato per ${paymentEditor.nomeCompleto}. Il mese non viene segnato come pagato.`)
+            return
+          }
           const range = result.months.length > 1 ? `${monthLabel(result.months[0])} – ${monthLabel(result.months[result.months.length - 1])}` : monthLabel(result.months[0])
           const septemberNote = String(month).endsWith('-09') && coverageStartMonth !== month ? ' Settembre resta separato e può essere registrato con una quota ridotta.' : ''
           setFeedback(`${selectedPackage.nome} registrato per ${paymentEditor.nomeCompleto}: ${euro(editorAmount)}, copertura ${range}.${septemberNote}`)
@@ -226,9 +250,9 @@ export default function PagamentiPage() {
       amount: cumulativeAmount,
       status: 'pagato',
       method: paymentMethod,
-      note: paymentNote.trim() || (isTokenPackage ? `${selectedPackage.nome} · ${euro(editorAmount)}` : `Incasso ${euro(editorAmount)} registrato da Nova`),
+      note: paymentNote.trim() || `Incasso ${euro(editorAmount)} registrato da Nova`,
     }, {
-      onSuccess: () => setFeedback(`${isTokenPackage ? selectedPackage.nome : 'Pagamento'} di ${euro(editorAmount)} registrato per ${paymentEditor.nomeCompleto}.`),
+      onSuccess: () => setFeedback(`Pagamento di ${euro(editorAmount)} registrato per ${paymentEditor.nomeCompleto}.`),
     })
   }
 
@@ -305,7 +329,7 @@ export default function PagamentiPage() {
             <span className="payments-summary-label">Incassato</span>
             <strong className="payments-summary-value payments-summary-amount">{euro(summary.paid)}</strong>
             <div className="payments-summary-footer">
-              <small>{summary.paidCount} coperti <span aria-hidden="true">•</span> {summary.partialCount} parziali</small>
+              <small>{summary.paidCount} coperti <span aria-hidden="true">•</span> {summary.partialCount} parziali <span aria-hidden="true">•</span> {summary.tokenCount} a gettone</small>
             </div>
           </div>
         </div>
@@ -362,6 +386,7 @@ export default function PagamentiPage() {
                 ['da_pagare', 'Da pagare'],
                 ['parziale', 'Parziali'],
                 ['pagato', 'Pagati'],
+                ['gettone', 'A gettone'],
                 ['sospeso', 'Sospesi'],
               ].map(([value, label]) => (
                 <button type="button" className={status === value ? 'active' : ''} onClick={() => setStatus(value)} key={value}>{label}</button>
@@ -420,9 +445,19 @@ export default function PagamentiPage() {
             </div>
 
             <div className="payments-compact-balance">
-              <div><span>Quota</span><strong>{euro(row.quota_mese)}</strong></div>
-              <div><span>Incassato</span><strong>{euro(row.pagato)}</strong></div>
-              <div className={row.residuo > 0 ? 'is-due' : 'is-ok'}><span>Residuo</span><strong>{euro(row.residuo)}</strong></div>
+              {row.stato_pagamento === 'gettone' ? (
+                <>
+                  <div><span>Costo gettone</span><strong>{euro(row.nova_package_total || (row.token_payments_count ? row.token_paid / row.token_payments_count : 0))}</strong></div>
+                  <div><span>Gettoni mese</span><strong>{row.token_payments_count || 0}</strong></div>
+                  <div className="is-ok"><span>Incassato</span><strong>{euro(row.token_paid || row.pagato)}</strong></div>
+                </>
+              ) : (
+                <>
+                  <div><span>Quota</span><strong>{euro(row.quota_mese)}</strong></div>
+                  <div><span>Incassato</span><strong>{euro(row.pagato)}</strong></div>
+                  <div className={row.residuo > 0 ? 'is-due' : 'is-ok'}><span>Residuo</span><strong>{euro(row.residuo)}</strong></div>
+                </>
+              )}
             </div>
 
             <div className="payments-compact-statusline">{paymentHeadline(row)}</div>
@@ -431,8 +466,8 @@ export default function PagamentiPage() {
               {row.stato_pagamento === 'pagato' ? (
                 <button type="button" className="payments-paid-btn" disabled><CheckCircle2 size={17} /> Pagamento registrato</button>
               ) : row.stato_pagamento === 'sospeso' ? null : (
-                <button type="button" className="payments-primary-btn" disabled={anyPaymentPending || row.residuo <= 0} onClick={() => openPaymentEditor(row)}>
-                  <CreditCard size={17} /> {row.stato_pagamento === 'parziale' ? 'Incassa residuo' : 'Registra pagamento'}
+                <button type="button" className="payments-primary-btn" disabled={anyPaymentPending || (row.stato_pagamento !== 'gettone' && row.residuo <= 0)} onClick={() => openPaymentEditor(row)}>
+                  <CreditCard size={17} /> {row.stato_pagamento === 'gettone' ? 'Registra altro gettone' : row.stato_pagamento === 'parziale' ? 'Incassa residuo' : 'Registra pagamento'}
                 </button>
               )}
 
@@ -440,7 +475,7 @@ export default function PagamentiPage() {
                 <button type="button" className="payments-secondary-btn" disabled={anyPaymentPending} onClick={() => markDue(row)}>
                   <RotateCcw size={16} /> Riapri pagamento
                 </button>
-              ) : (
+              ) : row.stato_pagamento === 'gettone' ? null : (
                 <button type="button" className="payments-secondary-btn payments-secondary-btn--muted" disabled={anyPaymentPending} onClick={() => markPaused(row)}>
                   Sospendi/chiudi
                 </button>
@@ -456,14 +491,24 @@ export default function PagamentiPage() {
         <div className="payments-modal-overlay" onClick={() => setPaymentEditor(null)}>
           <form className="payments-modal payments-register-modal" onSubmit={submitPayment} onClick={(event) => event.stopPropagation()}>
             <div className="payments-modal-header">
-              <div><span className="payments-modal-eyebrow">Registra incasso</span><h2>{paymentEditor.nomeCompleto}</h2><p>{monthLabel(month)} · residuo attuale {euro(paymentEditor.residuo)}</p></div>
+              <div><span className="payments-modal-eyebrow">Registra incasso</span><h2>{paymentEditor.nomeCompleto}</h2><p>{monthLabel(month)}{paymentEditor.stato_pagamento === 'gettone' ? ' · pagamento a lezione singola' : ` · residuo attuale ${euro(paymentEditor.residuo)}`}</p></div>
               <button type="button" className="payments-close-btn" onClick={() => setPaymentEditor(null)}><X size={18} /></button>
             </div>
 
             <div className="payments-register-summary">
-              <div><span>Quota mese</span><strong>{euro(paymentEditor.quota_mese)}</strong></div>
-              <div><span>Già incassato</span><strong>{euro(paymentEditor.pagato)}</strong></div>
-              <div><span>Residuo</span><strong>{euro(paymentEditor.residuo)}</strong></div>
+              {paymentEditor.stato_pagamento === 'gettone' ? (
+                <>
+                  <div><span>Gettoni già registrati</span><strong>{paymentEditor.token_payments_count || 0}</strong></div>
+                  <div><span>Incassato a gettone</span><strong>{euro(paymentEditor.token_paid || paymentEditor.pagato)}</strong></div>
+                  <div><span>Copertura mese</span><strong>Nessuna</strong></div>
+                </>
+              ) : (
+                <>
+                  <div><span>Quota mese</span><strong>{euro(paymentEditor.quota_mese)}</strong></div>
+                  <div><span>Già incassato</span><strong>{euro(paymentEditor.pagato)}</strong></div>
+                  <div><span>Residuo</span><strong>{euro(paymentEditor.residuo)}</strong></div>
+                </>
+              )}
             </div>
 
             <div className="payments-package-choice">
@@ -472,18 +517,20 @@ export default function PagamentiPage() {
                 <select value={selectedPackageId} onChange={(event) => selectPaymentPackage(event.target.value)}>
                   <option value="">Pagamento mensile / acconto</option>
                   <option value="__reduced__">Quota ridotta del mese · saldo completo</option>
-                  {packages.map((item) => <option value={item.id} key={item.id}>{item.nome} · {euro(item.prezzo)} · {item.durata_mesi} {item.durata_mesi === 1 ? 'mese' : 'mesi'}</option>)}
+                  {paymentPackages.map((item) => <option value={item.id} key={item.id}>{item.nome} · {euro(item.prezzo)} · {item.tipo === 'gettone' ? 'lezione singola' : `${item.durata_mesi} ${item.durata_mesi === 1 ? 'mese' : 'mesi'}`}</option>)}
                 </select>
                 {packagesQuery.error ? <small className="payments-inline-error">{packagesQuery.error.message}</small> : null}
+                {paymentEditor?.pricing_group_label ? <small>Listino automatico: <strong>{paymentEditor.pricing_group_label}</strong>. Puoi scegliere gettone, mensile, trimestrale o annuale.</small> : null}
               </label>
-              {selectedPackage ? <div className="payments-package-selected"><PackageCheck size={18} /><div><strong>{selectedPackage.nome}</strong><span>{selectedPackage.durata_mesi} {selectedPackage.durata_mesi === 1 ? 'mese' : 'mesi'} di copertura · prezzo proposto {euro(selectedPackage.prezzo)}</span></div></div> : null}
+              {selectedPackage ? <div className="payments-package-selected"><PackageCheck size={18} /><div><strong>{selectedPackage.nome}</strong><span>{isTokenPackage ? `Lezione singola · nessuna copertura mensile · prezzo ${euro(selectedPackage.prezzo)}` : `${selectedPackage.durata_mesi} ${selectedPackage.durata_mesi === 1 ? 'mese' : 'mesi'} di copertura · prezzo proposto ${euro(selectedPackage.prezzo)}`}</span></div></div> : null}
             </div>
 
             <div className="payments-form-grid">
               <label className="payments-form-field">
                 <span>{selectedPackage ? (isTokenPackage ? 'Importo gettone incassato' : 'Prezzo pacchetto incassato') : 'Importo incassato adesso'}</span>
-                <input type="number" min="0.01" max={isCoveragePackage ? undefined : paymentEditor.residuo} step="0.01" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} autoFocus />
-                {editorError ? <small className="payments-inline-error">{isCoveragePackage ? 'Inserisci un prezzo maggiore di 0 €.' : `Inserisci un importo tra 0,01 € e ${euro(paymentEditor.residuo)}.`}</small> : null}
+                <input type="number" min="0.01" max={selectedPackage ? undefined : paymentEditor.residuo} step="0.01" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} autoFocus />
+                <small>Importo sempre modificabile prima del salvataggio.</small>
+                {editorError ? <small className="payments-inline-error">{selectedPackage ? 'Inserisci un prezzo maggiore di 0 €.' : `Inserisci un importo tra 0,01 € e ${euro(paymentEditor.residuo)}.`}</small> : null}
               </label>
               <label className="payments-form-field">
                 <span>Metodo di incasso</span>
@@ -502,7 +549,7 @@ export default function PagamentiPage() {
 
             <div className="payments-register-result">
               <span>Dopo il salvataggio</span>
-              {isCoveragePackage ? <strong>{euro(editorAmount)} incassati · copertura {monthLabel(coverageStartMonth)} → {monthLabel(coverageEndMonth)}</strong> : <strong>{euro(editorPaidAfter)} incassati · {euro(editorResidueAfter)} residui</strong>}
+              {isTokenPackage ? <strong>{euro(editorAmount)} incassati · 1 lezione singola · il mese resta non coperto</strong> : isCoveragePackage ? <strong>{euro(editorAmount)} incassati · copertura {monthLabel(coverageStartMonth)} → {monthLabel(coverageEndMonth)}</strong> : <strong>{euro(editorPaidAfter)} incassati · {euro(editorResidueAfter)} residui</strong>}
             </div>
 
             <div className="payments-form-actions">
@@ -529,28 +576,42 @@ export default function PagamentiPage() {
             </div>
 
             <div className="payments-student-alert">
-              <span>Saldo mensile</span>
+              <span>{selectedRow.stato_pagamento === 'gettone' ? 'Pagamento a lezione singola' : 'Saldo mensile'}</span>
               <strong>{paymentHeadline(selectedRow)}</strong>
             </div>
 
             <div className="payments-student-info-grid">
-              <div><span>Pacchetto</span><strong>{selectedRow.tipo_pacchetto}</strong><small>{selectedRow.corsi.length} corsi inclusi</small><div className="payments-course-chips">{selectedRow.corsi.map((course) => <em key={course.id || course.nome}>{course.nome || 'Corso'}</em>)}</div></div>
-              <div><span>Formula</span><strong>{selectedRow.formula}</strong><small>totale mensile del pacchetto</small></div>
-              <div><span>Copertura</span><strong>{formatDate(selectedRow.copertura_dal)}</strong><small>fino al {formatDate(selectedRow.copertura_al)}</small></div>
-              <div><span>Quota pacchetto</span><strong>{euro(selectedRow.quota_mese)}</strong><small>competenza {monthLabel(month)}</small></div>
-              <div><span>Saldo registrato</span><strong>{euro(selectedRow.pagato)}</strong><small>{selectedRow.metodo_pagamento || 'Metodo non indicato'}{selectedRow.data_pagamento ? ` · ${formatDate(selectedRow.data_pagamento)}` : ''}</small></div>
+              <div><span>Pacchetto</span><strong>{selectedRow.tipo_pacchetto}</strong><small>{selectedRow.corsi.length} corsi collegati</small><div className="payments-course-chips">{selectedRow.corsi.map((course) => <em key={course.id || course.nome}>{course.nome || 'Corso'}</em>)}</div></div>
+              <div><span>Formula</span><strong>{selectedRow.formula}</strong><small>{selectedRow.stato_pagamento === 'gettone' ? 'pagamento per singola lezione' : 'totale mensile del pacchetto'}</small></div>
+              {selectedRow.stato_pagamento === 'gettone' ? (
+                <>
+                  <div><span>Copertura</span><strong>Nessuna copertura mensile</strong><small>ogni gettone vale una singola lezione</small></div>
+                  <div><span>Costo gettone</span><strong>{euro(selectedRow.nova_package_total || (selectedRow.token_payments_count ? selectedRow.token_paid / selectedRow.token_payments_count : 0))}</strong><small>prezzo per lezione</small></div>
+                  <div><span>Gettoni nel mese</span><strong>{selectedRow.token_payments_count || 0}</strong><small>incassato {euro(selectedRow.token_paid || selectedRow.pagato)}</small></div>
+                </>
+              ) : (
+                <>
+                  <div><span>Copertura</span><strong>{formatDate(selectedRow.copertura_dal)}</strong><small>fino al {formatDate(selectedRow.copertura_al)}</small></div>
+                  <div><span>Quota pacchetto</span><strong>{euro(selectedRow.quota_mese)}</strong><small>competenza {monthLabel(month)}</small></div>
+                  <div><span>Saldo registrato</span><strong>{euro(selectedRow.pagato)}</strong><small>{selectedRow.metodo_pagamento || 'Metodo non indicato'}{selectedRow.data_pagamento ? ` · ${formatDate(selectedRow.data_pagamento)}` : ''}</small></div>
+                </>
+              )}
             </div>
 
             <div className="payments-ledger-note">
               <strong>Controllo contabile Nova</strong>
-              <p>Saldo calcolato da un unico record mensile autorevole. {selectedRow.payment_source === 'legacy' ? 'I vecchi record sono stati normalizzati senza duplicare gli importi.' : 'Eventuali vecchie righe per-corso non vengono sommate due volte.'}</p>
+              {selectedRow.stato_pagamento === 'gettone' ? (
+                <p>I gettoni vengono registrati come lezioni singole autonome: aumentano l’incassato del mese, ma non possono mai segnare l’intera quota mensile come pagata.</p>
+              ) : (
+                <p>Saldo calcolato da un unico record mensile autorevole. {selectedRow.payment_source === 'legacy' ? 'I vecchi record sono stati normalizzati senza duplicare gli importi.' : 'Eventuali vecchie righe per-corso non vengono sommate due volte.'}</p>
+              )}
               {selectedRow.nota_pagamento ? <small>Nota: {selectedRow.nota_pagamento}</small> : null}
               {selectedRow.payment_ignored_excess > 0 ? <small>Eccedenza duplicata ignorata: {euro(selectedRow.payment_ignored_excess)}</small> : null}
             </div>
 
             <div className="payments-student-actions">
-              {selectedRow.stato_pagamento !== 'pagato' && selectedRow.stato_pagamento !== 'sospeso' ? <button type="button" className="payments-primary-btn" onClick={() => { setSelectedRow(null); openPaymentEditor(selectedRow) }}><CreditCard size={17} /> Registra incasso</button> : null}
-              {selectedRow.stato_pagamento !== 'da_pagare' ? <button type="button" className="payments-secondary-btn" onClick={() => markDue(selectedRow)}><RotateCcw size={16} /> Riapri pagamento</button> : null}
+              {selectedRow.stato_pagamento !== 'pagato' && selectedRow.stato_pagamento !== 'sospeso' ? <button type="button" className="payments-primary-btn" onClick={() => { setSelectedRow(null); openPaymentEditor(selectedRow) }}><CreditCard size={17} /> {selectedRow.stato_pagamento === 'gettone' ? 'Registra altro gettone' : 'Registra incasso'}</button> : null}
+              {selectedRow.stato_pagamento !== 'da_pagare' && selectedRow.stato_pagamento !== 'gettone' ? <button type="button" className="payments-secondary-btn" onClick={() => markDue(selectedRow)}><RotateCcw size={16} /> Riapri pagamento</button> : null}
               <button type="button" className="payments-secondary-btn" onClick={() => setSelectedRow(null)}>Chiudi</button>
             </div>
           </div>

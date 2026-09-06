@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Pencil, Plus, Search, Trash2, Users, X } from 'lucide-react'
-import { useAuth } from '../context/AuthProvider'
+import { useAuth } from '../context/authContext'
 import {
   addCourseParticipant,
   createOrchideaCourse,
@@ -134,7 +134,7 @@ export default function GruppiPage() {
     },
   })
 
-  const courses = coursesQuery.data || []
+  const courses = useMemo(() => coursesQuery.data || [], [coursesQuery.data])
   const filteredCourses = useMemo(() => {
     const term = search.trim().toLowerCase()
     if (!term) return courses
@@ -148,7 +148,7 @@ export default function GruppiPage() {
     ].some((value) => String(value || '').toLowerCase().includes(term)))
   }, [courses, search])
 
-  const participants = participantsQuery.data || []
+  const participants = useMemo(() => participantsQuery.data || [], [participantsQuery.data])
   const filteredParticipants = useMemo(() => {
     const term = participantSearch.trim().toLowerCase()
     if (!term) return participants

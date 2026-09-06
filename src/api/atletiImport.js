@@ -145,7 +145,7 @@ function normalizeLookupValue(value) {
         .replace(/\s+/g, ' ')
 }
 
-async function findOrCreateCorsoLookup({ userId, label }) {
+async function findOrCreateCorsoLookup({ label }) {
     const cleanLabel = normalizeString(label)
     if (!cleanLabel) return null
 
@@ -183,7 +183,7 @@ async function findOrCreateCorsoLookup({ userId, label }) {
     return created
 }
 
-async function findOrCreateLivelloLookup({ userId, label }) {
+async function findOrCreateLivelloLookup({ label }) {
     const cleanLabel = normalizeString(label)
     if (!cleanLabel) return null
 
@@ -340,9 +340,6 @@ export async function importAthletesRows(rows, options = {}) {
         errors: [],
     }
 
-    const knownLookupIds = new Set()
-    const createdLookupIds = new Set()
-
     for (let index = 0; index < rows.length; index += 1) {
         const row = rows[index]
 
@@ -428,13 +425,11 @@ export async function importAthletesRows(rows, options = {}) {
 
                 for (const entry of row.courseEntries) {
                     const corsoLookup = await findOrCreateCorsoLookup({
-                        userId,
                         label: entry.corsoLabel,
                     })
 
                     const livelloLookup = entry.livelloLabel
                         ? await findOrCreateLivelloLookup({
-                            userId,
                             label: entry.livelloLabel,
                         })
                         : null

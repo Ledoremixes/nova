@@ -1,0 +1,45 @@
+NOVA GESTIONALE - AGGIORNAMENTO 06/09/2026
+
+1) CORSISTI
+- Bottoni azione distinti graficamente: Scheda corsi viola, Rendi corsista verde, Rimuovi corsista rosso.
+- Stato quota tessera assicurativa visibile sia in tabella sia nella scheda corsista.
+- Quota corsista: 25,00 EUR.
+- Tesseramento serata già pagato: 3,00 EUR riconosciuti; differenza da incassare: 22,00 EUR.
+- Stati: non pagata (rosso), tesseramento serata/parziale (giallo), quota corsista completa (verde).
+- Lo stato esplicito inserito dalla segreteria non viene perso se il ruolo corsista viene rimosso e riattivato.
+
+2) LISTINO CORSI 2026/2027
+Creato automaticamente nel catalogo Pacchetti:
+- A gettone: 12 EUR / lezione singola, nessuna copertura mensile.
+- 1 corso: 40 / 110 / 320 EUR (mensile / trimestrale / annuale).
+- Country: 30 / 80 / 230 EUR.
+- 2 corsi Bachata + Salsa dello stesso livello base o intermedio: 50 / 135 / 399 EUR.
+- Altri 2 corsi (Special): 60 / 170 / 499 EUR.
+- 3 corsi: 85 / 245 / 729 EUR.
+- All You Can Dance (4 o più corsi): 119 / 345 / 999 EUR.
+
+Quando si assegnano i corsi, Pagamenti calcola automaticamente la quota mensile corretta.
+Nel popup Pagamenti restano sempre selezionabili A gettone, Mensile, Trimestrale e Annuale del gruppo corretto.
+L'importo proposto resta sempre modificabile dalla segreteria prima del salvataggio.
+I pacchetti standard del listino possono essere modificati nel nome/prezzo senza perdere il collegamento al calcolo automatico.
+
+3) EVENTI
+- Aggiunti: ingressi paganti, prezzo biglietto, incasso bar, costi totali serata.
+- Calcoli automatici:
+  ricavi biglietti = ingressi x prezzo biglietto
+  ricavi lordi = ricavi biglietti + incasso bar
+  ricavo netto = ricavi lordi - costi
+- Riepilogo in tempo reale nel popup e riepilogo economico su ogni scheda evento.
+- Compatibilita con gli eventi già salvati nei vecchi campi Incasso/Budget.
+
+4) TESSERATI
+- Rimossa la fascia gialla "Sorgente dati" non utile alla segreteria.
+
+5) VERIFICHE TECNICHE
+- ESLint completato senza errori.
+- Sintassi JavaScript verificata su tutti i file .js.
+- Import relativi verificati: nessun file mancante.
+- Test logica listino: 1 corso, Country, Bachata+Salsa base/intermedio, Special, 3 corsi, All You Can Dance e fallback A gettone.
+
+NOTA INSTALLAZIONE
+Lo ZIP non include node_modules, .env, .git o dist. Conservare le variabili ambiente del deployment corrente ed eseguire npm install se si lavora in locale.

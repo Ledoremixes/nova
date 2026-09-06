@@ -115,6 +115,7 @@ export default async function handler(req, res) {
         throw profileError
       }
       let orchideaSynced = false
+      let syncWarning = ''
       if (orchidea) {
         try {
           const existingOrchidea = await findAuthUserByEmail(orchidea, email)
@@ -127,12 +128,13 @@ export default async function handler(req, res) {
           }
           orchideaSynced = true
         } catch (syncError) {
-          await admin.from('users').delete().eq('id', uid)
-          await admin.auth.admin.deleteUser(uid).catch(() => null)
-          throw new Error(`Utente non creato: sincronizzazione Orchidea Allievi fallita. ${syncError.message || syncError}`)
+          // Nova e Orchidea sono due progetti distinti: un problema di sincronizzazione
+          // secondaria non deve annullare la creazione dell'utente Nova già riuscita.
+          syncWarning = `Utente Nova creato. Sincronizzazione Orchidea non riuscita: ${syncError.message || syncError}`
+          console.warn('admin-users orchidea sync create:', syncError)
         }
       }
-      return json(res, 201, { id: uid, email, role, is_active: isActive, orchidea_synced: orchideaSynced })
+      return json(res, 201, { id: uid, email, role, is_active: isActive, orchidea_synced: orchideaSynced, sync_warning: syncWarning || null })
     }
 
     const id = String(body.id || req.query?.id || '')
@@ -173,24 +175,31 @@ export default async function handler(req, res) {
       if (profileError) throw profileError
 
       let orchideaSynced = false
+      let syncWarning = ''
       if (orchidea) {
-        const orchideaUser = await findAuthUserByEmail(orchidea, previousEmail || profilePayload.email)
-        if (orchideaUser) {
-          const orchideaUpdates = {}
-          if (updates.email) orchideaUpdates.email = updates.email
-          if (body.password) orchideaUpdates.password = String(body.password)
-          if (Object.keys(orchideaUpdates).length) {
-            const { error: syncError } = await orchidea.auth.admin.updateUserById(orchideaUser.id, orchideaUpdates)
-            if (syncError) throw new Error(`Nova aggiornata, ma sincronizzazione Orchidea Allievi fallita: ${syncError.message}`)
+        try {
+          const orchideaUser = await findAuthUserByEmail(orchidea, previousEmail || profilePayload.email)
+          if (orchideaUser) {
+            const orchideaUpdates = {}
+            if (updates.email) orchideaUpdates.email = updates.email
+            if (body.password) orchideaUpdates.password = String(body.password)
+            if (Object.keys(orchideaUpdates).length) {
+              const { error: syncError } = await orchidea.auth.admin.updateUserById(orchideaUser.id, orchideaUpdates)
+              if (syncError) throw syncError
+            }
+            orchideaSynced = true
+          } else if (body.password) {
+            const { error: syncError } = await orchidea.auth.admin.createUser({ email: profilePayload.email, password: String(body.password), email_confirm: true })
+            if (syncError) throw syncError
+            orchideaSynced = true
           }
-          orchideaSynced = true
-        } else if (body.password) {
-          const { error: syncError } = await orchidea.auth.admin.createUser({ email: profilePayload.email, password: String(body.password), email_confirm: true })
-          if (syncError) throw new Error(`Nova aggiornata, ma creazione account Orchidea Allievi fallita: ${syncError.message}`)
-          orchideaSynced = true
+        } catch (syncError) {
+          // La modifica Nova è già conclusa: non restituiamo un falso errore di salvataggio.
+          syncWarning = `Utente Nova aggiornato. Sincronizzazione Orchidea non riuscita: ${syncError.message || syncError}`
+          console.warn('admin-users orchidea sync patch:', syncError)
         }
       }
-      return json(res, 200, { ...profilePayload, orchidea_synced: orchideaSynced })
+      return json(res, 200, { ...profilePayload, orchidea_synced: orchideaSynced, sync_warning: syncWarning || null })
     }
 
     if (req.method === 'DELETE') {
@@ -201,14 +210,20 @@ export default async function handler(req, res) {
       if (emailBefore) await admin.from('users').delete().ilike('email', emailBefore)
       const { error } = await admin.auth.admin.deleteUser(id)
       if (error) throw error
+      let syncWarning = ''
       if (orchidea && emailBefore) {
-        const orchideaUser = await findAuthUserByEmail(orchidea, emailBefore)
-        if (orchideaUser) {
-          const { error: syncError } = await orchidea.auth.admin.deleteUser(orchideaUser.id)
-          if (syncError) throw new Error(`Utente eliminato da Nova, ma non da Orchidea Allievi: ${syncError.message}`)
+        try {
+          const orchideaUser = await findAuthUserByEmail(orchidea, emailBefore)
+          if (orchideaUser) {
+            const { error: syncError } = await orchidea.auth.admin.deleteUser(orchideaUser.id)
+            if (syncError) throw syncError
+          }
+        } catch (syncError) {
+          syncWarning = `Utente eliminato da Nova. Eliminazione Orchidea non riuscita: ${syncError.message || syncError}`
+          console.warn('admin-users orchidea sync delete:', syncError)
         }
       }
-      return json(res, 200, { ok: true })
+      return json(res, 200, { ok: true, sync_warning: syncWarning || null })
     }
   } catch (error) {
     console.error('admin-users:', error)

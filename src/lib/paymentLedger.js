@@ -46,12 +46,19 @@ export function isCanonicalMonthlyPayment(row = {}) {
   return type === 'quota_mensile' || type === 'quota mensile' || description.startsWith('quota mensile ')
 }
 
+export function isTokenPayment(row = {}) {
+  const type = lower(row.tipo || row.type || row.categoria)
+  const description = lower(row.descrizione || row.description || row.causale)
+  const packageType = lower(row.nova_package_type)
+  return packageType === 'gettone' || type.includes('gettone') || description.includes('a gettone') || description.includes('lezione singola')
+}
+
 function isTuitionPayment(row = {}) {
   const type = lower(row.tipo || row.type || row.categoria)
   const description = lower(row.descrizione || row.description || row.causale)
   const excluded = ['associativ', 'tesser', 'visita', 'certificat', 'evento', 'serata', 'shop']
   if (excluded.some((token) => type.includes(token) || description.includes(token))) return false
-  if (isCanonicalMonthlyPayment(row)) return true
+  if (isCanonicalMonthlyPayment(row) || isTokenPayment(row)) return true
   if (['corso', 'quota corso', 'mensile', 'pacchetto'].some((token) => type.includes(token) || description.includes(token))) return true
 
   // Compatibilità con i vecchi record Orchidea: pagamento legato all'allievo e a un periodo.
@@ -74,8 +81,8 @@ function isPausedState(row = {}) {
 
 /**
  * Restituisce un solo saldo autorevole per allievo/mese.
- * Se esiste il record Nova `quota_mensile`, quello più recente prevale sui vecchi
- * record per-corso e impedisce somme duplicate (es. 70 € che diventano 112 €).
+ * I gettoni sono volutamente separati dal saldo mensile: vengono sommati come incasso
+ * a lezione singola, ma non possono mai trasformare il mese in "Pagato".
  */
 export function summarizeMonthlyTuitionPayments({ payments = [], selectedMonth, totalDue = 0 }) {
   const due = asAmount(totalDue)
@@ -83,11 +90,61 @@ export function summarizeMonthlyTuitionPayments({ payments = [], selectedMonth, 
     .filter((row) => paymentMatchesAccountingMonth(row, selectedMonth))
     .filter(isTuitionPayment)
 
-  const canonicalRows = relevant
+  const tokenRows = relevant
+    .filter(isTokenPayment)
+    .filter((row) => isPaidState(row) && !isPausedState(row))
+    .sort((a, b) => paymentTimestamp(b) - paymentTimestamp(a))
+  const tokenPaid = tokenRows.reduce((sum, item) => sum + asAmount(item.importo ?? item.amount), 0)
+
+  const nonTokenRelevant = relevant.filter((row) => !isTokenPayment(row))
+  const canonicalRows = nonTokenRelevant
     .filter(isCanonicalMonthlyPayment)
     .sort((a, b) => paymentTimestamp(b) - paymentTimestamp(a))
 
   const authoritative = canonicalRows[0] || null
+
+  // Modalità a gettone: un vecchio record mensile vuoto/non pagato non deve
+  // trasformare il gettone in un acconto mensile. Solo una vera quota mensile già
+  // incassata mantiene la modalità mensile; in tutti gli altri casi il gettone resta
+  // autonomo, senza residuo e soprattutto senza falso "mese pagato".
+  const authoritativeMonthlyPaid = Boolean(
+    authoritative
+    && !isPausedState(authoritative)
+    && (authoritative.nova_coverage_complete === true
+      || (isPaidState(authoritative) && asAmount(authoritative.importo ?? authoritative.amount) > 0)),
+  )
+  if (tokenRows.length > 0 && !authoritativeMonthlyPaid) {
+    const latestToken = tokenRows[0]
+    return {
+      paid: tokenPaid,
+      rawPaid: tokenPaid,
+      residue: 0,
+      status: 'gettone',
+      source: 'gettone',
+      authoritative: latestToken,
+      relevantCount: tokenRows.length,
+      duplicateCount: 0,
+      legacyCount: 0,
+      ignoredExcess: 0,
+      method: latestToken?.metodo || latestToken?.method || '',
+      note: latestToken?.note || '',
+      paidAt: latestToken?.data_pagamento || latestToken?.pagato_il || null,
+      updatedAt: latestToken?.updated_at || latestToken?.created_at || null,
+      packageCoverageComplete: false,
+      packageId: latestToken?.nova_package_id || null,
+      packageName: latestToken?.nova_package_name || 'A gettone',
+      packageType: 'gettone',
+      packageTotal: asAmount(latestToken?.nova_package_total || latestToken?.importo || latestToken?.amount),
+      packageDurationMonths: 0,
+      paymentGroupId: latestToken?.nova_payment_group_id || null,
+      coverageFrom: null,
+      coverageTo: null,
+      cashAmount: tokenPaid,
+      tokenPaymentsCount: tokenRows.length,
+      tokenPaid,
+    }
+  }
+
   let rawPaid = 0
   let paused = false
   let source = 'none'
@@ -99,9 +156,9 @@ export function summarizeMonthlyTuitionPayments({ payments = [], selectedMonth, 
       ? asAmount(authoritative.importo ?? authoritative.amount)
       : 0
   } else {
-    source = relevant.length ? 'legacy' : 'none'
-    paused = relevant.some(isPausedState)
-    rawPaid = relevant.reduce((sum, item) => (
+    source = nonTokenRelevant.length ? 'legacy' : 'none'
+    paused = nonTokenRelevant.some(isPausedState)
+    rawPaid = nonTokenRelevant.reduce((sum, item) => (
       isPaidState(item) && !isPausedState(item)
         ? sum + asAmount(item.importo ?? item.amount)
         : sum
@@ -121,15 +178,15 @@ export function summarizeMonthlyTuitionPayments({ payments = [], selectedMonth, 
   const residue = paused || packageCoverageComplete ? 0 : calculatedResidue
 
   return {
-    paid,
-    rawPaid,
+    paid: paid + tokenPaid,
+    rawPaid: rawPaid + tokenPaid,
     residue,
     status,
     source,
     authoritative,
     relevantCount: relevant.length,
     duplicateCount: Math.max(canonicalRows.length - 1, 0),
-    legacyCount: relevant.length - canonicalRows.length,
+    legacyCount: nonTokenRelevant.length - canonicalRows.length,
     ignoredExcess: Math.max(rawPaid - paid, 0),
     method: authoritative?.metodo || authoritative?.method || '',
     note: authoritative?.note || '',
@@ -144,6 +201,8 @@ export function summarizeMonthlyTuitionPayments({ payments = [], selectedMonth, 
     paymentGroupId: authoritative?.nova_payment_group_id || null,
     coverageFrom: authoritative?.nova_coverage_from || null,
     coverageTo: authoritative?.nova_coverage_to || null,
-    cashAmount: asAmount(authoritative?.nova_cash_amount),
+    cashAmount: asAmount(authoritative?.nova_cash_amount) + tokenPaid,
+    tokenPaymentsCount: tokenRows.length,
+    tokenPaid,
   }
 }

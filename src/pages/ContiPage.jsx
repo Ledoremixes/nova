@@ -174,7 +174,7 @@ export default function ContiPage() {
     },
   })
 
-  const allItems = lookupsQuery.data ?? []
+  const allItems = useMemo(() => lookupsQuery.data ?? [], [lookupsQuery.data])
 
   const filteredItems = useMemo(() => {
     const term = search.trim().toLowerCase()

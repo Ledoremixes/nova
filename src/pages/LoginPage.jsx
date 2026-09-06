@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthProvider'
+import { useAuth } from '../context/authContext'
 
 export default function LoginPage() {
   const { signIn, isAuthenticated, loading } = useAuth()

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useAuth } from '../context/AuthProvider'
+import { useAuth } from '../context/authContext'
 import { fetchDashboardRegistry } from '../api/dashboard'
 import StatCard from '../components/ui/StatCard'
 

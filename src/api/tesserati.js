@@ -319,7 +319,7 @@ export async function fetchTesseratoDetails(id) {
           pacchetto_totale_mensile,
           quota_pacchetto_percentuale,
           created_at,
-          corsi(id, nome, livello, giorno_settimana, ora_inizio, ora_fine, prezzo_mensile)
+          corsi(id, nome, disciplina, livello, giorno_settimana, ora_inizio, ora_fine, prezzo_mensile)
         `)
         .eq('tesseramento_id', id)
         .order('created_at', { ascending: false }),

@@ -1,8 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../api/supabase'
 import { orchideaSupabase, hasDedicatedOrchideaConfig } from '../api/orchideaSupabase'
-
-const AuthContext = createContext(null)
+import { AuthContext } from './authContext'
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
@@ -190,10 +189,4 @@ export function AuthProvider({ children }) {
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth deve essere usato dentro AuthProvider')
-  return ctx
 }
