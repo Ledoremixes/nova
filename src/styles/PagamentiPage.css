@@ -34,7 +34,7 @@
 .payments-filters-card,
 .payments-table-card,
 .payments-modal {
-  background: rgba(255, 255, 255, 1);
+  background: rgba(255, 255, 255, 0.88);
   border: 1px solid rgba(99, 102, 241, 0.12);
   box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
   border-radius: 24px;

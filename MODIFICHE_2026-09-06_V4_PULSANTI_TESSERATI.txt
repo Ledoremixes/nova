@@ -1,0 +1,5 @@
+NOVA GESTIONALE - V4 PULSANTI TESSERATI
+
+- Il pulsante "Apri scheda" nella tabella Tesserati è ora colorato in blu/indaco per distinguerlo chiaramente.
+- "Apri scheda" occupa l'intera larghezza della colonna Azioni, esattamente come il pulsante Corsista/Rimuovi corsista.
+- Conservata la colonna Azioni sticky e la resa responsive introdotta nella v3.

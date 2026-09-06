@@ -405,7 +405,7 @@ export default function TesseratiPage() {
               </div>
             </div>
 
-            <div className="tableWrap">
+            <div className="tableWrap tesserati-table-wrap">
               <table className="dataTable tesserati-table">
                 <thead>
                   <tr>
@@ -456,7 +456,7 @@ export default function TesseratiPage() {
                         </td>
                         <td>
                           <div className="rowActions">
-                            <button className="actionBtn" type="button" onClick={() => openStudentDetail(student)}>
+                            <button className="actionBtn tesserati-open-action" type="button" onClick={() => openStudentDetail(student)}>
                               Apri scheda
                             </button>
                             {isAdmin && !hasCustomMembershipNumber(student) ? (

@@ -692,3 +692,125 @@ button.tesserati-password-button:disabled {
 .tesserati-corsista-action { font-weight: 900 !important; border-width: 1px !important; }
 .tesserati-corsista-action.is-add { background: linear-gradient(135deg, #6d4df3, #a63ce4) !important; color: #fff !important; border-color: transparent !important; box-shadow: 0 8px 20px rgba(109,77,243,.18); }
 .tesserati-corsista-action.is-remove { background: #fff0f5 !important; color: #c21f6f !important; border-color: #f4b8d6 !important; }
+
+
+/* 2026-09-06 - tabella tesserati leggibile al 100% di zoom
+   La colonna Azioni resta sempre visibile e i pulsanti si compattano senza
+   obbligare la segreteria a ridurre lo zoom del browser. */
+.tesserati-table-wrap {
+  position: relative;
+  scrollbar-gutter: stable;
+}
+
+.tesserati-table {
+  width: 100%;
+  min-width: 1040px !important;
+  table-layout: fixed;
+}
+
+.tesserati-table th,
+.tesserati-table td {
+  padding-left: 9px;
+  padding-right: 9px;
+}
+
+.tesserati-table th:nth-child(1),
+.tesserati-table td:nth-child(1) { width: 17%; }
+.tesserati-table th:nth-child(2),
+.tesserati-table td:nth-child(2) { width: 20%; }
+.tesserati-table th:nth-child(3),
+.tesserati-table td:nth-child(3) { width: 11%; }
+.tesserati-table th:nth-child(4),
+.tesserati-table td:nth-child(4) { width: 15%; }
+.tesserati-table th:nth-child(5),
+.tesserati-table td:nth-child(5) { width: 8%; }
+.tesserati-table th:nth-child(6),
+.tesserati-table td:nth-child(6) { width: 8%; }
+.tesserati-table th:nth-child(7),
+.tesserati-table td:nth-child(7) { width: 8%; }
+
+.tesserati-table td:nth-child(2),
+.tesserati-table td:nth-child(3),
+.tesserati-table td:nth-child(4) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.tesserati-table th:last-child,
+.tesserati-table td:last-child {
+  width: 178px !important;
+  min-width: 178px !important;
+  max-width: 178px;
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  background: #fff;
+  box-shadow: -12px 0 18px -18px rgba(15, 23, 42, .55);
+}
+
+.tesserati-table th:last-child {
+  z-index: 5;
+}
+
+.tesserati-table tr.selected-table-row td:last-child {
+  background: #faf8ff;
+}
+
+.tesserati-table .rowActions {
+  min-width: 0 !important;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.tesserati-table .actionBtn {
+  min-width: 0 !important;
+  width: 100%;
+  padding: 8px 7px;
+  font-size: 12px;
+  line-height: 1.15;
+  white-space: normal;
+  text-align: center;
+}
+
+.tesserati-table .tesserati-corsista-action {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1180px) {
+  .tesserati-table {
+    min-width: 980px !important;
+  }
+
+  .tesserati-table th,
+  .tesserati-table td {
+    padding-left: 7px;
+    padding-right: 7px;
+    font-size: 13px;
+  }
+
+  .tesserati-table th:last-child,
+  .tesserati-table td:last-child {
+    width: 164px !important;
+    min-width: 164px !important;
+    max-width: 164px;
+  }
+}
+
+
+/* 2026-09-06 - azioni tesserati più chiare */
+.tesserati-table .tesserati-open-action {
+  grid-column: 1 / -1;
+  width: 100% !important;
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  font-weight: 900 !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, .20);
+}
+
+.tesserati-table .tesserati-open-action:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 11px 22px rgba(37, 99, 235, .27);
+}
