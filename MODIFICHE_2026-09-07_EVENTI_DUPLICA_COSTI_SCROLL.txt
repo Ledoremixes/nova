@@ -1,0 +1,12 @@
+NOVA GESTIONALE - 07/09/2026
+
+GESTIONE EVENTI
+- Modale nuovo/modifica evento resa scrollabile con barra di scorrimento visibile.
+- Barra azioni Annulla / Crea evento / Salva modifiche mantenuta sticky in fondo al modale.
+- Aggiunto pulsante Duplica evento nelle card.
+- La duplicazione apre un nuovo evento precompilato, copia configurazione e costi fissi, ma azzera ingressi e incasso bar e imposta lo stato Bozza.
+- Sostituito il singolo campo "Costi totali serata" con un elenco modificabile di costi fissi.
+- Ogni costo ha descrizione e importo, può essere aggiunto, modificato o eliminato.
+- Il totale costi è calcolato automaticamente dalla somma delle voci.
+- Compatibilità con vecchi eventi: un vecchio costo totale viene trasformato in una voce "Costi evento" durante la modifica.
+- Ricavo netto e riepiloghi continuano a usare il totale costi calcolato.

@@ -24,12 +24,16 @@ function clampAmount(value) {
 
 function normalizeRecord(row = {}) {
   const value = row._value || parseValue(row.value)
+  const paidAmount = clampAmount(value.paid_amount)
+  const fallbackPaidDate = value.paid_at || value.updated_at || row.created_at || null
   return {
     id: row.id || null,
     tesseramento_id: String(value.tesseramento_id || row.label || ''),
-    paid_amount: clampAmount(value.paid_amount),
+    paid_amount: paidAmount,
     target_amount: COURSE_MEMBERSHIP_FEE,
     source: value.source || 'nova',
+    charged_month: value.charged_month || (paidAmount >= COURSE_MEMBERSHIP_FEE && fallbackPaidDate ? String(fallbackPaidDate).slice(0, 7) : null),
+    paid_at: value.paid_at || (paidAmount >= COURSE_MEMBERSHIP_FEE ? fallbackPaidDate : null),
     updated_at: value.updated_at || row.created_at || null,
   }
 }
@@ -71,6 +75,8 @@ export function resolveMembershipFeeState(student = {}, storedRecord = null) {
     remaining,
     status,
     inferred,
+    charged_month: storedRecord?.charged_month || null,
+    paid_at: storedRecord?.paid_at || null,
     label: status === 'paid'
       ? 'Tessera corsista pagata'
       : status === 'partial'
@@ -95,21 +101,14 @@ async function fetchStoredMembershipFeeRecord(studentId) {
   return data?.[0] ? normalizeRecord(data[0]) : null
 }
 
-export async function setMembershipFeePaidAmount({ studentId, paidAmount, source = 'manuale' }) {
+export async function setMembershipFeePaidAmount({ studentId, paidAmount, source = 'manuale', chargedMonth = null }) {
   if (!studentId) throw new Error('Corsista non selezionato.')
   const cleanAmount = clampAmount(paidAmount)
-  const payloadValue = JSON.stringify({
-    schema: 1,
-    tesseramento_id: String(studentId),
-    paid_amount: cleanAmount,
-    target_amount: COURSE_MEMBERSHIP_FEE,
-    source,
-    updated_at: new Date().toISOString(),
-  })
+  const now = new Date().toISOString()
 
   const existing = await supabase
     .from('lookup_options')
-    .select('id')
+    .select('id,label,value,created_at')
     .eq('section_key', SECTION_KEY)
     .eq('list_key', LIST_KEY)
     .eq('label', String(studentId))
@@ -117,6 +116,23 @@ export async function setMembershipFeePaidAmount({ studentId, paidAmount, source
     .limit(1)
 
   if (existing.error) throw new Error(existing.error.message || 'Errore verifica quota tessera assicurativa')
+
+  const previous = existing.data?.[0] ? normalizeRecord(existing.data[0]) : null
+  const isFullyPaid = cleanAmount >= COURSE_MEMBERSHIP_FEE
+  const effectiveChargedMonth = isFullyPaid
+    ? (previous?.charged_month || chargedMonth || now.slice(0, 7))
+    : null
+  const paidAt = isFullyPaid ? (previous?.paid_at || now) : null
+  const payloadValue = JSON.stringify({
+    schema: 2,
+    tesseramento_id: String(studentId),
+    paid_amount: cleanAmount,
+    target_amount: COURSE_MEMBERSHIP_FEE,
+    source,
+    charged_month: effectiveChargedMonth,
+    paid_at: paidAt,
+    updated_at: now,
+  })
 
   if (existing.data?.[0]?.id) {
     const { data, error } = await supabase

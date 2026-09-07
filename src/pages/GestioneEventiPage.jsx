@@ -3,6 +3,7 @@ import {
   CalendarDays,
   CircleDollarSign,
   Clock3,
+  Copy,
   MapPin,
   Pencil,
   Plus,
@@ -28,6 +29,7 @@ const emptyEvent = {
   entries: 0,
   ticketPrice: 0,
   barRevenue: 0,
+  fixedCosts: [],
   costs: 0,
   description: '',
 }
@@ -47,14 +49,31 @@ function numberValue(value) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+function normalizeFixedCosts(items) {
+  if (!Array.isArray(items)) return []
+  return items
+    .map((item) => ({
+      id: item?.id || createId('cost'),
+      label: String(item?.label || item?.name || '').trim(),
+      amount: numberValue(item?.amount),
+    }))
+    .filter((item) => item.label || item.amount > 0)
+}
+
+function fixedCostsTotal(items) {
+  return normalizeFixedCosts(items).reduce((sum, item) => sum + numberValue(item.amount), 0)
+}
+
 function hasDetailedEconomics(item = {}) {
-  return ['entries', 'ticketPrice', 'barRevenue', 'costs'].some((key) => item[key] !== undefined && item[key] !== null)
+  return ['entries', 'ticketPrice', 'barRevenue', 'costs', 'fixedCosts'].some((key) => item[key] !== undefined && item[key] !== null)
 }
 
 function eventEconomics(item = {}) {
   const detailed = hasDetailedEconomics(item)
   const entries = numberValue(detailed ? item.entries : item.registered)
-  const costs = numberValue(detailed ? item.costs : item.budget)
+  const hasFixedCostList = Array.isArray(item.fixedCosts)
+  const listedCosts = normalizeFixedCosts(item.fixedCosts)
+  const costs = hasFixedCostList ? fixedCostsTotal(listedCosts) : numberValue(detailed ? item.costs : item.budget)
 
   if (!detailed) {
     const grossRevenue = numberValue(item.revenue)
@@ -63,6 +82,7 @@ function eventEconomics(item = {}) {
       ticketPrice: entries > 0 && grossRevenue > 0 ? grossRevenue / entries : 0,
       ticketRevenue: grossRevenue,
       barRevenue: 0,
+      fixedCosts: listedCosts,
       costs,
       grossRevenue,
       netRevenue: grossRevenue - costs,
@@ -78,6 +98,7 @@ function eventEconomics(item = {}) {
     ticketPrice,
     ticketRevenue,
     barRevenue,
+    fixedCosts: listedCosts,
     costs,
     grossRevenue,
     netRevenue: grossRevenue - costs,
@@ -86,12 +107,19 @@ function eventEconomics(item = {}) {
 
 function editorEvent(item = {}) {
   const economics = eventEconomics(item)
+  const fixedCosts = economics.fixedCosts.length
+    ? economics.fixedCosts.map((cost) => ({ ...cost, id: cost.id || createId('cost') }))
+    : economics.costs > 0
+      ? [{ id: createId('cost'), label: 'Costi evento', amount: economics.costs }]
+      : []
+
   return {
     ...emptyEvent,
     ...item,
     entries: economics.entries,
     ticketPrice: Number(economics.ticketPrice.toFixed(2)),
     barRevenue: economics.barRevenue,
+    fixedCosts,
     costs: economics.costs,
   }
 }
@@ -123,7 +151,7 @@ export default function GestioneEventiPage() {
 
   function newEvent() {
     setEditingId(null)
-    setForm({ ...emptyEvent })
+    setForm({ ...emptyEvent, fixedCosts: [] })
     setOpen(true)
   }
 
@@ -131,6 +159,42 @@ export default function GestioneEventiPage() {
     setEditingId(item.id)
     setForm(editorEvent(item))
     setOpen(true)
+  }
+
+  function duplicateEvent(item) {
+    const source = editorEvent(item)
+    setEditingId(null)
+    setForm({
+      ...source,
+      id: undefined,
+      title: `${source.title} - copia`,
+      status: 'Bozza',
+      entries: 0,
+      barRevenue: 0,
+      fixedCosts: source.fixedCosts.map((cost) => ({ ...cost, id: createId('cost') })),
+    })
+    setOpen(true)
+  }
+
+  function addFixedCost() {
+    setForm((current) => ({
+      ...current,
+      fixedCosts: [...(current.fixedCosts || []), { id: createId('cost'), label: '', amount: 0 }],
+    }))
+  }
+
+  function updateFixedCost(id, patch) {
+    setForm((current) => ({
+      ...current,
+      fixedCosts: (current.fixedCosts || []).map((cost) => cost.id === id ? { ...cost, ...patch } : cost),
+    }))
+  }
+
+  function removeFixedCost(id) {
+    setForm((current) => ({
+      ...current,
+      fixedCosts: (current.fixedCosts || []).filter((cost) => cost.id !== id),
+    }))
   }
 
   function submit(event) {
@@ -142,6 +206,7 @@ export default function GestioneEventiPage() {
       entries: economics.entries,
       ticketPrice: economics.ticketPrice,
       barRevenue: economics.barRevenue,
+      fixedCosts: normalizeFixedCosts(form.fixedCosts),
       costs: economics.costs,
       // Campi legacy mantenuti per compatibilità con dashboard/report già esistenti.
       registered: economics.entries,
@@ -214,11 +279,11 @@ export default function GestioneEventiPage() {
                   <div className="event-economics-grid">
                     <div><small>Biglietti</small><strong>{formatCurrency(economics.ticketRevenue)}</strong><span>{economics.entries} × {formatCurrency(economics.ticketPrice)}</span></div>
                     <div><small>Bar</small><strong>{formatCurrency(economics.barRevenue)}</strong><span>Incasso registrato</span></div>
-                    <div><small>Costi</small><strong>{formatCurrency(economics.costs)}</strong><span>Totale serata</span></div>
+                    <div><small>Costi</small><strong>{formatCurrency(economics.costs)}</strong><span>{economics.fixedCosts.length ? `${economics.fixedCosts.length} voci` : 'Totale serata'}</span></div>
                     <div className={economics.netRevenue >= 0 ? 'is-positive' : 'is-negative'}><small>Netto</small><strong>{formatCurrency(economics.netRevenue)}</strong><span>Ricavi − costi</span></div>
                   </div>
                   <div className="event-card__footer event-card__footer--actions">
-                    <div className="event-card__actions"><button className="module-icon-button" type="button" onClick={() => editEvent(item)} aria-label="Modifica"><Pencil size={17} /></button><button className="module-icon-button is-danger" type="button" onClick={() => removeEvent(item)} aria-label="Elimina"><Trash2 size={17} /></button></div>
+                    <div className="event-card__actions"><button className="module-icon-button" type="button" onClick={() => editEvent(item)} aria-label="Modifica" title="Modifica evento"><Pencil size={17} /></button><button className="module-icon-button is-copy" type="button" onClick={() => duplicateEvent(item)} aria-label="Duplica" title="Duplica evento"><Copy size={17} /></button><button className="module-icon-button is-danger" type="button" onClick={() => removeEvent(item)} aria-label="Elimina" title="Elimina evento"><Trash2 size={17} /></button></div>
                   </div>
                 </div>
               </article>
@@ -227,8 +292,8 @@ export default function GestioneEventiPage() {
         </div> : <ModuleEmpty icon={CalendarDays} title="Nessun evento trovato" text="Modifica i filtri oppure crea il primo evento." />}
       </div>
 
-      <ModuleModal open={open} onClose={() => setOpen(false)} title={editingId ? 'Modifica evento' : 'Nuovo evento'} subtitle="Inserisci i dati della serata: il risultato economico viene calcolato in tempo reale." icon={Sparkles} size="large">
-        <form className="module-form" onSubmit={submit}>
+      <ModuleModal open={open} onClose={() => setOpen(false)} title={editingId ? 'Modifica evento' : 'Nuovo evento'} subtitle="Inserisci i dati della serata: il risultato economico viene calcolato in tempo reale." icon={Sparkles} size="large" className="event-modal">
+        <form className="module-form event-form" onSubmit={submit}>
           <label className="module-field module-field--full">Titolo<span>*</span><input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Nome dell’evento" /></label>
           <label className="module-field">Categoria<select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>{categories.map((item) => <option key={item}>{item}</option>)}</select></label>
           <label className="module-field">Stato<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>{statuses.map((item) => <option key={item}>{item}</option>)}</select></label>
@@ -239,7 +304,31 @@ export default function GestioneEventiPage() {
           <label className="module-field">Ingressi paganti<input type="number" min="0" value={form.entries} onChange={(event) => setForm({ ...form, entries: event.target.value })} /></label>
           <label className="module-field">Prezzo biglietto (€)<input type="number" min="0" step="0.01" value={form.ticketPrice} onChange={(event) => setForm({ ...form, ticketPrice: event.target.value })} /></label>
           <label className="module-field">Incasso bar (€)<input type="number" min="0" step="0.01" value={form.barRevenue} onChange={(event) => setForm({ ...form, barRevenue: event.target.value })} /></label>
-          <label className="module-field module-field--full">Costi totali serata (€)<input type="number" min="0" step="0.01" value={form.costs} onChange={(event) => setForm({ ...form, costs: event.target.value })} placeholder="Personale, SIAE, cachet, forniture, sicurezza…" /></label>
+          <div className="module-field module-field--full event-fixed-costs">
+            <div className="event-fixed-costs__header">
+              <div>
+                <strong>Costi fissi dell’evento</strong>
+                <span>Elenca ogni voce separatamente: il totale viene calcolato in automatico.</span>
+              </div>
+              <button className="module-button event-fixed-costs__add" type="button" onClick={addFixedCost}><Plus size={16} /> Aggiungi costo</button>
+            </div>
+
+            {form.fixedCosts?.length ? (
+              <div className="event-fixed-costs__list">
+                {form.fixedCosts.map((cost) => (
+                  <div className="event-fixed-costs__row" key={cost.id}>
+                    <label>Voce costo<input value={cost.label} onChange={(event) => updateFixedCost(cost.id, { label: event.target.value })} placeholder="Es. DJ, SIAE, staff, sicurezza…" /></label>
+                    <label>Importo (€)<input type="number" min="0" step="0.01" value={cost.amount} onChange={(event) => updateFixedCost(cost.id, { amount: event.target.value })} /></label>
+                    <button className="module-icon-button is-danger" type="button" onClick={() => removeFixedCost(cost.id)} aria-label="Rimuovi costo" title="Rimuovi costo"><Trash2 size={17} /></button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="event-fixed-costs__empty">Nessun costo inserito. Aggiungi le voci fisse della serata per avere un netto preciso.</div>
+            )}
+
+            <div className="event-fixed-costs__total"><span>Totale costi evento</span><strong>{formatCurrency(formEconomics.costs)}</strong></div>
+          </div>
 
           <div className="event-finance-preview module-field--full">
             <div><small>Ricavi biglietti</small><strong>{formatCurrency(formEconomics.ticketRevenue)}</strong><span>{formEconomics.entries} ingressi × {formatCurrency(formEconomics.ticketPrice)}</span></div>

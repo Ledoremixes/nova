@@ -1953,3 +1953,14 @@
 .payments-student-card--gettone {
   border-color: rgba(124, 58, 237, 0.22);
 }
+
+.payments-compact-balance .payments-balance-note {
+  display: block;
+  margin-top: 3px;
+  color: #7b8496;
+  font-size: .66rem;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.25;
+}

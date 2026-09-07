@@ -1475,20 +1475,50 @@
 }
 
 .atleti-membership-action {
-  min-height: 38px;
-  padding: 0 13px;
+  min-height: 40px;
+  padding: 0 14px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid transparent;
+  border: 1px solid #dce2ea;
   border-radius: 12px;
+  background: #fff;
+  color: #667085;
   font-weight: 850;
   cursor: pointer;
+  opacity: .72;
+  transition: .18s ease;
 }
 
-.atleti-membership-action.is-unpaid { background: #fff1f3; border-color: #f2b8c1; color: #a91f37; }
-.atleti-membership-action.is-event { background: #fff8e8; border-color: #f4d58b; color: #946100; }
-.atleti-membership-action.is-paid { background: #eafaf2; border-color: #9ce4c2; color: #087a49; }
+.atleti-membership-action:hover:not(:disabled) {
+  opacity: 1;
+  transform: translateY(-1px);
+  border-color: #c8d0dc;
+  box-shadow: 0 7px 18px rgba(15, 23, 42, .07);
+}
+
+.atleti-membership-action:disabled {
+  cursor: wait;
+}
+
+.atleti-membership-action.is-selected {
+  opacity: 1;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, .10), inset 0 0 0 1px rgba(255,255,255,.55);
+}
+
+.atleti-membership-action.is-unpaid.is-selected { background: #d92d4b; border-color: #c8203d; color: #fff; }
+.atleti-membership-action.is-event.is-selected { background: #e9a51c; border-color: #d69410; color: #fff; }
+.atleti-membership-action.is-paid.is-selected { background: #14965e; border-color: #0f8451; color: #fff; }
+
+.atleti-membership-selection-note {
+  flex-basis: 100%;
+  text-align: right;
+  color: #7b8496;
+  font-size: .75rem;
+}
+
+.atleti-membership-selection-note strong { color: #2e3850; }
 .atleti-membership-error { grid-column: 1 / -1; margin: 0; }
 
 .atleti-auto-price-hint {

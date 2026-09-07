@@ -24,6 +24,15 @@ function money(value) {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(number)
 }
 
+function firstMembershipChargeMonth(enrollments = [], currentMonth) {
+  const months = (Array.isArray(enrollments) ? enrollments : [])
+    .map((row) => row.data_inizio || row.data_iscrizione || row.created_at || '')
+    .map((value) => String(value || '').slice(0, 7))
+    .filter((value) => /^\d{4}-\d{2}$/.test(value) && value >= currentMonth)
+    .sort()
+  return months[0] || currentMonth
+}
+
 export default function AtletiPage() {
   const { role } = useAuth()
   const currentRole = String(role || '').trim().toLowerCase()
@@ -71,8 +80,16 @@ export default function AtletiPage() {
 
   const membershipFeeMutation = useMutation({
     mutationFn: setMembershipFeePaidAmount,
-    onSuccess: () => {
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['nova-membership-fees'], (current = []) => {
+        const rows = Array.isArray(current) ? current : []
+        const exists = rows.some((item) => String(item.tesseramento_id) === String(updated.tesseramento_id))
+        return exists
+          ? rows.map((item) => String(item.tesseramento_id) === String(updated.tesseramento_id) ? updated : item)
+          : [...rows, updated]
+      })
       queryClient.invalidateQueries({ queryKey: ['nova-membership-fees'] })
+      queryClient.invalidateQueries({ queryKey: ['orchidea-allievi-payments'] })
     },
   })
 
@@ -100,6 +117,7 @@ export default function AtletiPage() {
   const details = detailsQuery.data || { enrollments: [], payments: [] }
   const currentMonth = new Date().toISOString().slice(0, 7)
   const activeEnrollments = (details.enrollments || []).filter((item) => enrollmentIsActiveForMonth(item, currentMonth))
+  const membershipChargeMonth = firstMembershipChargeMonth(details.enrollments || [], currentMonth)
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -120,6 +138,11 @@ export default function AtletiPage() {
   const recommendedMonthly = resolveCoursePricing(assignedCourses, packagesQuery.data || [], 'mensile')
   const membershipFeeMap = new Map((membershipFeesQuery.data || []).map((item) => [String(item.tesseramento_id), item]))
   const selectedMembershipFee = selected ? resolveMembershipFeeState(selected, membershipFeeMap.get(String(selected.id))) : null
+  const selectedMembershipChoice = selectedMembershipFee?.status === 'paid'
+    ? 'paid'
+    : Number(selectedMembershipFee?.paid_amount || 0) === EVENT_MEMBERSHIP_FEE
+      ? 'event'
+      : 'unpaid'
 
   async function toggleCorsista(row) {
     if (!canEdit) return
@@ -269,9 +292,34 @@ export default function AtletiPage() {
                 <small>{selectedMembershipFee.remaining > 0 ? `Residuo ${money(selectedMembershipFee.remaining)}` : 'Saldo completo'}</small>
               </div>
               {canEdit ? <div className="atleti-membership-actions">
-                <button type="button" className="atleti-membership-action is-unpaid" onClick={() => membershipFeeMutation.mutate({ studentId: selected.id, paidAmount: 0, source: 'segreteria' })}>Non pagata</button>
-                <button type="button" className="atleti-membership-action is-event" onClick={() => membershipFeeMutation.mutate({ studentId: selected.id, paidAmount: EVENT_MEMBERSHIP_FEE, source: 'tesseramento_serata' })}>Serata €3 pagata</button>
-                <button type="button" className="atleti-membership-action is-paid" onClick={() => membershipFeeMutation.mutate({ studentId: selected.id, paidAmount: COURSE_MEMBERSHIP_FEE, source: 'quota_corsista' })}><CheckCircle2 size={15} /> Corsista €25 pagata</button>
+                <button
+                  type="button"
+                  aria-pressed={selectedMembershipChoice === 'unpaid'}
+                  disabled={membershipFeeMutation.isPending}
+                  className={`atleti-membership-action is-unpaid ${selectedMembershipChoice === 'unpaid' ? 'is-selected' : ''}`}
+                  onClick={() => membershipFeeMutation.mutate({ studentId: selected.id, paidAmount: 0, source: 'segreteria' })}
+                >
+                  {selectedMembershipChoice === 'unpaid' ? <CheckCircle2 size={15} /> : null} Non pagata
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={selectedMembershipChoice === 'event'}
+                  disabled={membershipFeeMutation.isPending}
+                  className={`atleti-membership-action is-event ${selectedMembershipChoice === 'event' ? 'is-selected' : ''}`}
+                  onClick={() => membershipFeeMutation.mutate({ studentId: selected.id, paidAmount: EVENT_MEMBERSHIP_FEE, source: 'tesseramento_serata' })}
+                >
+                  {selectedMembershipChoice === 'event' ? <CheckCircle2 size={15} /> : null} Serata €3 pagata
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={selectedMembershipChoice === 'paid'}
+                  disabled={membershipFeeMutation.isPending}
+                  className={`atleti-membership-action is-paid ${selectedMembershipChoice === 'paid' ? 'is-selected' : ''}`}
+                  onClick={() => membershipFeeMutation.mutate({ studentId: selected.id, paidAmount: COURSE_MEMBERSHIP_FEE, source: 'quota_corsista', chargedMonth: membershipChargeMonth })}
+                >
+                  {selectedMembershipChoice === 'paid' ? <CheckCircle2 size={15} /> : null} Corsista €25 pagata
+                </button>
+                <small className="atleti-membership-selection-note">Selezione attiva: <strong>{selectedMembershipChoice === 'paid' ? 'Corsista €25 pagata' : selectedMembershipChoice === 'event' ? 'Serata €3 pagata' : 'Non pagata'}</strong></small>
               </div> : null}
               {membershipFeeMutation.error ? <p className="form-error atleti-membership-error">{membershipFeeMutation.error.message}</p> : null}
             </div> : null}

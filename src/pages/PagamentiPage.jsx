@@ -454,7 +454,7 @@ export default function PagamentiPage() {
               ) : (
                 <>
                   <div><span>Quota</span><strong>{euro(row.quota_mese)}</strong></div>
-                  <div><span>Incassato</span><strong>{euro(row.pagato)}</strong></div>
+                  <div><span>Parziale</span><strong>{euro(row.pagato)}</strong>{row.membership_fee_charged > 0 ? <small className="payments-balance-note">incl. {euro(row.membership_fee_charged)} tessera</small> : null}</div>
                   <div className={row.residuo > 0 ? 'is-due' : 'is-ok'}><span>Residuo</span><strong>{euro(row.residuo)}</strong></div>
                 </>
               )}
@@ -504,9 +504,9 @@ export default function PagamentiPage() {
                 </>
               ) : (
                 <>
-                  <div><span>Quota mese</span><strong>{euro(paymentEditor.quota_mese)}</strong></div>
-                  <div><span>Già incassato</span><strong>{euro(paymentEditor.pagato)}</strong></div>
-                  <div><span>Residuo</span><strong>{euro(paymentEditor.residuo)}</strong></div>
+                  <div><span>Totale</span><strong>{euro(paymentEditor.quota_mese)}</strong></div>
+                  <div><span>Costo tessera</span><strong>{euro(paymentEditor.pagato)}</strong></div>
+                  <div><span>Totale corsi</span><strong>{euro(paymentEditor.residuo)}</strong></div>
                 </>
               )}
             </div>
@@ -592,8 +592,8 @@ export default function PagamentiPage() {
               ) : (
                 <>
                   <div><span>Copertura</span><strong>{formatDate(selectedRow.copertura_dal)}</strong><small>fino al {formatDate(selectedRow.copertura_al)}</small></div>
-                  <div><span>Quota pacchetto</span><strong>{euro(selectedRow.quota_mese)}</strong><small>competenza {monthLabel(month)}</small></div>
-                  <div><span>Saldo registrato</span><strong>{euro(selectedRow.pagato)}</strong><small>{selectedRow.metodo_pagamento || 'Metodo non indicato'}{selectedRow.data_pagamento ? ` · ${formatDate(selectedRow.data_pagamento)}` : ''}</small></div>
+                  <div><span>Quota pacchetto</span><strong>{euro(selectedRow.quota_mese)}</strong><small>{selectedRow.membership_fee_charged > 0 ? `include ${euro(selectedRow.membership_fee_charged)} di tessera assicurativa · ` : ''}competenza {monthLabel(month)}</small></div>
+                  <div><span>Parziale registrato</span><strong>{euro(selectedRow.pagato)}</strong><small>{selectedRow.membership_fee_charged > 0 ? `${euro(selectedRow.membership_fee_charged)} tessera una tantum · ` : ''}{selectedRow.metodo_pagamento || 'Metodo non indicato'}{selectedRow.data_pagamento ? ` · ${formatDate(selectedRow.data_pagamento)}` : ''}</small></div>
                 </>
               )}
             </div>

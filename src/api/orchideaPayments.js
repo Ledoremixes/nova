@@ -4,6 +4,7 @@ import { summarizeMonthlyTuitionPayments } from '../lib/paymentLedger'
 import { enrollmentIsActiveForMonth, resolveEnrollmentPricing } from '../lib/packagePricing'
 import { fetchPackagesCatalog } from './packagesCatalog'
 import { resolveCoursePricing } from '../lib/coursePriceList'
+import { COURSE_MEMBERSHIP_FEE, fetchMembershipFeeRecords } from './membershipFees'
 
 export function euro(value) {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
@@ -109,15 +110,19 @@ function normalizePaymentRow(row = {}) {
     recommended_package_name: row.recommended_package_name || '',
     pricing_group: row.pricing_group || null,
     pricing_group_label: row.pricing_group_label || '',
+    membership_fee_charged: Number(row.membership_fee_charged || 0),
+    tuition_monthly_list_price: Number(row.tuition_monthly_list_price || 0),
+    selected_package_total: Number(row.selected_package_total || 0),
     corsi: courses,
   }
 }
 
-function normalizeDirectRows({ enrollments = [], students = [], courses = [], payments = [], pricingHistory = [], packages = [], selectedMonth }) {
+function normalizeDirectRows({ enrollments = [], students = [], courses = [], payments = [], pricingHistory = [], packages = [], membershipFees = [], selectedMonth }) {
   const monthStart = dayjs(`${selectedMonth}-01`)
   const monthEnd = monthStart.endOf('month')
   const studentsById = new Map(students.map((item) => [String(item.id), item]))
   const coursesById = new Map(courses.map((item) => [String(item.id), item]))
+  const membershipFeeByStudent = new Map((membershipFees || []).map((item) => [String(item.tesseramento_id), item]))
   const groups = new Map()
 
   enrollments
@@ -177,21 +182,48 @@ function normalizeDirectRows({ enrollments = [], students = [], courses = [], pa
   return [...groups.values()].map((row) => {
     const relatedPayments = paymentsByStudent.get(String(row.tesseramento_id)) || []
     const automaticPricing = resolveCoursePricing(row.corsi, packages, 'mensile')
-    const total = Number(automaticPricing?.prezzo ?? row.quota_mese ?? 0)
-    const ledger = summarizeMonthlyTuitionPayments({ payments: relatedPayments, selectedMonth, totalDue: total })
+    const monthlyListPrice = Number(automaticPricing?.prezzo ?? row.quota_mese ?? 0)
+    const ledger = summarizeMonthlyTuitionPayments({ payments: relatedPayments, selectedMonth, totalDue: monthlyListPrice })
+
+    // Se il corsista ha scelto un pacchetto multi-mese, la card deve mostrare il
+    // prezzo reale del pacchetto scelto (es. trimestrale 3 corsi = 245 €), non il
+    // semplice equivalente mensile (85 €). L'importo allocato al singolo mese resta
+    // invece separato nel campo "Parziale" per mantenere corretta la contabilità.
+    const hasPackageCoverage = Boolean(
+      ledger.packageCoverageComplete
+      && ledger.packageType !== 'gettone'
+      && Number(ledger.packageTotal || 0) > 0,
+    )
+    const selectedPackageTotal = hasPackageCoverage ? Number(ledger.packageTotal || 0) : monthlyListPrice
+
+    // La tessera assicurativa corsista da 25 € è una tantum. Quando viene marcata
+    // come pagata dalla segreteria, viene conteggiata solo nel mese memorizzato come
+    // primo mese di pagamento e non si ripete nei mesi successivi.
+    const membershipRecord = membershipFeeByStudent.get(String(row.tesseramento_id))
+    const membershipFeeCharged = Number(membershipRecord?.paid_amount || 0) >= COURSE_MEMBERSHIP_FEE
+      && String(membershipRecord?.charged_month || '') === String(selectedMonth)
+      ? COURSE_MEMBERSHIP_FEE
+      : 0
+
+    const displayQuota = selectedPackageTotal + membershipFeeCharged
+    const displayPaid = Number(ledger.paid || 0) + membershipFeeCharged
+    const displayStatus = membershipFeeCharged > 0 && ledger.status === 'da_pagare' ? 'parziale' : ledger.status
 
     return normalizePaymentRow({
       ...row,
-      formula: automaticPricing ? 'Mensile' : row.formula,
-      tipo_pacchetto: automaticPricing?.pricing_group_label || row.tipo_pacchetto,
+      formula: ledger.packageType && ledger.packageType !== 'gettone' ? ledger.packageType : (automaticPricing ? 'Mensile' : row.formula),
+      tipo_pacchetto: ledger.packageName || automaticPricing?.pricing_group_label || row.tipo_pacchetto,
       recommended_package_id: automaticPricing?.id || null,
       recommended_package_name: automaticPricing?.nome || '',
       pricing_group: automaticPricing?.pricing_group || null,
       pricing_group_label: automaticPricing?.pricing_group_label || '',
-      quota_mese: total,
-      pagato: ledger.paid,
+      quota_mese: displayQuota,
+      pagato: displayPaid,
       residuo: ledger.residue,
-      stato_pagamento: ledger.status,
+      stato_pagamento: displayStatus,
+      membership_fee_charged: membershipFeeCharged,
+      tuition_monthly_list_price: monthlyListPrice,
+      selected_package_total: selectedPackageTotal,
       pagamento_id: ledger.authoritative?.id || null,
       metodo_pagamento: ledger.method,
       nota_pagamento: ledger.note,
@@ -217,13 +249,14 @@ function normalizeDirectRows({ enrollments = [], students = [], courses = [], pa
 
 async function fetchAllieviPaymentsMonthDirect({ month, search = '', courseId = 'all', status = 'all' }) {
   const selectedMonth = month || dayjs().format('YYYY-MM')
-  const [enrollmentsRes, studentsRes, coursesRes, paymentsRes, pricingHistoryRes, packages] = await Promise.all([
+  const [enrollmentsRes, studentsRes, coursesRes, paymentsRes, pricingHistoryRes, packages, membershipFees] = await Promise.all([
     orchideaSupabase.from('iscrizioni_corsi').select('*').limit(10000),
     orchideaSupabase.from('tesseramenti').select('*').limit(10000),
     orchideaSupabase.from('corsi').select('*').limit(2000),
     orchideaSupabase.from('pagamenti').select('*').limit(10000),
     orchideaSupabase.from('nova_package_pricing_history').select('*').limit(20000),
     fetchPackagesCatalog({ includeInactive: false }).catch(() => []),
+    fetchMembershipFeeRecords().catch(() => []),
   ])
 
   if (enrollmentsRes.error) throw new Error(enrollmentsRes.error.message || 'Errore caricamento iscrizioni corsi')
@@ -237,6 +270,7 @@ async function fetchAllieviPaymentsMonthDirect({ month, search = '', courseId = 
     payments: paymentsRes.error ? [] : (paymentsRes.data || []),
     pricingHistory: pricingHistoryRes.error ? [] : (pricingHistoryRes.data || []),
     packages,
+    membershipFees,
     selectedMonth,
   })
 

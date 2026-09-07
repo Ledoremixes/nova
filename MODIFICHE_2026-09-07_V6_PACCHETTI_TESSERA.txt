@@ -1,0 +1,35 @@
+NOVA GESTIONALE - V6 PAGAMENTI / PACCHETTI / TESSERA CORSISTA
+Data: 07/09/2026
+
+1) CORREZIONE IMPORTI PACCHETTI
+- Le card Pagamenti ora mostrano come Quota il prezzo reale del pacchetto scelto.
+- Esempio: 3 corsi trimestrale mostra 245,00 € e non 85,00 €.
+- La correzione vale per mensile, trimestrale, annuale e per tutti i gruppi del listino.
+- L'allocazione contabile del pacchetto sui singoli mesi resta separata, così la copertura non genera falsi residui.
+- Il campo laterale "Incassato" della card è stato rinominato "Parziale".
+
+2) TESSERA ASSICURATIVA CORSISTA 25 €
+- Quando la segreteria seleziona "Corsista €25 pagata", Nova memorizza il primo mese di addebito.
+- I 25 € vengono sommati una sola volta alla quota e al parziale del primo mese utile del corsista.
+- Nei mesi successivi la tessera non viene riaddebitata e continua a risultare pagata.
+- Se i corsi iniziano in un mese futuro, l'addebito viene associato al primo mese utile di corso invece che al mese corrente.
+- Compatibilità con record già esistenti: per i vecchi record pagati Nova ricava il mese una tantum dalla data di aggiornamento/salvataggio.
+
+3) SELETTORE STATO TESSERA PIÙ CHIARO
+- Non pagata / Serata €3 pagata / Corsista €25 pagata non risultano più tutti accesi.
+- Solo l'opzione effettivamente selezionata viene evidenziata con colore pieno e spunta.
+- Le altre due opzioni restano neutre e meno evidenti.
+- Aggiunta indicazione testuale "Selezione attiva".
+
+4) LISTINO VERIFICATO
+- A gettone: 12 €
+- 1 corso: 40 / 110 / 320 €
+- Country: 30 / 80 / 230 €
+- Bachata + Salsa: 50 / 135 / 399 €
+- 2 corsi Special: 60 / 170 / 499 €
+- 3 corsi: 85 / 245 / 729 €
+- All You Can Dance: 119 / 345 / 999 €
+
+VERIFICHE
+- ESLint completato senza errori.
+- Controllati automaticamente tutti i 18 prezzi mensile/trimestrale/annuale + gettone.

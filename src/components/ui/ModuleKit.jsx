@@ -27,12 +27,12 @@ export function ModuleMetric({ label, value, caption, icon: Icon, tone = 'violet
   )
 }
 
-export function ModuleModal({ open, title, subtitle, icon: Icon, onClose, children, size = 'medium' }) {
+export function ModuleModal({ open, title, subtitle, icon: Icon, onClose, children, size = 'medium', className = '' }) {
   if (!open) return null
 
   return (
     <div className="modalOverlay module-modal-overlay" onMouseDown={onClose}>
-      <div className={`modalCard module-modal module-modal--${size}`} onMouseDown={(event) => event.stopPropagation()}>
+      <div className={`modalCard module-modal module-modal--${size} ${className}`.trim()} onMouseDown={(event) => event.stopPropagation()}>
         <div className="module-modal__header">
           <div className="module-modal__heading">
             {Icon ? <span><Icon size={21} /></span> : null}
