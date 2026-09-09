@@ -2,19 +2,18 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
+  ArrowLeft,
   ArrowRight,
   BadgeCheck,
   Camera,
   Check,
   CheckCircle2,
   CreditCard,
-  FileScan,
   IdCard,
   Keyboard,
   LoaderCircle,
   PenLine,
   RefreshCw,
-  ScanLine,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -25,19 +24,13 @@ import { saveAssistedCorsistaMembership } from '../api/assistedMembership'
 import {
   fiscalCodeDetails,
   fiscalCodeFromBarcode,
-  healthCardOcrScore,
-  mergeHealthCardOcrResults,
   normalizeFiscalCode,
-  parseHealthCardOcr,
-  preprocessHealthCardImage,
   validateFiscalCode,
 } from '../lib/healthCard'
 import '../styles/TesseramentoCorsistaPage.css'
 
 const CURRENT_SEASON = '2026/2027'
-const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'
 const HTML5_QR_URL = 'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js'
-const BARCODE_READER_ID = 'membership-barcode-reader'
 const BARCODE_FILE_READER_ID = 'membership-barcode-file-reader'
 
 function emptyForm() {
@@ -74,38 +67,6 @@ function formFromStudent(student = {}) {
   }
 }
 
-function mergeOcrIntoForm(current, ocr) {
-  return {
-    ...current,
-    nome: current.nome || ocr.nome,
-    cognome: current.cognome || ocr.cognome,
-    cf: current.cf || ocr.cf,
-    nascita: current.nascita || ocr.nascita,
-    luogo: current.luogo || ocr.luogo,
-  }
-}
-
-function loadTesseractScript() {
-  if (window.Tesseract) return Promise.resolve(window.Tesseract)
-  const existing = document.querySelector(`script[src="${TESSERACT_URL}"]`)
-  if (existing) {
-    return new Promise((resolve, reject) => {
-      existing.addEventListener('load', () => resolve(window.Tesseract), { once: true })
-      existing.addEventListener('error', () => reject(new Error('Impossibile caricare il motore OCR. Controlla la connessione internet.')), { once: true })
-    })
-  }
-
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script')
-    script.src = TESSERACT_URL
-    script.async = true
-    script.crossOrigin = 'anonymous'
-    script.onload = () => resolve(window.Tesseract)
-    script.onerror = () => reject(new Error('Impossibile caricare il motore OCR. Controlla la connessione internet.'))
-    document.head.appendChild(script)
-  })
-}
-
 function loadBarcodeScript() {
   if (window.Html5Qrcode) return Promise.resolve(window)
   const existing = document.querySelector(`script[src="${HTML5_QR_URL}"]`)
@@ -130,16 +91,7 @@ function loadBarcodeScript() {
 function barcodeFormats() {
   const formats = window.Html5QrcodeSupportedFormats
   if (!formats) return undefined
-  return [
-    formats.CODE_39,
-    formats.CODE_128,
-    formats.CODABAR,
-    formats.EAN_13,
-  ].filter((item) => item != null)
-}
-
-function waitForRender() {
-  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  return [formats.CODE_39, formats.CODE_128, formats.CODABAR, formats.EAN_13].filter((item) => item != null)
 }
 
 function SignaturePad({ value, onChange }) {
@@ -242,25 +194,14 @@ function SignaturePad({ value, onChange }) {
 export default function TesseramentoCorsistaPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const barcodeScannerRef = useRef(null)
-  const ocrWorkerRef = useRef(null)
-  const mountedRef = useRef(true)
 
   const [step, setStep] = useState(1)
   const [form, setForm] = useState(emptyForm)
   const [matchedStudent, setMatchedStudent] = useState(null)
   const [barcodeVerified, setBarcodeVerified] = useState(false)
   const [barcodeStatus, setBarcodeStatus] = useState('')
-  const [cameraOpen, setCameraOpen] = useState(false)
-  const [cameraError, setCameraError] = useState('')
+  const [barcodeError, setBarcodeError] = useState('')
   const [barcodeBusy, setBarcodeBusy] = useState(false)
-  const [ocrBusy, setOcrBusy] = useState(false)
-  const [ocrProgress, setOcrProgress] = useState(0)
-  const [ocrMessage, setOcrMessage] = useState('')
-  const [ocrConfidence, setOcrConfidence] = useState(null)
-  const [ocrExtracted, setOcrExtracted] = useState(null)
-  const [ocrSource, setOcrSource] = useState('manuale')
-  const [frontPreview, setFrontPreview] = useState('')
   const [signature, setSignature] = useState('')
   const [consents, setConsents] = useState({ data_confirmed: false, privacy: false, membership: false })
   const [result, setResult] = useState(null)
@@ -273,52 +214,46 @@ export default function TesseramentoCorsistaPage() {
   const students = useMemo(() => studentsQuery.data || [], [studentsQuery.data])
   const fiscalDetails = useMemo(() => fiscalCodeDetails(form.cf), [form.cf])
   const fiscalValid = useMemo(() => validateFiscalCode(form.cf), [form.cf])
-  const formComplete = Boolean(
-    form.nome.trim()
-    && form.cognome.trim()
-    && fiscalValid
-    && form.nascita
-    && form.luogo.trim()
-    && form.telefono.trim()
-    && form.email.trim().includes('@')
-    && form.residenza.trim(),
-  )
-  const canContinueToData = Boolean(
-    fiscalValid
-    || form.nome.trim()
-    || form.cognome.trim()
-    || form.nascita
-    || form.luogo.trim(),
-  )
-  const consentsComplete = consents.data_confirmed && consents.privacy && consents.membership
 
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false
-      stopCamera()
-      if (ocrWorkerRef.current) {
-        ocrWorkerRef.current.terminate?.().catch?.(() => {})
-      }
-      if (frontPreview) URL.revokeObjectURL(frontPreview)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const requiredFields = useMemo(() => [
+    ['nome', 'Nome'],
+    ['cognome', 'Cognome'],
+    ['cf', 'Codice fiscale'],
+    ['nascita', 'Data di nascita'],
+    ['luogo', 'Luogo di nascita'],
+    ['telefono', 'Telefono'],
+    ['email', 'Email'],
+    ['residenza', 'Residenza'],
+  ], [])
+
+  const missingFields = useMemo(() => requiredFields
+    .filter(([key]) => {
+      if (key === 'cf') return !fiscalValid
+      if (key === 'email') return !form.email.trim().includes('@')
+      return !String(form[key] || '').trim()
+    })
+    .map(([, label]) => label), [form, fiscalValid, requiredFields])
+
+  const completedFields = requiredFields.length - missingFields.length
+  const formComplete = missingFields.length === 0
+  const consentsComplete = consents.data_confirmed && consents.privacy && consents.membership
 
   function findStudentByCf(cf) {
     const normalized = normalizeFiscalCode(cf)
-    return students.find((student) => normalizeFiscalCode(student.cf) === normalized) || null
+    return students.find((student) => normalizeFiscalCode(student.cf || student.raw?.cf || student.raw?.cod_fiscale) === normalized) || null
   }
 
-  function applyFiscalCode(cf, { verified = false, source = 'manuale' } = {}) {
+  function applyFiscalCode(cf, { verified = false, autoAdvance = false } = {}) {
     const normalized = normalizeFiscalCode(cf)
     if (!normalized) return
+
     const details = fiscalCodeDetails(normalized)
     const existing = findStudentByCf(normalized)
 
     if (existing) {
       setMatchedStudent(existing)
       setForm(formFromStudent(existing))
-      setBarcodeStatus(`Trovato: ${fullName(existing)}. I dati già presenti sono stati recuperati automaticamente.`)
+      setBarcodeStatus(`Rinnovo trovato: ${fullName(existing)}. Nova ha recuperato i dati già presenti.`)
     } else {
       setMatchedStudent(null)
       setForm((current) => ({
@@ -326,96 +261,28 @@ export default function TesseramentoCorsistaPage() {
         cf: normalized,
         nascita: current.nascita || details?.birthDate || '',
       }))
-      setBarcodeStatus(verified ? 'Codice fiscale letto correttamente. Non risulta un tesseramento precedente: nuova anagrafica.' : '')
+      setBarcodeStatus('Nuovo corsista. Codice fiscale acquisito: completa solo i dati mancanti.')
     }
 
     setBarcodeVerified(verified && validateFiscalCode(normalized))
-    if (source !== 'manuale') setOcrSource(source)
-  }
-
-  async function stopCamera() {
-    const scanner = barcodeScannerRef.current
-    barcodeScannerRef.current = null
-
-    if (scanner) {
-      try {
-        if (scanner.isScanning) await scanner.stop()
-      } catch {
-        // Lo stop può essere chiamato mentre il lettore si sta già chiudendo.
-      }
-      try {
-        scanner.clear()
-      } catch {
-        // Nessuna azione necessaria.
-      }
-    }
-
-    if (mountedRef.current) setCameraOpen(false)
+    if (autoAdvance) setStep(2)
   }
 
   function acceptDecodedBarcode(rawValue) {
     const cf = fiscalCodeFromBarcode(rawValue)
     if (!cf || !validateFiscalCode(cf)) {
-      setCameraError('Ho letto il barcode, ma non contiene un codice fiscale valido. Riprova tenendo tutta la sequenza di barre nel riquadro.')
-      return false
+      throw new Error('Il barcode è stato letto, ma non contiene un codice fiscale valido. Riprova con una foto più vicina.')
     }
-
-    setCameraError('')
-    applyFiscalCode(cf, { verified: true, source: 'barcode' })
-    return true
-  }
-
-  async function startCamera() {
-    setCameraError('')
-    setBarcodeStatus('')
-
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error('Fotocamera non disponibile. Apri Nova da Chrome/Safari tramite HTTPS oppure usa “Fotografa barcode”.')
-      }
-
-      await loadBarcodeScript()
-      if (!window.Html5Qrcode) throw new Error('Lettore barcode non disponibile.')
-
-      setCameraOpen(true)
-      await waitForRender()
-
-      const scanner = new window.Html5Qrcode(BARCODE_READER_ID, {
-        formatsToSupport: barcodeFormats(),
-        verbose: false,
-      })
-      barcodeScannerRef.current = scanner
-
-      await scanner.start(
-        { facingMode: 'environment' },
-        {
-          fps: 15,
-          qrbox: (viewfinderWidth, viewfinderHeight) => ({
-            width: Math.max(220, Math.min(Math.round(viewfinderWidth * 0.92), 560)),
-            height: Math.max(90, Math.min(Math.round(viewfinderHeight * 0.28), 170)),
-          }),
-          disableFlip: true,
-        },
-        async (decodedText) => {
-          if (!acceptDecodedBarcode(decodedText)) return
-          await stopCamera()
-        },
-        () => {},
-      )
-    } catch (error) {
-      await stopCamera()
-      if (mountedRef.current) setCameraError(error.message || 'Non riesco ad aprire il lettore barcode.')
-    }
+    applyFiscalCode(cf, { verified: true, autoAdvance: true })
   }
 
   async function scanBarcodeFile(file) {
     if (!file) return
     setBarcodeBusy(true)
-    setCameraError('')
+    setBarcodeError('')
     setBarcodeStatus('')
 
     try {
-      await stopCamera()
       await loadBarcodeScript()
       if (!window.Html5Qrcode) throw new Error('Lettore barcode non disponibile.')
 
@@ -426,9 +293,7 @@ export default function TesseramentoCorsistaPage() {
 
       try {
         const decodedText = await scanner.scanFile(file, true)
-        if (!acceptDecodedBarcode(decodedText)) {
-          throw new Error('Il barcode è stato trovato ma non contiene un codice fiscale valido.')
-        }
+        acceptDecodedBarcode(decodedText)
       } finally {
         try {
           scanner.clear()
@@ -437,9 +302,9 @@ export default function TesseramentoCorsistaPage() {
         }
       }
     } catch (error) {
-      setCameraError(
+      setBarcodeError(
         error?.message?.includes('No MultiFormat Readers')
-          ? 'Non riesco a leggere il barcode da questa foto. Avvicinati, tieni il retro ben dritto e lascia un po’ di spazio bianco ai lati del codice.'
+          ? 'Non riesco a leggere il barcode. Rifai la foto più vicina, dritta, nitida e con un po’ di spazio bianco ai lati delle barre.'
           : (error.message || 'Barcode non riconosciuto. Riprova con una foto più vicina e nitida.'),
       )
     } finally {
@@ -447,148 +312,28 @@ export default function TesseramentoCorsistaPage() {
     }
   }
 
-  async function ensureOcrWorker() {
-    const Tesseract = await loadTesseractScript()
-    if (ocrWorkerRef.current) return ocrWorkerRef.current
-
-    setOcrMessage('Preparo il lettore OCR…')
-    ocrWorkerRef.current = await Tesseract.createWorker('ita', 1, {
-      logger: (message) => {
-        if (!mountedRef.current) return
-        if (typeof message.progress === 'number') setOcrProgress(Math.round(message.progress * 100))
-        if (message.status) setOcrMessage(message.status === 'recognizing text' ? 'Leggo i dati stampati…' : 'Preparo il riconoscimento…')
-      },
-    })
-    await ocrWorkerRef.current.setParameters({
-      preserve_interword_spaces: '1',
-      user_defined_dpi: '300',
-      tessedit_pageseg_mode: '6',
-    })
-    return ocrWorkerRef.current
-  }
-
-  async function recognizeFront(file) {
-    if (!file) return
-    setOcrBusy(true)
-    setOcrProgress(0)
-    setOcrMessage('Ottimizzo la foto…')
-    setOcrConfidence(null)
-    setOcrExtracted(null)
-
-    if (frontPreview) URL.revokeObjectURL(frontPreview)
-    setFrontPreview(URL.createObjectURL(file))
-
-    try {
-      const worker = await ensureOcrWorker()
-      const image = await preprocessHealthCardImage(file)
-
-      await worker.setParameters({
-        preserve_interword_spaces: '1',
-        user_defined_dpi: '300',
-        tessedit_pageseg_mode: '6',
-        tessedit_char_whitelist: '',
-      })
-      const first = await worker.recognize(image)
-      let parsed = parseHealthCardOcr(first.data?.text || '')
-      let confidence = Number(first.data?.confidence || 0)
-      let score = healthCardOcrScore(parsed)
-
-      // Secondo passaggio solo se il primo non ha recuperato abbastanza campi.
-      if (score < 4) {
-        setOcrMessage('Raffino automaticamente la lettura…')
-        const thresholded = await preprocessHealthCardImage(file, { threshold: true })
-        await worker.setParameters({
-          preserve_interword_spaces: '1',
-          user_defined_dpi: '300',
-          tessedit_pageseg_mode: '11',
-          tessedit_char_whitelist: '',
-        })
-        const second = await worker.recognize(thresholded)
-        const secondParsed = parseHealthCardOcr(second.data?.text || '')
-        parsed = mergeHealthCardOcrResults(parsed, secondParsed)
-        confidence = Math.max(confidence, Number(second.data?.confidence || 0))
-        score = healthCardOcrScore(parsed)
-      }
-
-      // Se manca ancora il CF, esegue un passaggio mirato ai soli caratteri del codice fiscale.
-      if (!validateFiscalCode(parsed.cf)) {
-        setOcrMessage('Cerco il codice fiscale stampato…')
-        await worker.setParameters({
-          preserve_interword_spaces: '0',
-          user_defined_dpi: '300',
-          tessedit_pageseg_mode: '11',
-          tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-        })
-        const cfPass = await worker.recognize(image)
-        const cfParsed = parseHealthCardOcr(cfPass.data?.text || '')
-        parsed = mergeHealthCardOcrResults(parsed, cfParsed)
-        confidence = Math.max(confidence, Number(cfPass.data?.confidence || 0))
-        score = healthCardOcrScore(parsed)
-      }
-
-      // Ripristina i parametri generali per la lettura successiva.
-      await worker.setParameters({
-        preserve_interword_spaces: '1',
-        user_defined_dpi: '300',
-        tessedit_pageseg_mode: '6',
-        tessedit_char_whitelist: '',
-      })
-
-      const detectedCf = normalizeFiscalCode(parsed.cf)
-      const validDetectedCf = validateFiscalCode(detectedCf) ? detectedCf : ''
-      const existingFromOcr = validDetectedCf ? findStudentByCf(validDetectedCf) : null
-
-      if (existingFromOcr) {
-        setMatchedStudent(existingFromOcr)
-        setForm(formFromStudent(existingFromOcr))
-        setBarcodeStatus(`Trovato: ${fullName(existingFromOcr)}. Ho recuperato i dati già presenti.`)
-      } else {
-        setForm((current) => {
-          if (matchedStudent) return current
-          const merged = mergeOcrIntoForm(current, parsed)
-          if (validDetectedCf && !validateFiscalCode(merged.cf)) merged.cf = validDetectedCf
-          const finalCf = validateFiscalCode(merged.cf) ? merged.cf : validDetectedCf
-          if (finalCf) {
-            merged.cf = finalCf
-            merged.nascita = fiscalCodeDetails(finalCf)?.birthDate || merged.nascita
-          }
-          return merged
-        })
-      }
-
-      setOcrExtracted(parsed)
-      setOcrConfidence(Math.round(confidence))
-      setOcrSource(barcodeVerified ? 'barcode+ocr' : 'ocr')
-
-      if (score >= 4) {
-        setOcrMessage(`Ho letto ${score}/5 dati principali. Sono già stati inseriti: controllali prima della firma.${validDetectedCf ? '' : ' Per il CF usa il barcode sul retro.'}`)
-      } else if (score >= 2) {
-        setOcrMessage(`Lettura parziale: ho recuperato ${score}/5 dati. Controlla quelli trovati e fotografa il barcode sul retro per il codice fiscale.`)
-      } else {
-        setOcrMessage('La foto è stata elaborata, ma non ho riconosciuto abbastanza dati con sicurezza. Riprova più vicino, senza riflessi e con la tessera perfettamente orizzontale.')
-      }
-    } catch (error) {
-      setOcrExtracted(null)
-      setOcrMessage(error.message || 'Non sono riuscito a leggere il tesserino. Riprova con più luce e senza riflessi.')
-    } finally {
-      setOcrBusy(false)
-      setOcrProgress(100)
-    }
-  }
-
   function changeCf(value) {
     const normalized = normalizeFiscalCode(value).slice(0, 16)
-    setForm((current) => ({ ...current, cf: normalized }))
     setBarcodeVerified(false)
     setBarcodeStatus('')
-    const existing = normalized.length === 16 ? findStudentByCf(normalized) : null
+    setBarcodeError('')
+
+    const valid = validateFiscalCode(normalized)
+    const existing = valid ? findStudentByCf(normalized) : null
     if (existing) {
       setMatchedStudent(existing)
       setForm(formFromStudent(existing))
-      setBarcodeStatus(`Trovato: ${fullName(existing)}. Dati recuperati dal tesseramento precedente.`)
-    } else if (matchedStudent) {
-      setMatchedStudent(null)
+      setBarcodeStatus(`Rinnovo trovato: ${fullName(existing)}. Dati recuperati automaticamente.`)
+      return
     }
+
+    if (matchedStudent) setMatchedStudent(null)
+    const details = valid ? fiscalCodeDetails(normalized) : null
+    setForm((current) => ({
+      ...current,
+      cf: normalized,
+      nascita: valid ? (details?.birthDate || current.nascita) : current.nascita,
+    }))
   }
 
   const saveMutation = useMutation({
@@ -599,9 +344,9 @@ export default function TesseramentoCorsistaPage() {
       consents,
       signature_data_url: signature,
       extraction: {
-        source: ocrSource,
+        source: barcodeVerified ? 'barcode_foto' : 'manuale',
         barcode_cf_verified: barcodeVerified,
-        ocr_confidence: ocrConfidence,
+        ocr_confidence: null,
       },
     }),
     onSuccess: async (data) => {
@@ -615,22 +360,13 @@ export default function TesseramentoCorsistaPage() {
   })
 
   function resetAll() {
-    stopCamera()
-    if (frontPreview) URL.revokeObjectURL(frontPreview)
     setStep(1)
     setForm(emptyForm())
     setMatchedStudent(null)
     setBarcodeVerified(false)
     setBarcodeStatus('')
-    setCameraError('')
+    setBarcodeError('')
     setBarcodeBusy(false)
-    setOcrBusy(false)
-    setOcrProgress(0)
-    setOcrMessage('')
-    setOcrConfidence(null)
-    setOcrExtracted(null)
-    setOcrSource('manuale')
-    setFrontPreview('')
     setSignature('')
     setConsents({ data_confirmed: false, privacy: false, membership: false })
     setResult(null)
@@ -644,13 +380,13 @@ export default function TesseramentoCorsistaPage() {
           <span className="membership-success__icon"><CheckCircle2 size={36} /></span>
           <span className="membership-eyebrow">Tesseramento completato</span>
           <h1>{fullName(result.student)}</h1>
-          <p>I dati sono stati confermati e la firma è stata salvata nell’archivio privato di Nova. Le foto della Tessera Sanitaria non vengono conservate.</p>
+          <p>Firma e dati sono stati salvati. Ora puoi passare direttamente all’assegnazione corsi e al pagamento.</p>
 
           <div className="membership-success__grid">
             <div><span>Numero tessera</span><strong>{result.student.numero_tessera || 'Assegnato'}</strong></div>
             <div><span>Stagione</span><strong>{result.student.stagione || CURRENT_SEASON}</strong></div>
             <div><span>Anagrafica</span><strong>{result.existing ? 'Rinnovata' : 'Nuova'}</strong></div>
-            <div><span>Quota corsista</span><strong>25 € da gestire</strong><small>La firma non rende mai gratuita la tessera.</small></div>
+            <div><span>Quota corsista</span><strong>25 € da gestire</strong><small>La tessera non viene mai omaggiata.</small></div>
           </div>
 
           <div className="membership-success__actions">
@@ -668,183 +404,134 @@ export default function TesseramentoCorsistaPage() {
     <section className="membership-page">
       <div className="membership-hero">
         <div>
-          <span className="membership-eyebrow"><Sparkles size={15} /> Tesseramento assistito</span>
+          <span className="membership-eyebrow"><Sparkles size={15} /> Flusso rapido segreteria</span>
           <h1>Tesseramento corsista</h1>
-          <p>Leggi la Tessera Sanitaria, recupera i vecchi dati e fai intervenire il cliente solo per controllo e firma.</p>
+          <p>Tre passaggi guidati: fotografa il barcode, controlla i dati e passa il tablet al cliente per la firma.</p>
         </div>
-        <div className="membership-hero__badge"><ShieldCheck size={22} /><span><strong>Firma obbligatoria</strong><small>foto tessera non archiviate</small></span></div>
+        <div className="membership-hero__badge"><ShieldCheck size={22} /><span><strong>3 passaggi</strong><small>firma cliente obbligatoria</small></span></div>
       </div>
 
-      <div className="membership-steps">
-        <button type="button" className={step === 1 ? 'is-active' : step > 1 ? 'is-done' : ''} onClick={() => step > 1 && setStep(1)}><b>{step > 1 ? <Check size={15} /> : '1'}</b><span>Tessera sanitaria</span></button>
+      <div className="membership-step-strip">
+        <button type="button" className={step === 1 ? 'is-active' : step > 1 ? 'is-done' : ''} onClick={() => step > 1 && setStep(1)}><b>{step > 1 ? <Check size={15} /> : '1'}</b><span>Identifica</span></button>
         <i />
-        <button type="button" className={step === 2 ? 'is-active' : step > 2 ? 'is-done' : ''} onClick={() => step > 2 && setStep(2)}><b>{step > 2 ? <Check size={15} /> : '2'}</b><span>Controllo dati</span></button>
+        <button type="button" className={step === 2 ? 'is-active' : step > 2 ? 'is-done' : ''} onClick={() => step > 2 && setStep(2)}><b>{step > 2 ? <Check size={15} /> : '2'}</b><span>Dati</span></button>
         <i />
-        <button type="button" className={step === 3 ? 'is-active' : step > 3 ? 'is-done' : ''}><b>{step > 3 ? <Check size={15} /> : '3'}</b><span>Firma cliente</span></button>
-        <i />
-        <button type="button" className={step === 4 ? 'is-active' : ''}><b>4</b><span>Fine</span></button>
+        <button type="button" className={step === 3 ? 'is-active' : step > 3 ? 'is-done' : ''}><b>{step > 3 ? <Check size={15} /> : '3'}</b><span>Firma</span></button>
       </div>
 
       {step === 1 ? (
         <div className="membership-stage">
-          <div className="membership-stage__heading">
-            <span className="membership-stage__number">1</span>
-            <div><h2>Inquadra la Tessera Sanitaria</h2><p>Per i rinnovi basta il barcode. Per un nuovo corsista fotografa anche il fronte: Nova prova a compilare automaticamente i dati stampati.</p></div>
+          <div className="membership-card-head">
+            <span className="membership-step-icon"><IdCard size={23} /></span>
+            <div><span>Passaggio 1</span><h2>Identifica il corsista</h2><p>Usa solo la foto del barcode sul retro: è il metodo che funziona meglio e fa risparmiare più tempo.</p></div>
           </div>
 
-          <div className="membership-scan-grid">
-            <article className="membership-scan-card membership-scan-card--barcode">
-              <span className="membership-scan-card__icon"><ScanLine size={27} /></span>
-              <div><span className="membership-scan-card__tag">Più veloce · consigliato</span><h3>Leggi il barcode sul retro</h3><p>La Tessera Sanitaria usa normalmente Code 39 (alcune vecchie tessere Code 128). Il nuovo lettore supporta entrambi e non dipende più dal lettore nativo del browser.</p></div>
-              <div className="membership-scan-card__actions">
-                <button type="button" className="membership-button membership-button--primary" disabled={barcodeBusy} onClick={cameraOpen ? stopCamera : startCamera}><Camera size={18} /> {cameraOpen ? 'Chiudi fotocamera' : 'Avvia lettore'}</button>
-                <label className={`membership-button membership-button--secondary membership-file-button ${barcodeBusy ? 'is-disabled' : ''}`}>
-                  {barcodeBusy ? <LoaderCircle size={18} className="membership-spin" /> : <CreditCard size={18} />}
-                  {barcodeBusy ? 'Leggo il barcode…' : 'Fotografa barcode'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    disabled={barcodeBusy}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0]
-                      event.target.value = ''
-                      scanBarcodeFile(file)
-                    }}
-                  />
-                </label>
-              </div>
-            </article>
+          <div className="membership-barcode-flow">
+            <div className="membership-barcode-visual" aria-hidden="true">
+              <CreditCard size={42} />
+              <div className="membership-barcode-lines"><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /></div>
+              <span>RETRO TESSERA SANITARIA</span>
+            </div>
 
-            <article className="membership-scan-card">
-              <span className="membership-scan-card__icon"><FileScan size={27} /></span>
-              <div><span className="membership-scan-card__tag">Per nuovi corsisti</span><h3>Leggi il fronte con OCR</h3><p>Fotografa il fronte in orizzontale, senza riflessi. Nova legge nome, cognome, nascita e luogo e poi ti fa controllare tutto.</p></div>
-              <label className={`membership-button membership-button--secondary membership-file-button ${ocrBusy ? 'is-disabled' : ''}`}>
-                {ocrBusy ? <LoaderCircle size={18} className="membership-spin" /> : <CreditCard size={18} />}
-                {ocrBusy ? 'Lettura in corso…' : 'Fotografa / carica fronte'}
+            <div className="membership-barcode-copy">
+              <span className="membership-mini-pill">Metodo consigliato</span>
+              <h3>Fotografa il barcode</h3>
+              <div className="membership-instructions">
+                <span><b>1</b> Gira la Tessera Sanitaria sul retro.</span>
+                <span><b>2</b> Avvicinati al barcode e tienilo dritto.</span>
+                <span><b>3</b> Scatta: Nova trova subito il corsista.</span>
+              </div>
+
+              <label className={`membership-photo-button ${barcodeBusy || studentsQuery.isLoading ? 'is-disabled' : ''}`}>
+                {barcodeBusy ? <LoaderCircle size={22} className="membership-spin" /> : <Camera size={22} />}
+                <span><strong>{barcodeBusy ? 'Sto leggendo il barcode…' : 'Fotografa barcode'}</strong><small>{studentsQuery.isLoading ? 'Carico l’anagrafica…' : 'Si apre direttamente la fotocamera'}</small></span>
                 <input
                   type="file"
                   accept="image/*"
                   capture="environment"
-                  disabled={ocrBusy}
+                  disabled={barcodeBusy || studentsQuery.isLoading}
                   onChange={(event) => {
                     const file = event.target.files?.[0]
                     event.target.value = ''
-                    recognizeFront(file)
+                    scanBarcodeFile(file)
                   }}
                 />
               </label>
-            </article>
+            </div>
           </div>
 
-          {cameraOpen ? (
-            <div className="membership-camera-panel">
-              <div id={BARCODE_READER_ID} className="membership-html5-reader" />
-              <p>Inquadra tutto il barcode orizzontalmente, lasciando un po’ di spazio bianco ai lati. La lettura si chiude da sola appena Nova riconosce il codice fiscale.</p>
-            </div>
-          ) : null}
           <div id={BARCODE_FILE_READER_ID} className="membership-hidden-barcode-reader" aria-hidden="true" />
 
-          {cameraError ? <div className="membership-alert membership-alert--error">{cameraError}</div> : null}
+          {barcodeError ? <div className="membership-alert membership-alert--error">{barcodeError}</div> : null}
           {barcodeStatus ? <div className={`membership-alert ${matchedStudent ? 'membership-alert--success' : 'membership-alert--info'}`}><BadgeCheck size={19} /> {barcodeStatus}</div> : null}
 
-          {ocrBusy || ocrMessage ? (
-            <div className="membership-ocr-status">
-              <div>
-                <span>{ocrBusy ? <LoaderCircle size={18} className="membership-spin" /> : <CheckCircle2 size={18} />}</span>
-                <div>
-                  <strong>{ocrMessage || 'OCR pronto'}</strong>
-                  <small>
-                    {ocrConfidence != null
-                      ? `Dati riconosciuti: ${ocrExtracted ? healthCardOcrScore(ocrExtracted) : 0}/5 · confidenza OCR indicativa: ${ocrConfidence}%`
-                      : 'La prima lettura prepara il motore OCR; le successive sono più rapide.'}
-                  </small>
-                </div>
-              </div>
-              <div className="membership-progress"><i style={{ width: `${ocrProgress}%` }} /></div>
+          <details className="membership-manual-panel">
+            <summary><Keyboard size={18} /><span><strong>Il barcode non si legge?</strong><small>Usa il codice fiscale manualmente</small></span></summary>
+            <div className="membership-manual-panel__body">
+              <label><span>Codice fiscale</span><div className="membership-cf-input-wrap"><input value={form.cf} onChange={(event) => changeCf(event.target.value)} placeholder="INSERISCI IL CODICE FISCALE" maxLength={16} autoCapitalize="characters" autoComplete="off" />{form.cf.length === 16 ? <em className={fiscalValid ? 'is-valid' : 'is-invalid'}>{fiscalValid ? 'Valido' : 'Controlla'}</em> : null}</div></label>
+              <button type="button" className="membership-button membership-button--primary" disabled={!fiscalValid} onClick={() => setStep(2)}>Continua <ArrowRight size={18} /></button>
             </div>
-          ) : null}
-
-          {ocrExtracted ? (
-            <div className="membership-ocr-result">
-              <div className="membership-ocr-result__head">
-                <FileScan size={19} />
-                <span><strong>Dati realmente letti dalla foto</strong><small>I campi vuoti non sono stati riconosciuti: Nova non li inventa.</small></span>
-              </div>
-              <div className="membership-ocr-result__grid">
-                <span><small>Nome</small><strong>{ocrExtracted.nome || 'Non letto'}</strong></span>
-                <span><small>Cognome</small><strong>{ocrExtracted.cognome || 'Non letto'}</strong></span>
-                <span><small>Data nascita</small><strong>{ocrExtracted.nascita || 'Non letta'}</strong></span>
-                <span><small>Luogo nascita</small><strong>{ocrExtracted.luogo || 'Non letto'}</strong></span>
-                <span className="is-wide"><small>Codice fiscale</small><strong>{validateFiscalCode(ocrExtracted.cf) ? ocrExtracted.cf : 'Non letto con certezza — usa il barcode sul retro'}</strong></span>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="membership-manual-cf">
-            <span><Keyboard size={19} /><strong>Oppure inserisci il codice fiscale</strong><small>utile se la fotocamera non è disponibile</small></span>
-            <div className="membership-cf-input-wrap">
-              <input value={form.cf} onChange={(event) => changeCf(event.target.value)} placeholder="INSERISCI IL CODICE FISCALE" autoCapitalize="characters" autoComplete="off" />
-              {form.cf.length === 16 ? <em className={fiscalValid ? 'is-valid' : 'is-invalid'}>{fiscalValid ? 'Valido' : 'Controlla'}</em> : null}
-            </div>
-          </div>
-
-          {form.cf ? (
-            <div className="membership-scan-summary">
-              <div className="membership-scan-summary__top">
-                <span className="membership-avatar"><IdCard size={25} /></span>
-                <div><span>{matchedStudent ? 'Anagrafica già presente' : 'Nuova anagrafica'}</span><strong>{matchedStudent ? fullName(matchedStudent) : (form.nome || form.cognome ? `${form.nome} ${form.cognome}`.trim() : 'Dati da completare')}</strong><small>{form.cf} {barcodeVerified ? '· barcode verificato' : ''}</small></div>
-              </div>
-              <div className="membership-scan-summary__facts">
-                <span><small>Data nascita</small><strong>{form.nascita || fiscalDetails?.birthDate || '—'}</strong></span>
-                <span><small>Sesso da CF</small><strong>{fiscalDetails?.sex || '—'}</strong></span>
-                <span><small>Codice comune</small><strong>{fiscalDetails?.birthplaceCode || '—'}</strong></span>
-              </div>
-            </div>
-          ) : null}
-
-          {frontPreview ? <div className="membership-photo-note"><img src={frontPreview} alt="Anteprima Tessera Sanitaria" /><span><ShieldCheck size={17} /><strong>Foto usata solo per la lettura</strong><small>Non viene inviata né salvata nell’archivio Nova.</small></span></div> : null}
-
-          <div className="membership-stage__actions membership-stage__actions--right">
-            <button type="button" className="membership-button membership-button--primary" disabled={!canContinueToData} onClick={() => setStep(2)}>{fiscalValid ? 'Continua ai dati' : 'Controlla i dati letti'} <ArrowRight size={18} /></button>
-          </div>
+          </details>
         </div>
       ) : null}
 
       {step === 2 ? (
         <div className="membership-stage">
-          <div className="membership-stage__heading">
-            <span className="membership-stage__number">2</span>
-            <div><h2>Controlla e completa i dati</h2><p>I campi recuperati sono modificabili. Prima della firma la segretaria deve verificare che i dati siano corretti.</p></div>
+          <div className="membership-card-head">
+            <span className="membership-step-icon"><UserRoundCheck size={23} /></span>
+            <div><span>Passaggio 2</span><h2>Controlla e completa i dati</h2><p>Nova ti evidenzia ciò che manca. Quando è tutto completo puoi passare il tablet al cliente.</p></div>
+            <button type="button" className="membership-text-button" onClick={() => setStep(1)}><ArrowLeft size={16} /> Cambia tessera</button>
           </div>
 
-          {matchedStudent ? <div className="membership-alert membership-alert--success"><UserRoundCheck size={20} /><span><strong>Rinnovo di {fullName(matchedStudent)}</strong><small>Ho recuperato i dati del tesseramento precedente. Aggiorna solo ciò che è cambiato.</small></span></div> : null}
+          {matchedStudent ? (
+            <div className="membership-alert membership-alert--success membership-person-found">
+              <UserRoundCheck size={21} />
+              <span><strong>Rinnovo trovato: {fullName(matchedStudent)}</strong><small>I vecchi dati sono già stati recuperati. Controlla soprattutto telefono, email e residenza.</small></span>
+            </div>
+          ) : (
+            <div className="membership-alert membership-alert--info membership-person-found">
+              <BadgeCheck size={21} />
+              <span><strong>Nuovo corsista</strong><small>Codice fiscale e data di nascita sono già stati ricavati. Completa i campi mancanti.</small></span>
+            </div>
+          )}
 
-          <div className="membership-form-grid">
-            <label><span>Nome *</span><input value={form.nome} onChange={(event) => setForm({ ...form, nome: event.target.value })} autoComplete="off" /></label>
-            <label><span>Cognome *</span><input value={form.cognome} onChange={(event) => setForm({ ...form, cognome: event.target.value })} autoComplete="off" /></label>
-            <label className="membership-field-cf"><span>Codice fiscale *</span><div><input value={form.cf} onChange={(event) => changeCf(event.target.value)} maxLength={16} autoCapitalize="characters" autoComplete="off" /><em className={fiscalValid ? 'is-valid' : 'is-invalid'}>{fiscalValid ? (barcodeVerified ? 'Verificato da barcode' : 'Formalmente valido') : 'Non valido'}</em></div></label>
-            <label><span>Data di nascita *</span><input type="date" value={form.nascita} onChange={(event) => setForm({ ...form, nascita: event.target.value })} /></label>
-            <label><span>Luogo di nascita *</span><input value={form.luogo} onChange={(event) => setForm({ ...form, luogo: event.target.value })} autoComplete="off" /></label>
-            <label><span>Telefono *</span><input type="tel" value={form.telefono} onChange={(event) => setForm({ ...form, telefono: event.target.value })} autoComplete="off" /></label>
-            <label><span>Email *</span><input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} autoComplete="off" /></label>
-            <label className="is-wide"><span>Residenza / indirizzo completo *</span><input value={form.residenza} onChange={(event) => setForm({ ...form, residenza: event.target.value })} placeholder="Via, numero civico, CAP, Comune" autoComplete="off" /></label>
+          <div className="membership-completion-card">
+            <div><span>Dati completati</span><strong>{completedFields}/{requiredFields.length}</strong></div>
+            <div className="membership-completion-bar"><i style={{ width: `${Math.round((completedFields / requiredFields.length) * 100)}%` }} /></div>
+            {missingFields.length ? <small>Mancano: {missingFields.join(' · ')}</small> : <small className="is-complete"><CheckCircle2 size={15} /> Tutti i dati sono completi</small>}
           </div>
 
-          {ocrConfidence != null ? (
-            <div className="membership-ocr-confidence"><FileScan size={18} /><span><strong>OCR: {ocrConfidence}%</strong><small>L’OCR serve solo a velocizzare la compilazione: i dati vengono salvati soltanto dopo il controllo umano e la firma.</small></span></div>
-          ) : null}
+          <div className="membership-data-card">
+            <div className="membership-data-card__head"><span>Dati personali</span><small>Controlla i dati anagrafici</small></div>
+            <div className="membership-form-grid">
+              <label className={form.nome.trim() ? 'is-complete' : 'is-missing'}><span>Nome *</span><input value={form.nome} onChange={(event) => setForm({ ...form, nome: event.target.value })} autoComplete="off" /></label>
+              <label className={form.cognome.trim() ? 'is-complete' : 'is-missing'}><span>Cognome *</span><input value={form.cognome} onChange={(event) => setForm({ ...form, cognome: event.target.value })} autoComplete="off" /></label>
+              <label className={`membership-field-cf ${fiscalValid ? 'is-complete' : 'is-missing'}`}><span>Codice fiscale *</span><div><input value={form.cf} onChange={(event) => changeCf(event.target.value)} maxLength={16} autoCapitalize="characters" autoComplete="off" /><em className={fiscalValid ? 'is-valid' : 'is-invalid'}>{fiscalValid ? (barcodeVerified ? 'Letto dal barcode' : 'Valido') : 'Non valido'}</em></div></label>
+              <label className={form.nascita ? 'is-complete' : 'is-missing'}><span>Data di nascita *</span><input type="date" value={form.nascita} onChange={(event) => setForm({ ...form, nascita: event.target.value })} /></label>
+              <label className={form.luogo.trim() ? 'is-complete' : 'is-missing'}><span>Luogo di nascita *</span><input value={form.luogo} onChange={(event) => setForm({ ...form, luogo: event.target.value })} autoComplete="off" /></label>
+              <div className="membership-derived-info"><span>Sesso da CF</span><strong>{fiscalDetails?.sex || '—'}</strong><small>Codice comune: {fiscalDetails?.birthplaceCode || '—'}</small></div>
+            </div>
+          </div>
+
+          <div className="membership-data-card">
+            <div className="membership-data-card__head"><span>Contatti e residenza</span><small>Chiedi al corsista solo quello che manca</small></div>
+            <div className="membership-form-grid">
+              <label className={form.telefono.trim() ? 'is-complete' : 'is-missing'}><span>Telefono *</span><input type="tel" value={form.telefono} onChange={(event) => setForm({ ...form, telefono: event.target.value })} autoComplete="off" /></label>
+              <label className={form.email.trim().includes('@') ? 'is-complete' : 'is-missing'}><span>Email *</span><input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} autoComplete="off" /></label>
+              <label className={`is-wide ${form.residenza.trim() ? 'is-complete' : 'is-missing'}`}><span>Residenza / indirizzo completo *</span><input value={form.residenza} onChange={(event) => setForm({ ...form, residenza: event.target.value })} placeholder="Via, numero civico, CAP, Comune" autoComplete="off" /></label>
+            </div>
+          </div>
 
           <div className="membership-stage__actions">
             <button type="button" className="membership-button membership-button--secondary" onClick={() => setStep(1)}>Indietro</button>
-            <button type="button" className="membership-button membership-button--primary" disabled={!formComplete} onClick={() => setStep(3)}>Passa il tablet al cliente <ArrowRight size={18} /></button>
+            <button type="button" className="membership-button membership-button--primary membership-next-button" disabled={!formComplete} onClick={() => setStep(3)}>Passa il tablet al cliente <ArrowRight size={18} /></button>
           </div>
         </div>
       ) : null}
 
       {step === 3 ? (
         <div className="membership-stage membership-stage--client">
-          <div className="membership-client-banner"><ShieldCheck size={26} /><div><span>Modalità cliente</span><strong>Controlla i dati e firma</strong><small>La segretaria può girare ora il tablet verso il corsista.</small></div></div>
+          <div className="membership-client-banner"><ShieldCheck size={27} /><div><span>Passaggio 3 · Modalità cliente</span><strong>Controlla i dati e firma</strong><small>Da questo momento puoi girare il tablet verso il corsista.</small></div></div>
 
           <div className="membership-review-card">
             <div className="membership-review-card__head"><span className="membership-avatar membership-avatar--large"><UserRoundCheck size={28} /></span><div><span>Tesseramento corsista {CURRENT_SEASON}</span><h2>{form.nome} {form.cognome}</h2><small>{form.cf}</small></div></div>
@@ -858,7 +545,7 @@ export default function TesseramentoCorsistaPage() {
           </div>
 
           <div className="membership-consents">
-            <label><input type="checkbox" checked={consents.data_confirmed} onChange={(event) => setConsents({ ...consents, data_confirmed: event.target.checked })} /><span><strong>Confermo che i dati sopra indicati sono corretti.</strong><small>Se qualcosa non è corretto, torna indietro prima di firmare.</small></span></label>
+            <label><input type="checkbox" checked={consents.data_confirmed} onChange={(event) => setConsents({ ...consents, data_confirmed: event.target.checked })} /><span><strong>Confermo che i dati sopra indicati sono corretti.</strong><small>Se qualcosa non è corretto, chiedi alla segreteria di tornare indietro.</small></span></label>
             <label><input type="checkbox" checked={consents.privacy} onChange={(event) => setConsents({ ...consents, privacy: event.target.checked })} /><span><strong>Confermo di aver preso visione dell’informativa privacy relativa al trattamento dei dati per il tesseramento.</strong></span></label>
             <label><input type="checkbox" checked={consents.membership} onChange={(event) => setConsents({ ...consents, membership: event.target.checked })} /><span><strong>Confermo la richiesta di tesseramento all’associazione per la stagione {CURRENT_SEASON}.</strong></span></label>
           </div>

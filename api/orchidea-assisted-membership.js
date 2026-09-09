@@ -194,7 +194,7 @@ async function saveSignaturePackage(admin, { student, signatureDataUrl, consents
       numero_tessera: student.numero_tessera || null,
       stagione: student.stagione || null,
     },
-    privacy_note: 'Le immagini della Tessera Sanitaria usate per OCR/barcode non vengono salvate da Nova; viene conservata soltanto la firma e il riepilogo dei dati confermati.',
+    privacy_note: 'La foto usata per leggere il barcode della Tessera Sanitaria non viene salvata da Nova; viene conservata soltanto la firma e il riepilogo dei dati confermati.',
   }
 
   const manifestUpload = await admin.storage
