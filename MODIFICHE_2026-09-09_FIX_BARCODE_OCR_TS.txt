@@ -1,0 +1,35 @@
+FIX TESSERAMENTO CORSISTA - TESSERA SANITARIA
+Data: 09/09/2026
+
+Problemi corretti:
+- Il vecchio lettore barcode dipendeva da BarcodeDetector del browser e su alcuni smartphone non rilevava il codice.
+- Dopo l'OCR del fronte poteva comparire "lettura completata" anche se non erano stati estratti campi utili, lasciando il pulsante apparentemente bloccato.
+
+Modifiche:
+1. Barcode
+- Nuovo lettore basato su html5-qrcode/ZXing, più compatibile su mobile.
+- Supporto Code 39 (Tessera Sanitaria), Code 128 (alcune vecchie tessere), Codabar ed EAN-13.
+- Lettura live dalla fotocamera.
+- Nuova alternativa "Fotografa barcode" per decodificare una foto del retro.
+- Messaggi espliciti quando il barcode viene letto ma non contiene un CF valido.
+- Indicazione di lasciare margine bianco ai lati del barcode.
+
+2. OCR fronte
+- Migliorata la pre-elaborazione dell'immagine e l'upscaling delle scritte piccole.
+- Primo passaggio OCR generale, secondo passaggio automatico ad alto contrasto se necessario.
+- Passaggio mirato al codice fiscale con whitelist alfanumerica.
+- Correzione automatica delle confusioni OCR più comuni nel CF (O/0, I/1, S/5, B/8, ecc.) con validazione del carattere di controllo.
+- Parser più robusto per Nome, Cognome, Data di nascita e Luogo di nascita.
+- Nova mostra subito quali dati sono stati realmente riconosciuti e quali no.
+- Non mostra più "lettura completata" in modo fuorviante se l'OCR non ha trovato dati sufficienti.
+- Il pulsante consente di passare al controllo dati anche quando l'OCR ha recuperato campi utili ma il CF deve ancora essere completato.
+
+3. UX
+- Il placeholder del CF non sembra più un codice già compilato.
+- Il barcode viene indicato chiaramente come presente sul RETRO della Tessera Sanitaria.
+- La fotografia del fronte continua a non essere salvata nell'archivio Nova.
+
+Verifica:
+- ESLint superato sui file modificati.
+- Test del parser effettuati con CF valido e con errori OCR simulati.
+- Build completo non eseguibile nel container Linux per il binding nativo Rolldown mancante nel node_modules Windows già incluso nel progetto.
