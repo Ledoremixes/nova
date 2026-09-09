@@ -169,3 +169,19 @@
     pointer-events: auto;
   }
 }
+.sidebar__link--sub {
+  margin-left: 14px;
+  min-height: 38px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.72);
+  border-left: 1px solid rgba(255,255,255,.12);
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+
+.sidebar__link--sub.sidebar__link--active {
+  color: #fff;
+  border-left-color: rgba(186, 153, 255, .9);
+}

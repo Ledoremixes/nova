@@ -1,5 +1,20 @@
 export const COURSE_PRICE_LIST_VERSION = '2026/2027'
 
+
+export const GIFT_PACKAGE = {
+  id: 'builtin:omaggio',
+  pricing_key: 'gift',
+  pricing_group: 'gift',
+  period: 'omaggio',
+  nome: 'Omaggio · 1 mese',
+  tipo: 'omaggio',
+  durata_mesi: 1,
+  prezzo: 0,
+  descrizione: 'Copertura gratuita di un mese corso. La tessera corsista resta sempre dovuta.',
+  ordine: -10,
+  attivo: true,
+}
+
 export const COURSE_PRICE_LIST = [
   {
     pricing_key: 'token',
@@ -178,6 +193,7 @@ export function resolveCoursePricing(courses = [], packages = [], period = 'mens
 export function packagesForCourseSelection(courses = [], packages = []) {
   const group = pricingGroupForCourses(courses)
   const enriched = (packages || []).map(enrichPackagePricingMetadata).filter((item) => item.attivo !== false)
+  const gift = [{ ...GIFT_PACKAGE }]
   const token = enriched.filter((item) => item.pricing_key === 'token' || item.tipo === 'gettone')
   if (!token.length) {
     const fallbackToken = fallbackPricingPackage('token')
@@ -191,7 +207,7 @@ export function packagesForCourseSelection(courses = [], packages = []) {
   const custom = enriched.filter((item) => !item.pricing_key && item.tipo !== 'gettone')
 
   const seen = new Set()
-  return [...token, ...matched, ...custom].filter((item) => {
+  return [...gift, ...token, ...matched, ...custom].filter((item) => {
     const key = String(item.id || item.pricing_key || item.nome)
     if (seen.has(key)) return false
     seen.add(key)

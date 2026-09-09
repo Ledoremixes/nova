@@ -46,7 +46,19 @@ export function isCanonicalMonthlyPayment(row = {}) {
   return type === 'quota_mensile' || type === 'quota mensile' || description.startsWith('quota mensile ')
 }
 
-export function isTokenPayment(row = {}) {
+export 
+function isGiftPayment(row = {}) {
+  const type = lower(row.tipo || row.type || row.categoria)
+  const description = lower(row.descrizione || row.description || row.causale)
+  const packageType = lower(row.nova_package_type)
+  const packageName = lower(row.nova_package_name)
+  return packageType === 'omaggio'
+    || packageName.includes('omaggio')
+    || type.includes('omaggio')
+    || description.includes('omaggio')
+}
+
+function isTokenPayment(row = {}) {
   const type = lower(row.tipo || row.type || row.categoria)
   const description = lower(row.descrizione || row.description || row.causale)
   const packageType = lower(row.nova_package_type)
@@ -169,9 +181,11 @@ export function summarizeMonthlyTuitionPayments({ payments = [], selectedMonth, 
   // dei vecchi duplicati viene tracciata ma non altera saldo e compensi.
   const paid = due > 0 ? Math.min(rawPaid, due) : rawPaid
   const calculatedResidue = Math.max(due - paid, 0)
-  const packageCoverageComplete = authoritative?.nova_coverage_complete === true
+  const giftCoverage = Boolean(authoritative && isGiftPayment(authoritative) && isPaidState(authoritative) && !paused)
+  const packageCoverageComplete = authoritative?.nova_coverage_complete === true || giftCoverage
   let status = 'da_pagare'
   if (paused) status = 'sospeso'
+  else if (giftCoverage) status = 'omaggio'
   else if (packageCoverageComplete) status = 'pagato'
   else if (due > 0 && paid >= due) status = 'pagato'
   else if (paid > 0) status = 'parziale'
@@ -194,9 +208,9 @@ export function summarizeMonthlyTuitionPayments({ payments = [], selectedMonth, 
     updatedAt: authoritative?.updated_at || authoritative?.created_at || null,
     packageCoverageComplete,
     packageId: authoritative?.nova_package_id || null,
-    packageName: authoritative?.nova_package_name || '',
-    packageType: authoritative?.nova_package_type || '',
-    packageTotal: asAmount(authoritative?.nova_package_total),
+    packageName: authoritative?.nova_package_name || (giftCoverage ? 'Omaggio · 1 mese' : ''),
+    packageType: authoritative?.nova_package_type || (giftCoverage ? 'omaggio' : ''),
+    packageTotal: giftCoverage ? 0 : asAmount(authoritative?.nova_package_total),
     packageDurationMonths: Number(authoritative?.nova_package_duration_months || 0),
     paymentGroupId: authoritative?.nova_payment_group_id || null,
     coverageFrom: authoritative?.nova_coverage_from || null,

@@ -20,6 +20,8 @@ import {
   ShieldCheck,
   HandHeart,
   FileText,
+  UserPlus,
+  ScanLine,
 } from 'lucide-react'
 import { useAuth } from '../../context/authContext'
 
@@ -28,6 +30,8 @@ const items = [
   { to: '/tesserati', label: 'Tesserati', icon: Users, roles: ['admin', 'user'] },
   { to: '/gruppi', label: 'Corsi e gruppi', icon: Users, roles: ['admin', 'user'] },
   { to: '/atleti', label: 'Corsisti', icon: UserSquare2, roles: ['admin', 'user'] },
+  { to: '/tesseramento-corsista', label: 'Tesseramento corsista', icon: ScanLine, roles: ['admin', 'user'], subItem: true },
+  { to: '/iscrizione-corsista', label: 'Iscrizione corsista', icon: UserPlus, roles: ['admin', 'user'], subItem: true },
   { to: '/insegnanti', label: 'Insegnanti', icon: GraduationCap, roles: ['admin', 'user'] },
   { to: '/volontari', label: 'Volontari sportivi', icon: HandHeart, roles: ['admin', 'user'] },
   { to: '/visite-mediche', label: 'Visite mediche', icon: HeartPulse, roles: ['admin'] },
@@ -67,8 +71,8 @@ export default function Sidebar({ isOpen, onNavigate }) {
 
       <nav className="sidebar__nav">
         {visibleItems.map((item) => (
-          <NavLink key={item.to} to={item.to} onClick={onNavigate} className={({ isActive }) => isActive ? 'sidebar__link sidebar__link--active' : 'sidebar__link'}>
-            {createElement(item.icon, { size: 18 })}
+          <NavLink key={item.to} to={item.to} onClick={onNavigate} className={({ isActive }) => `${isActive ? 'sidebar__link sidebar__link--active' : 'sidebar__link'}${item.subItem ? ' sidebar__link--sub' : ''}`}>
+            {createElement(item.icon, { size: item.subItem ? 16 : 18 })}
             <span>{item.label}</span>
           </NavLink>
         ))}

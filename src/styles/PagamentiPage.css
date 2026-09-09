@@ -34,7 +34,7 @@
 .payments-filters-card,
 .payments-table-card,
 .payments-modal {
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 1);
   border: 1px solid rgba(99, 102, 241, 0.12);
   box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
   border-radius: 24px;
@@ -1963,4 +1963,135 @@
   letter-spacing: 0;
   text-transform: none;
   line-height: 1.25;
+}
+
+.payments-membership-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 10px 0 8px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.payments-membership-alert > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.payments-membership-alert > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.payments-membership-alert strong {
+  font-size: 11px;
+}
+
+.payments-membership-alert small {
+  opacity: .78;
+  font-size: 9px;
+}
+
+.payments-membership-alert.is-due {
+  border: 1px solid #ffc8ce;
+  background: #fff4f5;
+  color: #be2339;
+}
+
+.payments-membership-alert.is-partial {
+  border: 1px solid #ffdca8;
+  background: #fff8ec;
+  color: #a25c08;
+}
+
+.payments-membership-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 10px 0 8px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.payments-membership-alert > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.payments-membership-alert > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.payments-membership-alert strong {
+  font-size: 11px;
+}
+
+.payments-membership-alert small {
+  opacity: .78;
+  font-size: 9px;
+}
+
+.payments-membership-alert.is-due {
+  border: 1px solid #ffc8ce;
+  background: #fff4f5;
+  color: #be2339;
+}
+
+.payments-membership-alert.is-partial {
+  border: 1px solid #ffdca8;
+  background: #fff8ec;
+  color: #a25c08;
+}
+
+/* Stato Omaggio */
+.payments-student-status--gift {
+  background: #e5f8ef;
+  border-color: #b9e6d2;
+  color: #177957;
+}
+
+.payments-student-card--omaggio {
+  border-color: rgba(47, 160, 117, .22);
+}
+
+.payments-package-selected.is-gift {
+  background: linear-gradient(135deg, #f2fff8, #f7fffb);
+  border-color: #bfe8d8;
+  color: #177957;
+}
+
+.payments-gift-membership-required {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #efc5c5;
+  border-radius: 14px;
+  background: #fff7f7;
+  color: #b23737;
+}
+
+.payments-gift-membership-required > div {
+  display: grid;
+  gap: 3px;
+}
+
+.payments-gift-membership-required strong {
+  font-size: 13px;
+}
+
+.payments-gift-membership-required span {
+  color: #8f5e5e;
+  font-size: 11px;
+  line-height: 1.4;
 }

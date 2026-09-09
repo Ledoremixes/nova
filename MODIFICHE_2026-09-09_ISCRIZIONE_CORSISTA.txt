@@ -1,0 +1,25 @@
+NOVA - Iscrizione corsista guidata - 09/09/2026
+
+NOVITA PRINCIPALI
+- Nuova voce laterale "Iscrizione corsista" subito sotto "Corsisti".
+- Flusso unico pensato per la segreteria:
+  1) ricerca anagrafica esistente oppure nuova iscrizione rapida;
+  2) scelta corsi;
+  3) proposta automatica del pacchetto corretto;
+  4) scelta di cosa incassare subito (tessera/pacchetto) e metodo di pagamento.
+- Riepilogo laterale sempre visibile e schermata finale di conferma.
+- I corsi già assegnati vengono riconosciuti e non duplicati.
+- Se il nuovo inserimento corrisponde a una persona già presente, Nova riapre l'anagrafica esistente evitando duplicati.
+- La nuova anagrafica rapida crea anche l'account area allievi; il codice fiscale viene usato come password iniziale.
+- Campi rapidi obbligatori: nome, cognome, telefono, codice fiscale, email.
+- Data/luogo di nascita e residenza sono disponibili in un pannello aggiuntivo.
+
+PAGAMENTI
+- Nelle card Pagamenti compare ora un avviso rosso se la tessera corsista da 25 euro risulta non pagata.
+- Se risultano gia versati 3 euro per la tessera serata, l'avviso diventa arancione e mostra la differenza di 22 euro.
+- Lo stato della tessera resta separato dal saldo corsi per non falsare la competenza mensile.
+
+BACKEND
+- Aggiunta API server /api/orchidea-students per creare in modo sicuro il corsista nel database Orchidea Allievi.
+- L'API accetta utenti Nova con ruolo admin o user attivo.
+- Usa ORCHIDEA_SUPABASE_SERVICE_ROLE_KEY su Vercel, la stessa configurazione server gia prevista per le operazioni amministrative Orchidea.

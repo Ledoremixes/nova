@@ -16,6 +16,8 @@ import ForbiddenPage from '../pages/ForbiddenPage'
 import ContabilitaPage from '../pages/ContabilitaPage'
 import PagamentiPage from '../pages/PagamentiPage'
 import AtletiPage from '../pages/AtletiPage'
+import IscrizioneCorsistaPage from '../pages/IscrizioneCorsistaPage'
+import TesseramentoCorsistaPage from '../pages/TesseramentoCorsistaPage'
 import ContiPage from '../pages/ContiPage'
 import GruppiPage from '../pages/GruppiPage'
 import PacchettiPage from '../pages/PacchettiPage'
@@ -48,6 +50,8 @@ export const router = createBrowserRouter([
 
       { path: 'gruppi', element: <GruppiPage title="Gruppi" /> },
       { path: 'atleti', element: <AtletiPage /> },
+      { path: 'tesseramento-corsista', element: <TesseramentoCorsistaPage /> },
+      { path: 'iscrizione-corsista', element: <IscrizioneCorsistaPage /> },
       { path: 'visite-mediche', element: (<ProtectedRoute roles={['admin']}><VisiteMedichePage /></ProtectedRoute>) },
       { path: 'calendario', element: (<ProtectedRoute roles={['admin']}><CalendarioPage /></ProtectedRoute>) },
       { path: 'pagamenti', element: <PagamentiPage /> },

@@ -4,7 +4,7 @@ import { summarizeMonthlyTuitionPayments } from '../lib/paymentLedger'
 import { enrollmentIsActiveForMonth, resolveEnrollmentPricing } from '../lib/packagePricing'
 import { fetchPackagesCatalog } from './packagesCatalog'
 import { resolveCoursePricing } from '../lib/coursePriceList'
-import { COURSE_MEMBERSHIP_FEE, fetchMembershipFeeRecords } from './membershipFees'
+import { COURSE_MEMBERSHIP_FEE, fetchMembershipFeeRecords, resolveMembershipFeeState } from './membershipFees'
 
 export function euro(value) {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
@@ -111,6 +111,10 @@ function normalizePaymentRow(row = {}) {
     pricing_group: row.pricing_group || null,
     pricing_group_label: row.pricing_group_label || '',
     membership_fee_charged: Number(row.membership_fee_charged || 0),
+    membership_fee_paid: Number(row.membership_fee_paid || 0),
+    membership_fee_remaining: Number(row.membership_fee_remaining || 0),
+    membership_fee_status: row.membership_fee_status || 'unpaid',
+    membership_fee_label: row.membership_fee_label || '',
     tuition_monthly_list_price: Number(row.tuition_monthly_list_price || 0),
     selected_package_total: Number(row.selected_package_total || 0),
     corsi: courses,
@@ -189,25 +193,35 @@ function normalizeDirectRows({ enrollments = [], students = [], courses = [], pa
     // prezzo reale del pacchetto scelto (es. trimestrale 3 corsi = 245 €), non il
     // semplice equivalente mensile (85 €). L'importo allocato al singolo mese resta
     // invece separato nel campo "Parziale" per mantenere corretta la contabilità.
+    const isGiftCoverage = Boolean(ledger.packageCoverageComplete && ledger.packageType === 'omaggio')
     const hasPackageCoverage = Boolean(
       ledger.packageCoverageComplete
       && ledger.packageType !== 'gettone'
+      && !isGiftCoverage
       && Number(ledger.packageTotal || 0) > 0,
     )
-    const selectedPackageTotal = hasPackageCoverage ? Number(ledger.packageTotal || 0) : monthlyListPrice
+    const selectedPackageTotal = isGiftCoverage ? 0 : hasPackageCoverage ? Number(ledger.packageTotal || 0) : monthlyListPrice
 
     // La tessera assicurativa corsista da 25 € è una tantum. Quando viene marcata
     // come pagata dalla segreteria, viene conteggiata solo nel mese memorizzato come
     // primo mese di pagamento e non si ripete nei mesi successivi.
     const membershipRecord = membershipFeeByStudent.get(String(row.tesseramento_id))
-    const membershipFeeCharged = Number(membershipRecord?.paid_amount || 0) >= COURSE_MEMBERSHIP_FEE
+    const membershipState = resolveMembershipFeeState(
+      studentsById.get(String(row.tesseramento_id)) || {},
+      membershipRecord || null,
+    )
+    const membershipFeeCharged = Number(membershipState.paid_amount || 0) >= COURSE_MEMBERSHIP_FEE
       && String(membershipRecord?.charged_month || '') === String(selectedMonth)
       ? COURSE_MEMBERSHIP_FEE
       : 0
 
     const displayQuota = selectedPackageTotal + membershipFeeCharged
     const displayPaid = Number(ledger.paid || 0) + membershipFeeCharged
-    const displayStatus = membershipFeeCharged > 0 && ledger.status === 'da_pagare' ? 'parziale' : ledger.status
+    const displayStatus = isGiftCoverage
+      ? 'omaggio'
+      : membershipFeeCharged > 0 && ledger.status === 'da_pagare'
+        ? 'parziale'
+        : ledger.status
 
     return normalizePaymentRow({
       ...row,
@@ -222,6 +236,10 @@ function normalizeDirectRows({ enrollments = [], students = [], courses = [], pa
       residuo: ledger.residue,
       stato_pagamento: displayStatus,
       membership_fee_charged: membershipFeeCharged,
+      membership_fee_paid: membershipState.paid_amount,
+      membership_fee_remaining: membershipState.remaining,
+      membership_fee_status: membershipState.status,
+      membership_fee_label: membershipState.label,
       tuition_monthly_list_price: monthlyListPrice,
       selected_package_total: selectedPackageTotal,
       pagamento_id: ledger.authoritative?.id || null,
@@ -493,8 +511,10 @@ export async function setAllievoPackagePayment({
       mese: monthStart,
       scadenza: monthEnd,
       stato: 'pagato',
-      metodo: method || null,
-      descrizione: `${packageItem.nome} · copertura ${selectedStart} / ${months[months.length - 1]}`,
+      metodo: packageItem?.tipo === 'omaggio' ? 'Omaggio' : (method || null),
+      descrizione: packageItem?.tipo === 'omaggio'
+        ? `${packageItem.nome || 'Omaggio'} · copertura gratuita ${selectedStart} / ${months[months.length - 1]}`
+        : `${packageItem.nome} · copertura ${selectedStart} / ${months[months.length - 1]}`,
       note: note || null,
       tipo: 'quota_mensile',
       pagato_il: dayjs().format('YYYY-MM-DD'),
@@ -539,7 +559,7 @@ export async function setAllievoPackagePayment({
       saved.push(data)
     }
   }
-  return { rows: saved, months, groupId, coverageFrom, coverageTo, cashAmount }
+  return { kind: packageItem?.tipo === 'omaggio' ? 'omaggio' : 'package', rows: saved, months, groupId, coverageFrom, coverageTo, cashAmount }
 }
 
 export async function setAllievoMonthlyPayment({ tesseramentoId, month, amount, status, note = '', method = 'Contanti' }) {
