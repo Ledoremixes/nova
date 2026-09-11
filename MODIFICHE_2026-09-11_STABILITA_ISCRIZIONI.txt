@@ -1,0 +1,72 @@
+NOVA - HARDENING ISCRIZIONE CORSISTA / TABLET
+Data: 11/09/2026
+
+PROBLEMA OSSERVATO
+- Durante l'iscrizione corsi il salvataggio poteva fermarsi con:
+  "new row violates row-level security policy for table nova_package_pricing_history".
+- La riga corso poteva essere già stata inserita prima dell'errore dello storico prezzi,
+  creando il rischio di un salvataggio parziale.
+- Su tablet 10-13 pollici il layout desktop (sidebar + riepilogo laterale) lasciava poco spazio
+  ai passaggi e poteva deformare righe e card.
+
+CORREZIONI PRINCIPALI
+1) Storico prezzi protetto da bridge server
+- Nuovo endpoint /api/orchidea-pricing-history.
+- Verifica prima la sessione e il ruolo dell'operatore Nova.
+- Solo dopo usa la service role Orchidea lato server per superare correttamente le RLS.
+- Nessuna service role viene esposta al browser.
+
+2) Lo storico tecnico iniziale non blocca piu' l'iscrizione
+- Quando un corso viene assegnato senza tariffa manuale, la versione storica iniziale a 0 euro
+  e' considerata accessoria: un suo problema non puo' annullare il lavoro della segreteria.
+- Le vere modifiche manuali dei prezzi continuano invece a richiedere lo storico.
+
+3) Anti-duplicazione corsi
+- Prima dell'inserimento Nova verifica se lo stesso corsista e' gia' attivo nello stesso corso
+  nel mese di competenza.
+- Retry, doppio tap o rete lenta non devono creare una seconda iscrizione identica.
+
+4) Rollback dell'iscrizione guidata
+- Nova memorizza cosa ha modificato durante l'operazione.
+- Se un passaggio successivo fallisce prova automaticamente a:
+  * rimuovere i corsi appena aggiunti;
+  * ripristinare lo stato della tessera corsista;
+  * ripristinare lo stato anagrafico precedente.
+- Ogni tentativo ha un codice operazione ISC-... mostrato anche in caso di errore critico.
+
+5) Pagamenti pacchetto multi-mese piu' sicuri
+- Prima di scrivere un trimestrale/annuale Nova fotografa le righe pagamento esistenti.
+- Se una delle mensilita' fallisce, cancella le righe appena create e ripristina quelle modificate.
+- Evita quindi un pacchetto registrato solo in parte.
+
+6) Errori comprensibili
+- La segretaria non vede piu' come messaggio principale gli errori PostgreSQL/RLS grezzi.
+- In caso di ripristino non verificabile Nova avvisa esplicitamente di NON ripetere l'incasso
+  prima di controllare Pagamenti.
+
+7) Tablet
+- Sotto 1180px Nova passa al layout tablet con menu laterale a scomparsa.
+- Iscrizione corsista usa una colonna principale larga; il riepilogo non stringe piu' i passaggi.
+- Card, importi e testi hanno protezioni contro overflow e sovrapposizioni.
+
+8) Protezione globale interfaccia
+- Aggiunto Error Boundary React: un crash grafico di una pagina non lascia una schermata nera/bianca.
+- Nova mostra una schermata di sicurezza con codice UI e pulsanti Ricarica/Dashboard.
+
+CONFIGURAZIONE VERCEL NECESSARIA
+Sono gia' le stesse variabili usate dal tesseramento assistito:
+- SUPABASE_SERVICE_ROLE_KEY
+- ORCHIDEA_SUPABASE_URL
+- ORCHIDEA_SUPABASE_SERVICE_ROLE_KEY
+Le chiavi service role restano SOLO lato server e non devono avere prefisso VITE_.
+
+TEST ESEGUITI
+- ESLint sui file JS/JSX modificati: OK.
+- Build Vite non eseguibile nel container Linux perche' lo ZIP sorgente contiene node_modules Windows
+  e manca il binding Linux di Rolldown. Per evitare di perpetuare questo problema, lo ZIP consegnato
+  NON contiene node_modules: sul PC si usa il node_modules locale / npm install.
+
+NOTA GIT IMPORTANTE
+Lo ZIP consegnato NON contiene la cartella .git e NON contiene .env.
+Questo evita di sovrascrivere la cronologia Git locale (causa dei conflitti non-fast-forward avuti in precedenza)
+e non trasferisce segreti. Estrarre/copiare i file dentro la cartella Nova gia' collegata a GitHub.

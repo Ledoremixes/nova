@@ -25,7 +25,7 @@ import {
   UsersRound,
   WalletCards,
 } from 'lucide-react'
-import { fetchOrchideaCourses, fetchOrchideaStudents, addCourseParticipant } from '../api/orchideaEntities'
+import { fetchOrchideaCourses, fetchOrchideaStudents, addCourseParticipant, removeCourseParticipant } from '../api/orchideaEntities'
 import { fetchTesseratoDetails, updateTesserato } from '../api/tesserati'
 import { fetchPackagesCatalog } from '../api/packagesCatalog'
 import {
@@ -114,6 +114,26 @@ function emptyForm() {
     luogo: '',
     residenza: '',
   }
+}
+
+function operationCode() {
+  const stamp = dayjs().format('YYMMDD-HHmmss')
+  const random = Math.random().toString(36).slice(2, 6).toUpperCase()
+  return `ISC-${stamp}-${random}`
+}
+
+function enrollmentErrorMessage(error) {
+  const raw = String(error?.message || error?.cause?.message || '').toLowerCase()
+  if (error?.rollbackFailed) {
+    return 'Il salvataggio non si è concluso e Nova non ha potuto verificare il ripristino automatico. Non incassare di nuovo: controlla Pagamenti e segnala il codice operazione all’amministratore.'
+  }
+  if (raw.includes('row-level security') || raw.includes('rls') || raw.includes('permission denied')) {
+    return 'Nova non ha ricevuto i permessi necessari dal database. Nessuna iscrizione deve essere considerata conclusa: riprova dopo aver aggiornato la pagina.'
+  }
+  if (raw.includes('failed to fetch') || raw.includes('network') || raw.includes('rete') || raw.includes('fetch')) {
+    return 'Connessione instabile durante il salvataggio. Nova ha tentato il ripristino automatico: verifica la connessione e riprova.'
+  }
+  return error?.message || 'Si è verificato un problema durante il salvataggio. Nova ha tentato di annullare le modifiche parziali: puoi riprovare.'
 }
 
 export default function IscrizioneCorsistaPage() {
@@ -250,90 +270,154 @@ export default function IscrizioneCorsistaPage() {
 
   const completeMutation = useMutation({
     mutationFn: async () => {
+      const opCode = operationCode()
       let student = selectedStudent
       let reusedExisting = false
       let firstAccessPassword = null
+      const rollback = {
+        addedEnrollmentIds: [],
+        membershipChanged: false,
+        previousMembershipAmount: storedMembership?.paid_amount ?? membershipState.paid_amount ?? 0,
+        originalStudent: selectedStudent ? { ...selectedStudent } : null,
+      }
 
-      if (mode === 'new') {
-        const created = await createQuickCorsista({ ...newForm, stagione: currentSeason })
-        student = normalizeQuickStudent(created.student)
-        reusedExisting = created.existing === true
-        firstAccessPassword = created.first_access_password || null
-        if (reusedExisting) {
-          const duplicateError = new Error('Questa persona era già presente. Ho aperto la sua anagrafica esistente: controlla i corsi e premi di nuovo “Completa iscrizione”.')
-          duplicateError.existingStudent = student
-          throw duplicateError
+      try {
+        if (mode === 'new') {
+          const created = await createQuickCorsista({ ...newForm, stagione: currentSeason })
+          student = normalizeQuickStudent(created.student)
+          rollback.originalStudent = { ...student }
+          reusedExisting = created.existing === true
+          firstAccessPassword = created.first_access_password || null
+          if (reusedExisting) {
+            const duplicateError = new Error('Questa persona era già presente. Ho aperto la sua anagrafica esistente: controlla i corsi e premi di nuovo “Completa iscrizione”.')
+            duplicateError.existingStudent = student
+            throw duplicateError
+          }
         }
-      }
 
-      if (!student?.id) throw new Error('Seleziona o crea un corsista prima di continuare.')
+        if (!student?.id) throw new Error('Seleziona o crea un corsista prima di continuare.')
 
-      const wasCorsista = student.is_corsista === true
-      if (!wasCorsista && !membershipWillBePaid) {
-        await markConvertedCorsistaMembership(student)
-      }
+        const wasCorsista = student.is_corsista === true
+        if (!wasCorsista && !membershipWillBePaid) {
+          await markConvertedCorsistaMembership(student)
+          rollback.membershipChanged = true
+        }
 
-      const updatedStudent = await updateTesserato(student.id, {
-        ...student,
-        is_corsista: true,
-        stagione: currentSeason,
-        tessera_attiva: true,
-        status: membershipWillBePaid ? 'active' : (student.status || 'pending_payment'),
-        payment_status: membershipWillBePaid ? 'paid' : (student.payment_status || 'unpaid'),
-      })
-      student = normalizeQuickStudent(updatedStudent)
-
-      if (mode === 'new' && !membershipWillBePaid) {
-        await setMembershipFeePaidAmount({
-          studentId: student.id,
-          paidAmount: 0,
-          source: 'iscrizione_guidata_nova',
+        const updatedStudent = await updateTesserato(student.id, {
+          ...student,
+          is_corsista: true,
+          stagione: currentSeason,
+          tessera_attiva: true,
+          status: membershipWillBePaid ? 'active' : (student.status || 'pending_payment'),
+          payment_status: membershipWillBePaid ? 'paid' : (student.payment_status || 'unpaid'),
         })
-      } else if (membershipWillBePaid && membershipRemaining > 0) {
-        await setMembershipFeePaidAmount({
-          studentId: student.id,
-          paidAmount: COURSE_MEMBERSHIP_FEE,
-          source: 'iscrizione_guidata_nova',
-          chargedMonth: currentMonth,
-        })
-      }
+        student = normalizeQuickStudent(updatedStudent)
 
-      const oldCourseIds = new Set(existingEnrollmentIds.map(String))
-      const coursesToAdd = combinedCourseIds.filter((courseId) => !oldCourseIds.has(String(courseId)))
-      for (const courseId of coursesToAdd) {
-        await addCourseParticipant({
-          courseId,
-          studentId: student.id,
-          tariffaMensile: null,
-          effectiveMonth: currentMonth,
-        })
-      }
+        if (mode === 'new' && !membershipWillBePaid) {
+          await setMembershipFeePaidAmount({
+            studentId: student.id,
+            paidAmount: 0,
+            source: 'iscrizione_guidata_nova',
+          })
+          rollback.membershipChanged = true
+        } else if (membershipWillBePaid && membershipRemaining > 0) {
+          await setMembershipFeePaidAmount({
+            studentId: student.id,
+            paidAmount: COURSE_MEMBERSHIP_FEE,
+            source: 'iscrizione_guidata_nova',
+            chargedMonth: currentMonth,
+          })
+          rollback.membershipChanged = true
+        }
 
-      let packagePayment = null
-      if (packageWillBeRegistered && selectedPackage) {
-        packagePayment = await setAllievoPackagePayment({
-          tesseramentoId: student.id,
-          startMonth: packageStartMonth,
+        const oldCourseIds = new Set(existingEnrollmentIds.map(String))
+        const coursesToAdd = combinedCourseIds.filter((courseId) => !oldCourseIds.has(String(courseId)))
+        for (const courseId of coursesToAdd) {
+          const enrollment = await addCourseParticipant({
+            courseId,
+            studentId: student.id,
+            tariffaMensile: null,
+            effectiveMonth: currentMonth,
+          })
+          if (enrollment?.id && enrollment?._nova_reused !== true) rollback.addedEnrollmentIds.push(enrollment.id)
+        }
+
+        let packagePayment = null
+        if (packageWillBeRegistered && selectedPackage) {
+          packagePayment = await setAllievoPackagePayment({
+            tesseramentoId: student.id,
+            startMonth: packageStartMonth,
+            packageItem: selectedPackage,
+            amount: isGiftPackage ? 0 : Number(selectedPackage.prezzo || 0),
+            method: isGiftPackage ? 'Omaggio' : paymentMethod,
+            note: isGiftPackage
+              ? `${selectedPackage.nome} registrato da Iscrizione corsista · tessera esclusa dall'omaggio · ${opCode}`
+              : `${selectedPackage.nome} registrato da Iscrizione corsista · ${opCode}`,
+          })
+        }
+
+        return {
+          student,
+          reusedExisting,
+          firstAccessPassword,
+          selectedCourses: chosenCourses,
           packageItem: selectedPackage,
-          amount: isGiftPackage ? 0 : Number(selectedPackage.prezzo || 0),
-          method: isGiftPackage ? 'Omaggio' : paymentMethod,
-          note: isGiftPackage
-            ? `${selectedPackage.nome} registrato da Iscrizione corsista · tessera esclusa dall'omaggio`
-            : `${selectedPackage.nome} registrato da Iscrizione corsista`,
-        })
-      }
+          packagePayment,
+          membershipPaid: membershipWillBePaid && membershipRemaining > 0,
+          membershipCash: membershipWillBePaid ? membershipRemaining : 0,
+          packageCash: !isGiftPackage && payPackageNow ? Number(selectedPackage?.prezzo || 0) : 0,
+          totalCash: cashNow,
+          operationCode: opCode,
+        }
+      } catch (error) {
+        if (error?.existingStudent?.id) throw error
 
-      return {
-        student,
-        reusedExisting,
-        firstAccessPassword,
-        selectedCourses: chosenCourses,
-        packageItem: selectedPackage,
-        packagePayment,
-        membershipPaid: membershipWillBePaid && membershipRemaining > 0,
-        membershipCash: membershipWillBePaid ? membershipRemaining : 0,
-        packageCash: !isGiftPackage && payPackageNow ? Number(selectedPackage?.prezzo || 0) : 0,
-        totalCash: cashNow,
+        const rollbackFailures = []
+
+        for (const enrollmentId of [...rollback.addedEnrollmentIds].reverse()) {
+          try {
+            await removeCourseParticipant(enrollmentId)
+          } catch (rollbackError) {
+            rollbackFailures.push(rollbackError)
+          }
+        }
+
+        if (student?.id && rollback.membershipChanged) {
+          try {
+            await setMembershipFeePaidAmount({
+              studentId: student.id,
+              paidAmount: rollback.previousMembershipAmount,
+              source: `rollback_${opCode}`,
+            })
+          } catch (rollbackError) {
+            rollbackFailures.push(rollbackError)
+          }
+        }
+
+        if (rollback.originalStudent?.id) {
+          try {
+            await updateTesserato(rollback.originalStudent.id, {
+              ...rollback.originalStudent,
+              is_corsista: rollback.originalStudent.is_corsista,
+              stagione: rollback.originalStudent.stagione,
+              tessera_attiva: rollback.originalStudent.tessera_attiva,
+              status: rollback.originalStudent.status,
+              payment_status: rollback.originalStudent.payment_status,
+            })
+          } catch (rollbackError) {
+            rollbackFailures.push(rollbackError)
+          }
+        }
+
+        const rollbackFailed = rollbackFailures.length > 0 || error?.rollbackFailed === true
+        const safeError = new Error(rollbackFailed
+          ? 'Il salvataggio non si è concluso e Nova non ha potuto verificare completamente il ripristino automatico. Non incassare di nuovo: controlla Pagamenti e segnala il codice operazione all’amministratore.'
+          : enrollmentErrorMessage(error))
+        safeError.operationCode = opCode
+        safeError.rollbackFailed = rollbackFailed
+        safeError.cause = error
+        if (rollbackFailures.length) console.error(`Rollback iscrizione ${opCode} incompleto:`, rollbackFailures)
+        throw safeError
       }
     },
     onSuccess: async (data) => {
@@ -419,6 +503,7 @@ export default function IscrizioneCorsistaPage() {
           <div className="enrollment-success-eyebrow">Iscrizione completata</div>
           <h1>{fullName(result.student)}</h1>
           <p>Nova ha aggiornato anagrafica, corsi, tessera e pagamento senza passare da altre sezioni.</p>
+          {result.operationCode ? <div className="enrollment-operation-code">Operazione verificata · {result.operationCode}</div> : null}
 
           <div className="enrollment-success-grid">
             <div><span>Corsi</span><strong>{result.selectedCourses.length}</strong><small>{result.selectedCourses.map((course) => course.nome).join(' · ')}</small></div>
@@ -657,7 +742,7 @@ export default function IscrizioneCorsistaPage() {
             </article>
           ) : null}
 
-          {completeMutation.error ? <div className="enrollment-error"><strong>Non sono riuscito a completare l’iscrizione.</strong><span>{completeMutation.error.message}</span></div> : null}
+          {completeMutation.error ? <div className={`enrollment-error ${completeMutation.error.rollbackFailed ? 'is-critical' : ''}`}><strong>{completeMutation.error.rollbackFailed ? 'Controllo necessario prima di riprovare' : 'Iscrizione non completata'}</strong><span>{completeMutation.error.message}</span>{completeMutation.error.operationCode ? <small>Codice operazione: {completeMutation.error.operationCode}</small> : null}</div> : null}
         </div>
 
         <aside className="enrollment-summary-card">

@@ -1,0 +1,87 @@
+.nova-fatal-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: linear-gradient(145deg, #f5f7fb, #fbf7ff);
+}
+
+.nova-fatal-card {
+  width: min(620px, 100%);
+  padding: 30px;
+  border: 1px solid rgba(91, 75, 219, .15);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(31, 41, 55, .12);
+  text-align: center;
+}
+
+.nova-fatal-mark {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 14px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #c026d3, #6d4aff);
+  color: #fff;
+  font-size: 26px;
+  font-weight: 900;
+}
+
+.nova-fatal-card > span {
+  color: #7a67c7;
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.nova-fatal-card h1 {
+  margin: 8px 0;
+  color: #172033;
+  font-size: clamp(26px, 5vw, 38px);
+}
+
+.nova-fatal-card p {
+  margin: 0 auto;
+  max-width: 520px;
+  color: #667085;
+  line-height: 1.55;
+}
+
+.nova-fatal-card > strong {
+  display: inline-block;
+  margin-top: 16px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #f4f1ff;
+  color: #5f45d8;
+  font-size: 12px;
+}
+
+.nova-fatal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+.nova-fatal-actions button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 12px;
+  background: #6d4aff;
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.nova-fatal-actions button.is-secondary {
+  border: 1px solid #dfe2e8;
+  background: #fff;
+  color: #4b5563;
+}

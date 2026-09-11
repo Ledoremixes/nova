@@ -1413,3 +1413,100 @@
   background: #1e9b70;
   color: #fff;
 }
+
+/* --- Stabilità tablet / cassa segreteria --- */
+.enrollment-card,
+.enrollment-summary-card,
+.enrollment-package-choice,
+.enrollment-pay-row {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.enrollment-card-head h2,
+.enrollment-card-head p,
+.enrollment-pay-copy strong,
+.enrollment-pay-copy small,
+.enrollment-package-choice strong,
+.enrollment-package-choice small,
+.enrollment-summary-card strong,
+.enrollment-summary-card small {
+  overflow-wrap: anywhere;
+}
+
+.enrollment-error small {
+  margin-top: 5px;
+  color: #8f3341;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.enrollment-error.is-critical {
+  border-color: #e89098;
+  background: #fff0f1;
+  box-shadow: 0 0 0 3px rgba(180, 35, 53, .06);
+}
+
+.enrollment-operation-code {
+  width: fit-content;
+  max-width: 100%;
+  margin: 10px auto 0;
+  padding: 6px 10px;
+  border: 1px solid #d8eee4;
+  border-radius: 999px;
+  background: #f6fffa;
+  color: #25765b;
+  font-size: 10px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+/* I tablet 10-13\" non devono usare il layout desktop a due colonne:
+   la colonna riepilogo restringeva troppo i passaggi e causava righe deformate. */
+@media (max-width: 1180px) {
+  .enrollment-layout {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .enrollment-main-column,
+  .enrollment-summary-card {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .enrollment-summary-card {
+    position: static;
+    order: 2;
+  }
+
+  .enrollment-course-grid,
+  .enrollment-package-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .enrollment-pay-row {
+    grid-template-columns: 22px 38px minmax(0, 1fr) minmax(76px, auto);
+  }
+
+  .enrollment-method-row {
+    max-width: 420px;
+  }
+}
+
+@media (max-width: 760px) {
+  .enrollment-course-grid,
+  .enrollment-package-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .enrollment-pay-row {
+    grid-template-columns: 22px 34px minmax(0, 1fr);
+  }
+
+  .enrollment-pay-amount {
+    grid-column: 3;
+    justify-self: start;
+    margin-top: 1px;
+  }
+}

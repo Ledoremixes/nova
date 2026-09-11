@@ -475,7 +475,33 @@ async function fetchPackagePricingHistoryForStudent(studentId) {
   return data || []
 }
 
-async function upsertPackagePricingVersion({ enrollmentId, studentId, courseId, effectiveFrom, studentQuota, packageName, packageTotal, note }) {
+async function upsertPackagePricingVersionViaBridge(payload) {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  if (sessionError || !sessionData?.session?.access_token) {
+    throw new Error('Sessione Nova non disponibile. Accedi di nuovo e riprova.')
+  }
+
+  const response = await fetch('/api/orchidea-pricing-history', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${sessionData.session.access_token}`,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  let body = {}
+  try {
+    body = await response.json()
+  } catch {
+    body = {}
+  }
+
+  if (!response.ok) throw new Error(body.error || 'Errore salvataggio storico prezzo pacchetto.')
+  return body.item || null
+}
+
+async function upsertPackagePricingVersion({ enrollmentId, studentId, courseId, effectiveFrom, studentQuota, packageName, packageTotal, note, required = true }) {
   const payload = {
     enrollment_id: String(enrollmentId),
     tesseramento_id: String(studentId),
@@ -496,14 +522,30 @@ async function upsertPackagePricingVersion({ enrollmentId, studentId, courseId, 
     .select('*')
     .single()
 
-  if (error) {
-    if (isMissingTableError(error)) {
-      throw new Error('Manca lo storico prezzi mensile. Esegui package_pricing_history.sql nel database Orchidea Allievi prima di salvare il pacchetto.')
+  if (!error) return data
+
+  if (isPermissionError(error)) {
+    try {
+      return await upsertPackagePricingVersionViaBridge(payload)
+    } catch (bridgeError) {
+      if (!required) {
+        console.warn('Storico prezzo non salvato durante assegnazione corso:', bridgeError)
+        return null
+      }
+      throw bridgeError
     }
-    throw new Error(error.message || 'Errore salvataggio storico prezzo pacchetto.')
   }
 
-  return data
+  if (isMissingTableError(error)) {
+    if (!required) return null
+    throw new Error('Manca lo storico prezzi mensile. Esegui package_pricing_history.sql nel database Orchidea Allievi prima di salvare il pacchetto.')
+  }
+
+  if (!required) {
+    console.warn('Storico prezzo non salvato durante assegnazione corso:', error)
+    return null
+  }
+  throw new Error(error.message || 'Errore salvataggio storico prezzo pacchetto.')
 }
 
 export async function addCourseParticipant({ courseId, studentId, tariffaMensile = null, effectiveMonth = null }) {
@@ -511,6 +553,22 @@ export async function addCourseParticipant({ courseId, studentId, tariffaMensile
 
   const effectiveFrom = effectiveMonth ? monthStartDate(effectiveMonth) : new Date().toISOString().slice(0, 10)
   const cleanQuota = tariffaMensile === '' || tariffaMensile === null ? null : Number(tariffaMensile || 0)
+
+  // Idempotenza: un doppio tap, un retry del browser o una rete lenta non devono
+  // creare una seconda iscrizione allo stesso corso per lo stesso periodo.
+  const existing = await orchideaSupabase
+    .from('iscrizioni_corsi')
+    .select('*')
+    .eq('corso_id', courseId)
+    .eq('tesseramento_id', studentId)
+    .order('created_at', { ascending: false, nullsFirst: false })
+    .limit(20)
+
+  if (!existing.error) {
+    const alreadyActive = (existing.data || []).find((row) => enrollmentIsActiveForMonth(row, effectiveMonth || effectiveFrom.slice(0, 7)))
+    if (alreadyActive) return { ...alreadyActive, _nova_reused: true }
+  }
+
   const payload = {
     corso_id: courseId,
     tesseramento_id: studentId,
@@ -558,6 +616,7 @@ export async function addCourseParticipant({ courseId, studentId, tariffaMensile
       packageName: null,
       packageTotal: null,
       note: '',
+      required: cleanQuota !== null,
     })
   }
 

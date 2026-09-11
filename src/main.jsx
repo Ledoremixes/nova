@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
+import AppErrorBoundary from './components/system/AppErrorBoundary'
 import { AuthProvider } from './context/AuthProvider'
 import { cleanupLegacyServiceWorkers } from './lib/legacyServiceWorkerCleanup'
 import './styles/global.css'
@@ -38,7 +39,9 @@ async function bootstrap() {
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <App />
+          <AppErrorBoundary>
+            <App />
+          </AppErrorBoundary>
         </AuthProvider>
       </QueryClientProvider>
     </React.StrictMode>,

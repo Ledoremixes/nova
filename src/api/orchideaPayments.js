@@ -434,6 +434,44 @@ function allocatePackageAmount(totalAmount, dues) {
   return values
 }
 
+const PAYMENT_ROLLBACK_FIELDS = [
+  'tesseramento_id', 'importo', 'periodo', 'mese', 'scadenza', 'stato', 'metodo',
+  'descrizione', 'note', 'tipo', 'pagato_il', 'data_pagamento', 'updated_at', 'created_at',
+  'nova_package_id', 'nova_package_name', 'nova_package_type', 'nova_package_total',
+  'nova_package_duration_months', 'nova_payment_group_id', 'nova_coverage_from',
+  'nova_coverage_to', 'nova_coverage_complete', 'nova_cash_amount',
+]
+
+function paymentRollbackPayload(row = {}) {
+  return Object.fromEntries(
+    PAYMENT_ROLLBACK_FIELDS
+      .filter((key) => Object.prototype.hasOwnProperty.call(row, key))
+      .map((key) => [key, row[key]]),
+  )
+}
+
+async function rollbackPackagePaymentWrites({ createdIds = [], previousRows = [] }) {
+  const failures = []
+
+  for (const id of createdIds) {
+    const { error } = await orchideaSupabase.from('pagamenti').delete().eq('id', id)
+    if (error) failures.push(error)
+  }
+
+  for (const row of previousRows) {
+    if (!row?.id) continue
+    const payload = paymentRollbackPayload(row)
+    const result = await paymentWriteWithLegacyFallback(
+      (writePayload) => orchideaSupabase.from('pagamenti').update(writePayload).eq('id', row.id),
+      payload,
+    )
+    if (result?.error) failures.push(result.error)
+  }
+
+  if (failures.length) console.error('Rollback pagamenti incompleto:', failures)
+  return failures.length === 0
+}
+
 export async function setAllievoPackagePayment({
   tesseramentoId,
   startMonth,
@@ -499,66 +537,94 @@ export async function setAllievoPackagePayment({
   const now = new Date().toISOString()
   const cashAmount = moneyRound(amount)
 
-  const saved = []
-  for (let index = 0; index < months.length; index += 1) {
-    const itemMonth = months[index]
-    const monthStart = `${itemMonth}-01`
-    const monthEnd = dayjs(monthStart).endOf('month').format('YYYY-MM-DD')
-    const payload = {
-      tesseramento_id: tesseramentoId,
-      importo: allocations[index] || 0,
-      periodo: itemMonth,
-      mese: monthStart,
-      scadenza: monthEnd,
-      stato: 'pagato',
-      metodo: packageItem?.tipo === 'omaggio' ? 'Omaggio' : (method || null),
-      descrizione: packageItem?.tipo === 'omaggio'
-        ? `${packageItem.nome || 'Omaggio'} · copertura gratuita ${selectedStart} / ${months[months.length - 1]}`
-        : `${packageItem.nome} · copertura ${selectedStart} / ${months[months.length - 1]}`,
-      note: note || null,
-      tipo: 'quota_mensile',
-      pagato_il: dayjs().format('YYYY-MM-DD'),
-      data_pagamento: dayjs().format('YYYY-MM-DD'),
-      updated_at: now,
-      nova_package_id: uuidOrNull(packageItem.id),
-      nova_package_name: packageItem.nome,
-      nova_package_type: packageItem.tipo || 'altro',
-      nova_package_total: cashAmount,
-      nova_package_duration_months: duration,
-      nova_payment_group_id: groupId,
-      nova_coverage_from: coverageFrom,
-      nova_coverage_to: coverageTo,
-      nova_coverage_complete: true,
-      nova_cash_amount: index === 0 ? cashAmount : 0,
-    }
+  // Snapshot prima di toccare il ledger. Se una delle mensilità fallisce,
+  // ripristiniamo le righe precedenti e cancelliamo quelle appena create.
+  // Così un trimestrale non può restare registrato solo per 1-2 mesi.
+  const snapshotRes = await orchideaSupabase
+    .from('pagamenti')
+    .select('*')
+    .eq('tesseramento_id', tesseramentoId)
+    .in('periodo', months)
+    .eq('tipo', 'quota_mensile')
+    .order('updated_at', { ascending: false, nullsFirst: false })
 
-    const existing = await orchideaSupabase
-      .from('pagamenti')
-      .select('id')
-      .eq('tesseramento_id', tesseramentoId)
-      .eq('periodo', itemMonth)
-      .eq('tipo', 'quota_mensile')
-      .order('updated_at', { ascending: false, nullsFirst: false })
-      .limit(1)
+  if (snapshotRes.error) throw new Error(snapshotRes.error.message || 'Errore verifica pagamenti esistenti')
 
-    if (existing.error) throw new Error(existing.error.message || `Errore verifica pagamento ${itemMonth}`)
-    if (existing.data?.[0]?.id) {
-      const { data, error } = await paymentWriteWithLegacyFallback(
-        (writePayload) => orchideaSupabase.from('pagamenti').update(writePayload).eq('id', existing.data[0].id).select().single(),
-        payload,
-      )
-      if (error) throw new Error(error.message || `Errore aggiornamento pagamento ${itemMonth}`)
-      saved.push(data)
-    } else {
-      const payloadWithCreatedAt = { ...payload, created_at: now }
-      const { data, error } = await paymentWriteWithLegacyFallback(
-        (writePayload) => orchideaSupabase.from('pagamenti').insert([writePayload]).select().single(),
-        payloadWithCreatedAt,
-      )
-      if (error) throw new Error(error.message || `Errore creazione pagamento ${itemMonth}`)
-      saved.push(data)
-    }
+  const previousByMonth = new Map()
+  for (const row of snapshotRes.data || []) {
+    const key = String(row.periodo || '')
+    if (key && !previousByMonth.has(key)) previousByMonth.set(key, row)
   }
+
+  const saved = []
+  const createdIds = []
+  const touchedPrevious = []
+
+  try {
+    for (let index = 0; index < months.length; index += 1) {
+      const itemMonth = months[index]
+      const monthStart = `${itemMonth}-01`
+      const monthEnd = dayjs(monthStart).endOf('month').format('YYYY-MM-DD')
+      const payload = {
+        tesseramento_id: tesseramentoId,
+        importo: allocations[index] || 0,
+        periodo: itemMonth,
+        mese: monthStart,
+        scadenza: monthEnd,
+        stato: 'pagato',
+        metodo: packageItem?.tipo === 'omaggio' ? 'Omaggio' : (method || null),
+        descrizione: packageItem?.tipo === 'omaggio'
+          ? `${packageItem.nome || 'Omaggio'} · copertura gratuita ${selectedStart} / ${months[months.length - 1]}`
+          : `${packageItem.nome} · copertura ${selectedStart} / ${months[months.length - 1]}`,
+        note: note || null,
+        tipo: 'quota_mensile',
+        pagato_il: dayjs().format('YYYY-MM-DD'),
+        data_pagamento: dayjs().format('YYYY-MM-DD'),
+        updated_at: now,
+        nova_package_id: uuidOrNull(packageItem.id),
+        nova_package_name: packageItem.nome,
+        nova_package_type: packageItem.tipo || 'altro',
+        nova_package_total: cashAmount,
+        nova_package_duration_months: duration,
+        nova_payment_group_id: groupId,
+        nova_coverage_from: coverageFrom,
+        nova_coverage_to: coverageTo,
+        nova_coverage_complete: true,
+        nova_cash_amount: index === 0 ? cashAmount : 0,
+      }
+
+      const previous = previousByMonth.get(itemMonth)
+      if (previous?.id) {
+        const { data, error } = await paymentWriteWithLegacyFallback(
+          (writePayload) => orchideaSupabase.from('pagamenti').update(writePayload).eq('id', previous.id).select().single(),
+          payload,
+        )
+        if (error) throw new Error(error.message || `Errore aggiornamento pagamento ${itemMonth}`)
+        touchedPrevious.push(previous)
+        saved.push(data)
+      } else {
+        const payloadWithCreatedAt = { ...payload, created_at: now }
+        const { data, error } = await paymentWriteWithLegacyFallback(
+          (writePayload) => orchideaSupabase.from('pagamenti').insert([writePayload]).select().single(),
+          payloadWithCreatedAt,
+        )
+        if (error) throw new Error(error.message || `Errore creazione pagamento ${itemMonth}`)
+        if (data?.id) createdIds.push(data.id)
+        saved.push(data)
+      }
+    }
+  } catch (error) {
+    const rollbackOk = await rollbackPackagePaymentWrites({ createdIds, previousRows: touchedPrevious })
+    const safeError = new Error(
+      rollbackOk
+        ? 'Il pagamento non è stato registrato perché si è verificato un problema. Le modifiche parziali sono state annullate: puoi riprovare senza creare duplicati.'
+        : 'Il pagamento non è stato completato e Nova non è riuscita a verificare il ripristino automatico. Non ripetere l’incasso: controlla la scheda Pagamenti o contatta l’amministratore.',
+    )
+    safeError.cause = error
+    safeError.rollbackFailed = !rollbackOk
+    throw safeError
+  }
+
   return { kind: packageItem?.tipo === 'omaggio' ? 'omaggio' : 'package', rows: saved, months, groupId, coverageFrom, coverageTo, cashAmount }
 }
 
