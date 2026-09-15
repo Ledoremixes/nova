@@ -1,0 +1,11 @@
+NOVA - 06/09/2026 - Tabella Tesserati responsive
+
+- Ridotta la larghezza minima forzata della tabella Tesserati.
+- Distribuite meglio le larghezze delle colonne.
+- Email, telefono e codice fiscale possono andare a capo senza allargare la tabella.
+- La colonna Azioni resta fissa (sticky) sul lato destro durante lo scorrimento orizzontale.
+- I pulsanti Apri scheda / N. progr. sono compatti e disposti su due colonne.
+- Il pulsante Corsista / Rimuovi corsista occupa una riga intera ed è sempre visibile.
+- Ottimizzazione aggiuntiva per schermi con larghezza inferiore a 1180px.
+
+Obiettivo: uso normale al 100% di zoom del browser senza dover ridurre lo zoom per vedere le azioni laterali.

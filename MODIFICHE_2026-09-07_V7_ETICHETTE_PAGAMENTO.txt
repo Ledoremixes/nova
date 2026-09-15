@@ -1,0 +1,9 @@
+Nova Gestionale - v7
+Data: 07/09/2026
+
+Modifica riepilogo "Registra incasso" nella sezione Pagamenti:
+- "Quota mese" -> "Totale"
+- "Già incassato" -> "Costo tessera"
+- "Residuo" -> "Totale corsi"
+
+I valori e la logica di calcolo restano invariati; cambia solo la descrizione visualizzata nei tre riquadri.

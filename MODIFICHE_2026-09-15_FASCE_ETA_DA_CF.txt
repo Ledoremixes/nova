@@ -1,0 +1,9 @@
+DASHBOARD - FASCE DI ETA DA CODICE FISCALE
+
+- La data di nascita salvata in anagrafica resta la fonte prioritaria.
+- Se manca, Nova ricava giorno, mese e anno dal codice fiscale.
+- Supportata l'omocodia tramite il parser CF gia presente in Nova.
+- Il CF viene usato solo se formalmente valido (checksum incluso).
+- Gestita l'ambiguita del secolo scegliendo una data non futura e plausibile (eta <= 100 anni); a parita viene preferito il 2000.
+- La Dashboard indica quante eta sono state ricavate automaticamente dal CF.
+- Le anagrafiche non determinabili restano escluse dalle percentuali delle fasce d'eta.

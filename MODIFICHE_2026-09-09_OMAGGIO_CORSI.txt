@@ -1,0 +1,32 @@
+NOVA - OMAGGIO CORSI / PROMO SETTEMBRE
+Data: 09/09/2026
+
+1. Aggiunta la formula "Omaggio · 1 mese" tra i pacchetti selezionabili.
+   - Disponibile per qualsiasi corso e qualsiasi mese, così può essere usata anche in futuro per contest/premi.
+   - Copre un mese corsi a 0,00 €.
+   - La tessera corsista NON viene mai omaggiata.
+
+2. Iscrizione corsista
+   - Se viene selezionato "Omaggio" e la tessera non è ancora saldata, Nova obbliga al pagamento della quota tessera residua.
+   - Se erano già stati pagati 3 € per la tessera serata, resta da incassare solo la differenza.
+   - Il mese omaggio viene registrato automaticamente anche senza spuntare un incasso corsi.
+   - Riepilogo e schermata finale distinguono chiaramente Omaggio e tessera.
+
+3. Promo settembre 2026
+   - Dal 20/09/2026 al 30/09/2026, per nuove iscrizioni senza corsi già attivi e con corsi esclusivamente Bachata/Salsa Base o Intermedio, Nova propone automaticamente "Omaggio" per settembre.
+   - L'opzione Omaggio resta comunque sempre selezionabile manualmente per gli altri casi.
+
+4. Pagamenti
+   - "Omaggio" compare nel selettore Pacchetto / formula di pagamento.
+   - È possibile scegliere il mese da omaggiare.
+   - Se la tessera è ancora da pagare, compare un avviso rosso e Nova registra obbligatoriamente anche il saldo tessera.
+   - I mesi omaggio sono mostrati con stato "Omaggio", residuo corsi 0 e filtro dedicato "Omaggi".
+   - "Riapri pagamento" rimuove l'omaggio e ripristina la quota corsi senza toccare la tessera già pagata.
+
+5. Compatibilità
+   - L'omaggio viene riconosciuto anche se il database usa il fallback legacy senza colonne nova_* grazie alla descrizione del movimento.
+
+Controlli eseguiti:
+- ESLint sui file modificati: OK.
+- Test logico del ledger Omaggio: OK (0 € incassati, residuo 0, stato Omaggio).
+- Build Vite non eseguibile nell'ambiente Linux di controllo per il node_modules Windows incluso nello ZIP (binding nativo Rolldown mancante), problema già presente nello ZIP di partenza e non legato alle modifiche.

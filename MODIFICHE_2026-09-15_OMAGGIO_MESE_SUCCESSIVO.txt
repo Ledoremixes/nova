@@ -1,0 +1,20 @@
+NOVA - Omaggio + pagamento periodo successivo
+Data: 15/09/2026
+
+Modifiche principali:
+- Quando in Iscrizione corsista viene selezionato il pacchetto "Omaggio · 1 mese", nel Passaggio 4 compare la nuova opzione:
+  "Ha già pagato anche da MM/AAAA?"
+- Se attivata, Nova mantiene l'omaggio sul mese corrente e registra separatamente il pacchetto pagato a partire dal mese successivo.
+- La segreteria può scegliere quale pacchetto è stato pagato dal mese successivo (Mensile, Trimestrale o Annuale); viene proposto automaticamente il Mensile corretto per i corsi selezionati.
+- Il riepilogo laterale mostra contemporaneamente mese omaggio e pacchetto successivo, con decorrenze e importi distinti.
+- Il totale da registrare include l'eventuale tessera dovuta e il pagamento del periodo successivo; la tessera resta sempre esclusa dall'omaggio.
+- La schermata di successo riporta anche il pacchetto successivo quando registrato.
+- Aggiunto rollback del primo pacchetto nel caso in cui il secondo salvataggio fallisca, per evitare registrazioni parziali.
+
+Esempio:
+Settembre 2026: Omaggio 0 euro
+Ottobre 2026: Mensile 2 corsi Bachata + Salsa 50 euro
+Incasso registrato: 50 euro (+ eventuale residuo tessera)
+
+Verifica tecnica:
+- ESLint eseguito sui file modificati senza errori.

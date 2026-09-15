@@ -1,0 +1,49 @@
+TESSERAMENTO CORSISTA ASSISTITO - 09/09/2026
+
+Nuova sottosezione Corsisti > Tesseramento corsista.
+
+Flusso implementato:
+1. Lettura barcode Tessera Sanitaria tramite fotocamera (BarcodeDetector del browser).
+   - Estrae il codice fiscale.
+   - Controlla formalmente il CF e il carattere di controllo.
+   - Ricava data di nascita, sesso e codice catastale dal CF.
+   - Cerca automaticamente il tesserato esistente e recupera i dati gia presenti.
+2. OCR del fronte Tessera Sanitaria.
+   - Avvio solo quando richiesto, per mantenere il caricamento di Nova leggero.
+   - Pre-elaborazione immagine (ridimensionamento, scala di grigi, contrasto).
+   - Seconda lettura automatica ad alto contrasto solo se mancano campi importanti.
+   - Estrazione di nome, cognome, data/luogo di nascita e CF quando leggibile.
+   - L'OCR e' sempre seguito da controllo umano prima della firma.
+   - Le foto del tesserino restano nel browser e NON vengono salvate su Supabase.
+3. Controllo dati guidato per la segretaria.
+4. Modalita cliente con riepilogo, conferme e firma obbligatoria su canvas touch.
+5. Salvataggio tesseramento e firma.
+   - La firma viene archiviata in un bucket Supabase PRIVATO chiamato nova-tesseramenti-firme.
+   - Insieme alla firma viene archiviato un manifest JSON con data/ora, operatore,
+     dati confermati, consensi e metodo di acquisizione.
+   - Il bucket viene creato automaticamente dal backend al primo utilizzo.
+6. Al termine: pulsante Continua con corsi e pagamento.
+   - Apre Iscrizione corsista con la persona gia selezionata.
+   - La quota tessera da 25 euro non viene mai marcata pagata dal tesseramento assistito.
+
+Nuovi file:
+- src/pages/TesseramentoCorsistaPage.jsx
+- src/styles/TesseramentoCorsistaPage.css
+- src/lib/healthCard.js
+- src/api/assistedMembership.js
+- api/orchidea-assisted-membership.js
+
+File modificati:
+- src/app/router.jsx
+- src/components/layout/Sidebar.jsx
+- src/pages/IscrizioneCorsistaPage.jsx
+
+NOTE TECNICHE:
+- Il barcode live rende al meglio con Chrome aggiornato e connessione HTTPS.
+- L'OCR viene caricato da CDN solo al primo utilizzo (Tesseract.js), quindi non appesantisce
+  il bundle iniziale di Nova. La prima lettura puo richiedere alcuni secondi; le successive
+  beneficiano della cache del browser.
+- Nessuna nuova dipendenza npm e nessuna migrazione SQL richiesta.
+- Eseguito ESLint sui file modificati: OK.
+- Il build Vite non puo essere eseguito in questo ambiente per il binding Linux di Rolldown
+  mancante nel node_modules Windows presente nello ZIP, problema gia presente nel pacchetto di partenza.

@@ -1,0 +1,15 @@
+FIX LOGIN ACCOUNT SEGRETERIA / ARCHIVIO TESSERATI
+Data: 15/09/2026
+
+Problema:
+- dopo il login con un account diverso (es. segreteria@orchideaclub.it), Nova poteva montare la pagina Tesserati prima che la seconda sessione Supabase Orchidea fosse pronta;
+- la prima query mostrava ORCHIDEA_AUTH_REQUIRED e il refresh la faceva sparire perché nel frattempo la sessione si era stabilizzata.
+
+Correzioni:
+1. AuthProvider mantiene il gestionale in loading fino al completamento del login Nova + Orchidea.
+2. Il redirect post-login non parte mentre la sincronizzazione auth è ancora in corso.
+3. Al logout vengono chiuse entrambe le sessioni prima di consentire un nuovo accesso.
+4. La cache React Query viene svuotata al cambio account per evitare dati/errori della sessione precedente.
+5. Tesserati ha retry brevi automatici sui problemi transitori di autenticazione.
+6. Aggiunto fallback server-side GET /api/orchidea-students: un operatore Nova autorizzato può leggere l'archivio tesserati tramite service role, senza dipendere esclusivamente dalla seconda sessione browser.
+7. Eliminato dal messaggio utente il riferimento tecnico a SQL/password duplicate: in caso di reale indisponibilità viene mostrato un errore più semplice.

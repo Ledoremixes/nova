@@ -1,0 +1,46 @@
+NOVA - MODIFICHE 31/07/2026
+Tesserati, anagrafica insegnanti e contratto Co.Co.Co. PDF
+
+1. TESSERATI
+- Allargata la colonna Azioni nella tabella.
+- I pulsanti non vanno più a capo e la scritta "Apri scheda" resta interamente visibile anche agli utenti non admin.
+- La tabella mantiene lo scorrimento orizzontale sulle risoluzioni più strette senza comprimere i comandi.
+
+2. INSEGNANTI - DATI PERSONALI RISERVATI
+- Aggiunti, con modifica riservata all'admin:
+  codice fiscale, data e luogo di nascita, province, indirizzo/comune/CAP di residenza,
+  IBAN e intestatario del conto.
+- Aggiunti i dati contrattuali permanenti: periodo, ruolo, disciplina, mansioni, sede,
+  giorni/turni, orari, ore stimate, preavviso, periodicità e natura del compenso,
+  luogo firma e foro facoltativo.
+- Gli utenti non admin non vedono il pannello dei dati fiscali e bancari.
+
+3. CONTRATTO CO.CO.CO. LAVORO SPORTIVO
+- Nuovo pulsante "Contratto" nelle schede insegnante, visibile solo all'admin.
+- Modale completo per controllare e modificare tutti i dati prima della generazione.
+- Periodo iniziale preimpostato: 07/09/2026 - 30/06/2027.
+  Nota: il 31 giugno non esiste, quindi è stato impostato correttamente il 30 giugno.
+- Le date sono sempre modificabili e gli ultimi valori vengono ricordati per i contratti successivi.
+- I dati personali e contrattuali vengono salvati nella scheda dell'insegnante.
+- Generazione PDF A4 pronta per la stampa con logo Orchidea, intestazione, numerazione pagine,
+  12 articoli, riepilogo operativo e spazi per le firme.
+- Il testo prende come base la bozza fornita, con impaginazione e formulazioni rese più ordinate.
+
+INSTALLAZIONE
+1. Aprire il SQL Editor del progetto Supabase che contiene public.insegnanti.
+2. Eseguire: update/teacher_personal_data_and_contracts.sql
+3. Pubblicare normalmente il progetto aggiornato.
+4. Aprire Insegnanti come admin, compilare i dati personali e usare il pulsante Contratto.
+
+FILE PRINCIPALI MODIFICATI
+- src/pages/TesseratiPage.jsx (struttura invariata; fix tramite CSS)
+- src/styles/TesseratiPage.css
+- src/pages/InsegnantiPage.jsx
+- src/styles/pages.css
+- src/api/orchideaEntities.js
+- src/utils/teacherContractPdf.js
+- update/teacher_personal_data_and_contracts.sql
+
+AVVERTENZA
+Il PDF è un modello gestionale. Prima dell'utilizzo definitivo e della firma, far verificare
+contenuto, inquadramento, compensi e adempimenti dal consulente del lavoro/commercialista dell'ASD.

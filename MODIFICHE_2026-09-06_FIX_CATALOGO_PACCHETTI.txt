@@ -1,0 +1,40 @@
+NOVA - VERSIONE DEFINITIVA PACCHETTI / PAGAMENTI - 06/09/2026
+
+PROBLEMI RISOLTI
+- eliminato il 404 di /api/packages-catalog in `npm run dev`;
+- eliminato l'errore "Risposta del catalogo pacchetti non valida";
+- il catalogo non dipende più dal service role del database Orchidea Allievi;
+- `npm run dev` ora espone localmente anche le API Vercel usate da gestione utenti e reset password;
+- pulizia automatica dei vecchi service worker `sw.js` che generavano centinaia di errori "Response body is already used";
+- la pulizia della vecchia service worker avviene PRIMA di avviare le query dell'app, così non può più intercettare le prime chiamate API;
+- catalogo pacchetti salvato nelle lookup_options globali già presenti nel database Nova;
+- creazione automatica del primo pacchetto "A gettone" da 12,00 € quando il catalogo è vuoto.
+
+GETTONE
+- "A gettone" = una sola lezione;
+- ogni incasso crea un movimento separato di tipo `gettone_corso`;
+- NON aggiorna il record `quota_mensile`;
+- NON imposta `nova_coverage_complete=true`;
+- NON può mai trasformare un mese non pagato in "Pagato";
+- anche un eventuale vecchio record mensile vuoto/non pagato non fa perdere la modalità "A gettone";
+- lo stato visualizzato diventa "A gettone", con numero di lezioni e totale incassato nel mese;
+- è possibile registrare più gettoni nello stesso mese;
+- se il catalogo usa ID non UUID, Nova evita di scriverlo nella colonna UUID del database Orchidea per prevenire errori di salvataggio.
+
+PAGAMENTI / COMPATIBILITÀ
+- i salvataggi pagamento hanno un fallback compatibile se nel database Orchidea non sono ancora presenti i campi `nova_*`;
+- l'endpoint /api/packages-catalog resta disponibile per compatibilità con eventuali bundle vecchi, ma usa anch'esso lookup_options Nova;
+- packages_and_payment_coverage.sql aggiunge i metadati avanzati di copertura alla tabella pagamenti di Orchidea.
+
+UTENTI E PASSWORD
+- corretto l'uso errato della service-role Nova contro il progetto Supabase Orchidea: una key di un progetto non viene più riutilizzata su un altro progetto;
+- il reset password corsista restituisce ora un messaggio di configurazione chiaro se manca `ORCHIDEA_SUPABASE_SERVICE_ROLE_KEY`;
+- creazione/modifica/eliminazione utenti Nova non falliscono più solo perché la sincronizzazione opzionale con Orchidea ha un problema;
+- le API admin funzionano anche in sviluppo locale tramite Vite.
+
+QUALITÀ
+- ESLint: 0 errori, 0 warning.
+- parsing JS/JSX: OK.
+- import relativi mancanti: 0.
+- test logica gettone: OK (singolo gettone, più gettoni, vecchio record mensile non pagato, mese già pagato + gettone).
+- mantenuti il logo /public/NOVA.png e i fix permanenti di TesseratiPage.

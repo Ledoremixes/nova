@@ -1,0 +1,19 @@
+NOVA GESTIONALE ASD - ELIMINAZIONE CORSI
+Data: 30/07/2026
+
+MODIFICHE
+- Aggiunto il pulsante "Elimina" in ogni scheda corso.
+- Aggiunto un modale di conferma con la domanda:
+  "Sei sicuro di voler eliminare questo corso?"
+- Nel messaggio viene mostrato il nome del corso e viene specificato che l'operazione è definitiva.
+- Se il corso ha partecipanti, Nova mostra un avviso prima della conferma.
+- Durante l'eliminazione i pulsanti vengono bloccati per evitare doppi comandi.
+- Dopo l'eliminazione la lista corsi viene aggiornata automaticamente.
+- Gli errori dovuti a iscrizioni o dati collegati vengono mostrati con un messaggio comprensibile.
+- Aggiunta funzione API deleteOrchideaCourse.
+- Aggiunto lo script opzionale update/nova_delete_corso.sql per i database con RLS che blocca il DELETE diretto.
+
+COMPORTAMENTO DI SICUREZZA
+Nova non elimina automaticamente dati storici collegati. Se il database rileva iscrizioni,
+pagamenti o altre associazioni protette, l'eliminazione viene bloccata. In quel caso è possibile
+disattivare il corso dalla schermata Modifica oppure rimuovere prima le associazioni necessarie.

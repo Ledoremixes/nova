@@ -1,0 +1,9 @@
+ALLINEAMENTO MODELLO C1 SIAE - 06/08/2026
+
+- Sostituito il vecchio sfondo, che aveva proporzioni non A4, con il modello base fornito dall'utente (2000x1414, A4 orizzontale).
+- Il modello base conserva già i dati fissi di Club Orchidea ASD, codice fiscale, titolare del sistema, locale, comune, provincia, tipo evento, ufficio SIAE, timbro e firma.
+- Il generatore non ridisegna più i dati fissi: stampa soltanto data, descrizione evento, orario, ingressi, prezzo, incasso e calcoli fiscali.
+- Le coordinate sono state ricavate direttamente dal modello C1 storico già compilato.
+- Prezzo, ingressi, incasso e riepiloghi sono centrati nelle rispettive celle.
+- Titolo evento, data e orario sono allineati alle righe originali.
+- Esportazione singolo evento e mensile invariata.

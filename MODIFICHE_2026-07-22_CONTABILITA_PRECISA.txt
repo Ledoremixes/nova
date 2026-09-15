@@ -1,0 +1,67 @@
+NOVA — CORREZIONI CONTABILITÀ E VERSAMENTI CASSA/BANCA
+Data: 22/07/2026
+
+1. RENDICONTO AGGIORNATO E CLASSIFICAZIONE CORRETTA
+- Il rendiconto ora usa davvero la classificazione configurata in Conti > Contabilità
+  (report_area, report_bucket e report_row_code).
+- Prima il codice ignorava questa configurazione e cercava di indovinare la natura del
+  movimento da descrizione, conto e parole chiave: una spesa correttamente associata a
+  un conto istituzionale poteva quindi non finire nelle Uscite istituzionali.
+- Se il conto non è configurato resta attivo un fallback prudente e il movimento viene
+  evidenziato tra le voci non classificate.
+- Il riepilogo mostra ora anche Finanziaria/patrimoniale e Supporto generale: prima tali
+  importi contribuivano al totale, ma non erano visibili nelle righe riepilogative.
+
+2. FILTRO DATE PIÙ AFFIDABILE
+- Il periodo contabile usa come fonte primaria entries.date.
+- operation_datetime è usato solo per vecchi movimenti privi di data contabile.
+- Questo elimina possibili slittamenti di un giorno legati alla conversione UTC.
+- I nuovi movimenti manuali salvano l'orario tecnico a mezzogiorno per evitare lo stesso
+  problema nelle altre viste.
+
+3. DIFFERENZA TRA DEBITI APERTI E USCITE
+- Un importo inserito in "Debiti aperti" riduce la posizione finanziaria, ma non è ancora
+  un'uscita del rendiconto perché non è stato pagato.
+- Quando il debito viene pagato occorre:
+  a) registrare l'uscita in Prima nota;
+  b) diminuire il valore dei Debiti aperti.
+- La pagina ora spiega questa differenza direttamente nell'interfaccia.
+
+4. LIQUIDITÀ E POSIZIONE FINANZIARIA
+- Sono mostrati separatamente:
+  * Cassa disponibile;
+  * Banca disponibile;
+  * Liquidità attuale (denaro realmente disponibile);
+  * Posizione finanziaria netta (liquidità + crediti - debiti).
+- I saldi usati per la chiusura dell'esercizio vengono calcolati sull'anno selezionato,
+  non più sempre sull'anno corrente.
+
+5. VERSAMENTO CASSA → BANCA
+- Nuovo pulsante "Versa cassa in banca" nella gestione dell'esercizio corrente.
+- Il versamento crea in una singola operazione due movimenti collegati:
+  * uscita dalla cassa/contanti;
+  * entrata in banca.
+- La cassa diminuisce e la banca aumenta dello stesso importo.
+- La liquidità totale resta invariata.
+- Il trasferimento è escluso da rendiconto, risultato, IVA e riepiloghi dei pagamenti,
+  così non genera ricavi o costi fittizi.
+- Prima della conferma viene mostrata l'anteprima dei saldi successivi e non è possibile
+  versare più della cassa disponibile.
+
+6. EXPORT
+- L'Excel del rendiconto comprende ora anche area finanziaria, supporto generale,
+  non classificate e indicazione dei trasferimenti interni.
+
+DATABASE
+- Non è richiesta una nuova migrazione SQL per queste modifiche.
+- È necessario che la precedente migrazione lookup contabilità sia già stata eseguita
+  per sfruttare la classificazione configurabile dei conti.
+
+VERIFICHE ESEGUITE
+- ESLint sui file JavaScript/JSX modificati: OK.
+- Parsing JSX con Babel: OK.
+- Parsing CSS con PostCSS: OK.
+- Test puro di calcolo: spesa istituzionale da 5.953,60 euro classificata correttamente;
+  trasferimento cassa-banca escluso dai totali economici: OK.
+- Build Vite completo non eseguito nell'ambiente Linux per assenza del binding nativo
+  opzionale Rolldown presente nell'installazione Windows del progetto.

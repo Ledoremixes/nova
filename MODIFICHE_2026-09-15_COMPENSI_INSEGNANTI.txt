@@ -1,0 +1,22 @@
+FIX COMPENSI INSEGNANTI - 15/09/2026
+
+Problema individuato
+- La sezione Insegnanti calcolava i compensi con una seconda lettura autonoma di iscrizioni/pagamenti.
+- La sezione Pagamenti usava invece un proprio ledger normalizzato (pacchetti, mensili, trimestrali, annuali, parziali, omaggi, tessera).
+- Le due letture potevano divergere: un pagamento correttamente visibile in Pagamenti poteva risultare come 0 nella sezione Insegnanti.
+- Inoltre, se la SELECT della tabella pagamenti falliva per sessione/RLS, il vecchio calcolo ignorava l'errore e mostrava 0 €, che e' un dato pericolosamente falso.
+
+Correzioni
+1. Insegnanti ora usa la STESSA query/caché della sezione Pagamenti per il mese selezionato.
+2. Il compenso percentuale viene calcolato solo sulla quota corsi realmente attribuita al mese, escludendo sempre la tessera corsista da 25 €.
+3. Pacchetti scontati vengono ripartiti proporzionalmente sui corsi selezionati.
+   Esempio: 2 corsi da listino 40+40, pacchetto pagato 50 => 25 € attribuiti a ciascun corso.
+4. Omaggio = 0 € di quota insegnante (nessun incasso corsi in quel mese).
+5. Trimestrali/annuali seguono la quota di competenza mensile gia' mostrata nella sezione Pagamenti, senza riconoscere tutto il pacchetto nel primo mese.
+6. Se i pagamenti non sono leggibili, Nova NON mostra piu' 0 €: mostra "Non disponibile" + errore + pulsante Riprova.
+7. Aggiunto fallback server protetto /api/orchidea-payments-read quando la sessione Orchidea/RLS del browser non rende disponibili i pagamenti.
+8. La query compensi condivide la cache di Pagamenti: meno duplicazioni e dati sempre coerenti tra le due sezioni.
+
+Regola mantenuta
+- Il mese compensi e' per COMPETENZA della quota corso, non per semplice data del bonifico/incasso.
+  Quindi una quota di ottobre incassata a settembre genera compenso in ottobre.

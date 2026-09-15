@@ -1,0 +1,14 @@
+TESSERAMENTO CORSISTA - FLUSSO SEMPLIFICATO
+
+- Eliminata completamente la fotocamera live per il barcode.
+- Eliminata completamente la lettura OCR del fronte Tessera Sanitaria.
+- Rimane un solo metodo consigliato: fotografia del barcode sul retro.
+- Dopo una lettura riuscita Nova passa automaticamente allo step Dati.
+- Se il CF esiste già, recupera automaticamente l'anagrafica precedente.
+- Se è un nuovo corsista, compila CF e data di nascita ricavata dal CF e mette in evidenza solo i campi mancanti.
+- Step guidati coerenti con Iscrizione corsista: Identifica -> Dati -> Firma.
+- Indicatore di completamento dati e campi mancanti evidenziati.
+- Inserimento manuale del CF mantenuto soltanto come fallback dentro una sezione richiudibile.
+- Firma e consensi restano obbligatori.
+- Foto del barcode non archiviata.
+- Dopo il tesseramento: collegamento diretto a Iscrizione corsista per corsi/pacchetto/pagamento.

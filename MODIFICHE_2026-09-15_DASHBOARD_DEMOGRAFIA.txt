@@ -1,0 +1,7 @@
+DASHBOARD - STATISTICHE DEMOGRAFICHE
+
+- Sostituito il grafico di composizione Tesserati/Corsisti con Uomini/Donne.
+- Il genere viene ricavato dal campo genere/sesso quando presente e, in fallback, dal codice fiscale.
+- Eventuali anagrafiche non determinabili sono segnalate senza alterare la percentuale Uomini/Donne.
+- Sostituita la lista Ultimi tesserati con le fasce di eta: 0-17, 18-25, 26-35, 36-45, 46-60, 61+.
+- L'eta viene calcolata dalla data di nascita e viene segnalato il numero di anagrafiche prive di data valida.

@@ -56,6 +56,8 @@ function normalizeStudent(row = {}) {
     nome: row.nome || '',
     cognome: row.cognome || '',
     nomeCompleto: `${row.nome || ''} ${row.cognome || ''}`.trim(),
+    nascita: row.nascita || row.data_nascita || null,
+    sesso: row.sesso || row.genere || '',
     email: row.email || '',
     telefono: row.telefono || row.cellulare || '',
     cf: row.cf || row.cod_fiscale || '',

@@ -1,0 +1,17 @@
+NOVA - RESTYLING RIEPILOGO PAGAMENTI ALLIEVI
+Data: 23/07/2026
+
+File modificati:
+- src/pages/PagamentiPage.jsx
+- src/styles/PagamentiPage.css
+
+Interventi:
+- Uniformate le quattro schede Allievi/pacchetti, Da incassare, Incassato e Sospesi/chiusi.
+- Valori separati graficamente da etichette e testo secondario.
+- Rimossa la pillola/circolo giallo del numero di saldi aperti.
+- Numero saldi aperti spostato nel testo inferiore della scheda.
+- Migliorati spaziature, allineamenti, gerarchia visiva e leggibilità degli importi.
+- Inseriti separatore interno e sottile accento Nova fucsia/viola.
+- Migliorata la resa responsive su tablet e smartphone.
+- Nessuna modifica al calcolo o ai dati dei pagamenti.
+- Nessuna migrazione SQL necessaria.
