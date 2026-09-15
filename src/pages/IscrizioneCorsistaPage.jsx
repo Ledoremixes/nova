@@ -24,6 +24,7 @@ import {
   UserPlus,
   UsersRound,
   WalletCards,
+  X,
 } from 'lucide-react'
 import { fetchOrchideaCourses, fetchOrchideaStudents, addCourseParticipant, removeCourseParticipant } from '../api/orchideaEntities'
 import { fetchTesseratoDetails, updateTesserato } from '../api/tesserati'
@@ -35,7 +36,7 @@ import {
   resolveMembershipFeeState,
   setMembershipFeePaidAmount,
 } from '../api/membershipFees'
-import { setAllievoPackagePayment } from '../api/orchideaPayments'
+import { rollbackAllievoPackagePaymentResult, setAllievoPackagePayment } from '../api/orchideaPayments'
 import { createQuickCorsista } from '../api/studentEnrollment'
 import { packagesForCourseSelection, resolveCoursePricing } from '../lib/coursePriceList'
 import { enrollmentIsActiveForMonth } from '../lib/packagePricing'
@@ -150,6 +151,8 @@ export default function IscrizioneCorsistaPage() {
   const [selectedPackageId, setSelectedPackageId] = useState('')
   const [payMembershipNow, setPayMembershipNow] = useState(false)
   const [payPackageNow, setPayPackageNow] = useState(false)
+  const [payNextPeriodAfterGift, setPayNextPeriodAfterGift] = useState(false)
+  const [giftFollowUpPackageId, setGiftFollowUpPackageId] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('Contanti')
   const [result, setResult] = useState(null)
 
@@ -240,6 +243,9 @@ export default function IscrizioneCorsistaPage() {
   const effectivePackageId = selectedPackageId || (septemberGiftPromoEligible ? giftPackage?.id : recommendedMonthly?.id) || ''
   const selectedPackage = paymentPackages.find((item) => String(item.id) === String(effectivePackageId)) || recommendedMonthly || null
   const isGiftPackage = selectedPackage?.tipo === 'omaggio'
+  const followUpPackages = paymentPackages.filter((item) => item.tipo !== 'omaggio' && item.tipo !== 'gettone')
+  const effectiveFollowUpPackageId = giftFollowUpPackageId || recommendedMonthly?.id || followUpPackages[0]?.id || ''
+  const followUpPackage = followUpPackages.find((item) => String(item.id) === String(effectiveFollowUpPackageId)) || recommendedMonthly || followUpPackages[0] || null
 
   const storedMembership = selectedStudent?.id
     ? (membershipQuery.data || []).find((row) => String(row.tesseramento_id) === String(selectedStudent.id))
@@ -255,8 +261,16 @@ export default function IscrizioneCorsistaPage() {
   const packageStartMonth = selectedPackage && String(currentMonth).endsWith('-09') && Number(selectedPackage.durata_mesi || 1) > 1
     ? dayjs(`${currentMonth}-01`).add(1, 'month').format('YYYY-MM')
     : currentMonth
+  const followUpStartMonth = dayjs(`${packageStartMonth}-01`)
+    .add(Math.max(1, Number(selectedPackage?.durata_mesi || 1)), 'month')
+    .format('YYYY-MM')
+  const followUpCash = isGiftPackage && payNextPeriodAfterGift && followUpPackage
+    ? Number(followUpPackage.prezzo || 0)
+    : 0
 
-  const cashNow = (membershipWillBePaid ? membershipRemaining : 0) + (!isGiftPackage && payPackageNow ? Number(selectedPackage?.prezzo || 0) : 0)
+  const cashNow = (membershipWillBePaid ? membershipRemaining : 0)
+    + (!isGiftPackage && payPackageNow ? Number(selectedPackage?.prezzo || 0) : 0)
+    + followUpCash
 
   const isNewFormValid = Boolean(
     newForm.nome.trim()
@@ -280,6 +294,8 @@ export default function IscrizioneCorsistaPage() {
         previousMembershipAmount: storedMembership?.paid_amount ?? membershipState.paid_amount ?? 0,
         originalStudent: selectedStudent ? { ...selectedStudent } : null,
       }
+      let packagePayment = null
+      let followUpPayment = null
 
       try {
         if (mode === 'new') {
@@ -342,7 +358,6 @@ export default function IscrizioneCorsistaPage() {
           if (enrollment?.id && enrollment?._nova_reused !== true) rollback.addedEnrollmentIds.push(enrollment.id)
         }
 
-        let packagePayment = null
         if (packageWillBeRegistered && selectedPackage) {
           packagePayment = await setAllievoPackagePayment({
             tesseramentoId: student.id,
@@ -356,6 +371,17 @@ export default function IscrizioneCorsistaPage() {
           })
         }
 
+        if (isGiftPackage && payNextPeriodAfterGift && followUpPackage) {
+          followUpPayment = await setAllievoPackagePayment({
+            tesseramentoId: student.id,
+            startMonth: followUpStartMonth,
+            packageItem: followUpPackage,
+            amount: Number(followUpPackage.prezzo || 0),
+            method: paymentMethod,
+            note: `${followUpPackage.nome} pagato insieme al mese omaggio precedente · decorrenza ${followUpStartMonth} · ${opCode}`,
+          })
+        }
+
         return {
           student,
           reusedExisting,
@@ -363,9 +389,12 @@ export default function IscrizioneCorsistaPage() {
           selectedCourses: chosenCourses,
           packageItem: selectedPackage,
           packagePayment,
+          followUpPackageItem: isGiftPackage && payNextPeriodAfterGift ? followUpPackage : null,
+          followUpPackagePayment: followUpPayment,
+          followUpStartMonth: isGiftPackage && payNextPeriodAfterGift ? followUpStartMonth : null,
           membershipPaid: membershipWillBePaid && membershipRemaining > 0,
           membershipCash: membershipWillBePaid ? membershipRemaining : 0,
-          packageCash: !isGiftPackage && payPackageNow ? Number(selectedPackage?.prezzo || 0) : 0,
+          packageCash: (!isGiftPackage && payPackageNow ? Number(selectedPackage?.prezzo || 0) : 0) + followUpCash,
           totalCash: cashNow,
           operationCode: opCode,
         }
@@ -373,6 +402,24 @@ export default function IscrizioneCorsistaPage() {
         if (error?.existingStudent?.id) throw error
 
         const rollbackFailures = []
+
+        if (followUpPayment) {
+          try {
+            const ok = await rollbackAllievoPackagePaymentResult(followUpPayment)
+            if (!ok) rollbackFailures.push(new Error('Ripristino pagamento successivo non riuscito'))
+          } catch (rollbackError) {
+            rollbackFailures.push(rollbackError)
+          }
+        }
+
+        if (packagePayment) {
+          try {
+            const ok = await rollbackAllievoPackagePaymentResult(packagePayment)
+            if (!ok) rollbackFailures.push(new Error('Ripristino pacchetto principale non riuscito'))
+          } catch (rollbackError) {
+            rollbackFailures.push(rollbackError)
+          }
+        }
 
         for (const enrollmentId of [...rollback.addedEnrollmentIds].reverse()) {
           try {
@@ -437,6 +484,8 @@ export default function IscrizioneCorsistaPage() {
         setSelectedPackageId('')
         setPayMembershipNow(false)
         setPayPackageNow(false)
+        setPayNextPeriodAfterGift(false)
+        setGiftFollowUpPackageId('')
       }
     },
   })
@@ -448,6 +497,8 @@ export default function IscrizioneCorsistaPage() {
     setSelectedPackageId('')
     setPayMembershipNow(false)
     setPayPackageNow(false)
+    setPayNextPeriodAfterGift(false)
+    setGiftFollowUpPackageId('')
     setResult(null)
   }
 
@@ -459,6 +510,8 @@ export default function IscrizioneCorsistaPage() {
     setSelectedPackageId('')
     setPayMembershipNow(false)
     setPayPackageNow(false)
+    setPayNextPeriodAfterGift(false)
+    setGiftFollowUpPackageId('')
     setShowExtraData(false)
     setResult(null)
   }
@@ -470,6 +523,8 @@ export default function IscrizioneCorsistaPage() {
     setSelectedPackageId('')
     setPayMembershipNow(false)
     setPayPackageNow(false)
+    setPayNextPeriodAfterGift(false)
+    setGiftFollowUpPackageId('')
     setResult(null)
   }
 
@@ -482,6 +537,8 @@ export default function IscrizioneCorsistaPage() {
     setSelectedPackageId('')
     setPayMembershipNow(false)
     setPayPackageNow(false)
+    setPayNextPeriodAfterGift(false)
+    setGiftFollowUpPackageId('')
     setShowExtraData(false)
     setResult(null)
     completeMutation.reset()
@@ -493,12 +550,18 @@ export default function IscrizioneCorsistaPage() {
     setCourseIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
     setSelectedPackageId('')
     setPayPackageNow(false)
+    setPayNextPeriodAfterGift(false)
+    setGiftFollowUpPackageId('')
   }
 
   if (result) {
     return (
       <section className="enrollment-page">
         <div className="enrollment-success-card">
+          <button type="button" className="enrollment-success-close" onClick={resetAll} aria-label="Chiudi popup iscrizione completata">
+            <X size={18} />
+            <span>Chiudi</span>
+          </button>
           <span className="enrollment-success-icon"><CheckCircle2 size={34} /></span>
           <div className="enrollment-success-eyebrow">Iscrizione completata</div>
           <h1>{fullName(result.student)}</h1>
@@ -507,7 +570,7 @@ export default function IscrizioneCorsistaPage() {
 
           <div className="enrollment-success-grid">
             <div><span>Corsi</span><strong>{result.selectedCourses.length}</strong><small>{result.selectedCourses.map((course) => course.nome).join(' · ')}</small></div>
-            <div><span>Pacchetto</span><strong>{result.packageItem?.nome || '—'}</strong><small>{result.packagePayment ? (result.packageItem?.tipo === 'omaggio' ? `Omaggio registrato · ${monthLabel(packageStartMonth)}` : `Pagato · decorrenza ${monthLabel(packageStartMonth)}`) : 'Da incassare'}</small></div>
+            <div><span>Pacchetto</span><strong>{result.packageItem?.nome || '—'}</strong><small>{result.packagePayment ? (result.packageItem?.tipo === 'omaggio' ? `Omaggio registrato · ${monthLabel(packageStartMonth)}${result.followUpPackageItem ? ` · poi ${result.followUpPackageItem.nome} da ${monthLabel(result.followUpStartMonth)}` : ''}` : `Pagato · decorrenza ${monthLabel(packageStartMonth)}`) : 'Da incassare'}</small></div>
             <div><span>Tessera corsista</span><strong>{result.membershipPaid || membershipRemaining <= 0 ? 'Pagata' : 'Da pagare'}</strong><small>{result.membershipPaid ? `${money(result.membershipCash)} registrati` : 'Resta visibile in rosso nei Pagamenti'}</small></div>
             <div><span>Incassato ora</span><strong>{money(result.totalCash)}</strong><small>{result.totalCash > 0 ? paymentMethod : 'Nessun incasso registrato'}</small></div>
           </div>
@@ -524,6 +587,7 @@ export default function IscrizioneCorsistaPage() {
           ) : null}
 
           <div className="enrollment-success-actions">
+            <button type="button" className="enrollment-secondary-button" onClick={resetAll}>Chiudi</button>
             <button type="button" className="enrollment-secondary-button" onClick={() => navigate('/atleti')}>Vai a Corsisti</button>
             <button type="button" className="enrollment-secondary-button" onClick={() => navigate('/pagamenti')}>Vai ai Pagamenti</button>
             <button type="button" className="enrollment-primary-button" onClick={resetAll}><Plus size={18} /> Nuova iscrizione</button>
@@ -683,7 +747,7 @@ export default function IscrizioneCorsistaPage() {
                   const recommended = String(item.id) === String(recommendedMonthly?.id)
                   const gift = item.tipo === 'omaggio'
                   return (
-                    <button type="button" className={`enrollment-package-choice ${selected ? 'is-selected' : ''} ${gift ? 'is-gift' : ''}`} key={item.id || item.nome} onClick={() => { setSelectedPackageId(item.id); setPayPackageNow(false) }}>
+                    <button type="button" className={`enrollment-package-choice ${selected ? 'is-selected' : ''} ${gift ? 'is-gift' : ''}`} key={item.id || item.nome} onClick={() => { setSelectedPackageId(item.id); setPayPackageNow(false); setPayNextPeriodAfterGift(false); setGiftFollowUpPackageId('') }}>
                       <span className="enrollment-package-top"><em>{gift ? 'Omaggio' : item.tipo === 'gettone' ? 'Lezione singola' : item.tipo}</em>{gift && septemberGiftPromoEligible ? <b>Promo settembre</b> : recommended && !septemberGiftPromoEligible ? <b>Consigliato</b> : null}</span>
                       <strong>{item.nome}</strong>
                       <span className="enrollment-package-price">{gift ? 'GRATIS' : money(item.prezzo)}</span>
@@ -718,12 +782,43 @@ export default function IscrizioneCorsistaPage() {
                 </label>
 
                 {isGiftPackage ? (
-                  <div className="enrollment-pay-row enrollment-pay-row--gift is-checked">
-                    <span className="enrollment-gift-check"><Check size={17} /></span>
-                    <span className="enrollment-pay-icon"><Sparkles size={21} /></span>
-                    <span className="enrollment-pay-copy"><strong>{selectedPackage.nome}</strong><small>Corso coperto gratuitamente per {monthLabel(packageStartMonth)}. Nessun incasso corsi.</small></span>
-                    <strong className="enrollment-pay-amount">0,00 €</strong>
-                  </div>
+                  <>
+                    <div className="enrollment-pay-row enrollment-pay-row--gift is-checked">
+                      <span className="enrollment-gift-check"><Check size={17} /></span>
+                      <span className="enrollment-pay-icon"><Sparkles size={21} /></span>
+                      <span className="enrollment-pay-copy"><strong>{selectedPackage.nome}</strong><small>Corso coperto gratuitamente per {monthLabel(packageStartMonth)}. Nessun incasso corsi.</small></span>
+                      <strong className="enrollment-pay-amount">0,00 €</strong>
+                    </div>
+
+                    <label className={`enrollment-pay-row enrollment-pay-row--next ${payNextPeriodAfterGift ? 'is-checked' : ''}`}>
+                      <input type="checkbox" checked={payNextPeriodAfterGift} onChange={(event) => setPayNextPeriodAfterGift(event.target.checked)} />
+                      <span className="enrollment-pay-icon"><CalendarRange size={21} /></span>
+                      <span className="enrollment-pay-copy">
+                        <strong>Ha già pagato anche da {monthLabel(followUpStartMonth)}?</strong>
+                        <small>Attiva questa voce se stai incassando ora anche il periodo successivo all’omaggio.</small>
+                      </span>
+                      <strong className="enrollment-pay-amount">{payNextPeriodAfterGift && followUpPackage ? money(followUpPackage.prezzo) : 'No'}</strong>
+                    </label>
+
+                    {payNextPeriodAfterGift && followUpPackage ? (
+                      <div className="enrollment-followup-box">
+                        <div className="enrollment-followup-head">
+                          <div>
+                            <span>Pacchetto dal {monthLabel(followUpStartMonth)}</span>
+                            <strong>Registra il pagamento successivo</strong>
+                          </div>
+                          <b>{money(followUpPackage.prezzo)}</b>
+                        </div>
+                        <label>
+                          <span>Pacchetto pagato</span>
+                          <select value={effectiveFollowUpPackageId} onChange={(event) => setGiftFollowUpPackageId(event.target.value)}>
+                            {followUpPackages.map((item) => <option key={item.id || item.nome} value={item.id}>{item.nome} · {money(item.prezzo)}</option>)}
+                          </select>
+                        </label>
+                        <small>L’omaggio resta su {monthLabel(packageStartMonth)}; questo pagamento parte automaticamente da {monthLabel(followUpStartMonth)}.</small>
+                      </div>
+                    ) : null}
+                  </>
                 ) : (
                   <label className={`enrollment-pay-row ${payPackageNow ? 'is-checked' : ''}`}>
                     <input type="checkbox" checked={payPackageNow} onChange={(event) => setPayPackageNow(event.target.checked)} />
@@ -736,7 +831,7 @@ export default function IscrizioneCorsistaPage() {
 
               {cashNow > 0 ? (
                 <div className="enrollment-method-row">
-                  <label><span>{isGiftPackage ? 'Metodo pagamento tessera' : 'Metodo di pagamento'}</span><select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}><option>Contanti</option><option>POS</option><option>Bonifico</option><option>SumUp</option><option>Altro</option></select></label>
+                  <label><span>{isGiftPackage ? (payNextPeriodAfterGift ? 'Metodo di pagamento' : 'Metodo pagamento tessera') : 'Metodo di pagamento'}</span><select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}><option>Contanti</option><option>POS</option><option>Bonifico</option><option>SumUp</option><option>Altro</option></select></label>
                 </div>
               ) : null}
             </article>
@@ -760,16 +855,16 @@ export default function IscrizioneCorsistaPage() {
 
           <div className="enrollment-summary-section">
             <span>Pacchetto</span>
-            {selectedPackage ? <><strong>{selectedPackage.nome}</strong><small>{isGiftPackage ? `0 € corsi · ${monthLabel(packageStartMonth)} · tessera esclusa` : `${money(selectedPackage.prezzo)} · da ${monthLabel(packageStartMonth)}`}</small></> : <em>Da scegliere</em>}
+            {selectedPackage ? <><strong>{selectedPackage.nome}</strong><small>{isGiftPackage ? `0 € corsi · ${monthLabel(packageStartMonth)} · tessera esclusa` : `${money(selectedPackage.prezzo)} · da ${monthLabel(packageStartMonth)}`}</small>{isGiftPackage && payNextPeriodAfterGift && followUpPackage ? <small className="enrollment-summary-followup"><CalendarRange size={13} /> Poi {followUpPackage.nome} · {money(followUpPackage.prezzo)} da {monthLabel(followUpStartMonth)}</small> : null}</> : <em>Da scegliere</em>}
           </div>
 
           <div className="enrollment-summary-section enrollment-summary-payments">
             <span>Incasso di oggi</span>
             <div><small>Tessera</small><strong>{membershipWillBePaid ? money(membershipRemaining) : money(0)}</strong></div>
-            <div><small>Pacchetto</small><strong>{isGiftPackage ? 'Omaggio' : payPackageNow ? money(selectedPackage?.prezzo || 0) : money(0)}</strong></div>
+            <div><small>Pacchetto</small><strong>{isGiftPackage ? (payNextPeriodAfterGift && followUpPackage ? `${money(followUpPackage.prezzo)} + omaggio` : 'Omaggio') : payPackageNow ? money(selectedPackage?.prezzo || 0) : money(0)}</strong></div>
           </div>
 
-          <div className="enrollment-summary-total"><span>Totale da registrare ora</span><strong>{money(cashNow)}</strong><small>{cashNow > 0 ? paymentMethod : isGiftPackage ? 'Mese corsi omaggio · nessun incasso' : 'Puoi salvare anche senza incassare'}</small></div>
+          <div className="enrollment-summary-total"><span>Totale da registrare ora</span><strong>{money(cashNow)}</strong><small>{cashNow > 0 ? (isGiftPackage && payNextPeriodAfterGift ? `${paymentMethod} · omaggio ${monthLabel(packageStartMonth)} + pagamento da ${monthLabel(followUpStartMonth)}` : paymentMethod) : isGiftPackage ? 'Mese corsi omaggio · nessun incasso' : 'Puoi salvare anche senza incassare'}</small></div>
 
           <button type="button" className="enrollment-complete-button" disabled={!canComplete || completeMutation.isPending} onClick={() => completeMutation.mutate()}>
             {completeMutation.isPending ? 'Sto completando…' : <><CheckCircle2 size={19} /> Completa iscrizione</>}

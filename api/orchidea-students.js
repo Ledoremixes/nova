@@ -115,7 +115,7 @@ async function nextMembershipNumber(admin) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return json(res, 405, { error: 'Metodo non consentito' })
+  if (!['GET', 'POST'].includes(req.method)) return json(res, 405, { error: 'Metodo non consentito' })
 
   let createdAuthUserId = null
   let authUserWasCreated = false
@@ -123,6 +123,22 @@ export default async function handler(req, res) {
   try {
     await requireNovaOperator(req)
     const orchidea = orchideaAdminClient()
+
+    // Lettura server-side dell'archivio tesserati. Serve come percorso stabile
+    // per Nova quando il browser sta ancora sincronizzando la seconda sessione
+    // Supabase Orchidea o quando il client dedicato non è autenticato.
+    // L'accesso resta protetto: accettiamo solo un token Nova valido di admin/user.
+    if (req.method === 'GET') {
+      const { data, error } = await orchidea
+        .from('tesseramenti')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(5000)
+
+      if (error) throw error
+      return json(res, 200, { ok: true, students: data || [] })
+    }
+
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
 
     const nome = clean(body.nome)

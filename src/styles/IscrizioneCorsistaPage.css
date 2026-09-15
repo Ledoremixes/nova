@@ -1058,11 +1058,37 @@
 }
 
 .enrollment-success-card {
+  position: relative;
   max-width: 980px;
   width: 100%;
   margin: 24px auto;
   padding: 34px;
   text-align: center;
+}
+
+
+.enrollment-success-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 13px;
+  border: 1px solid #dcdee4;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #50596a;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 10px 28px rgba(24, 32, 52, 0.08);
+}
+
+.enrollment-success-close:hover {
+  border-color: #cfd4de;
+  background: #fff;
+  color: #20293b;
 }
 
 .enrollment-success-icon {
@@ -1316,7 +1342,14 @@
   }
 
   .enrollment-success-card {
-    padding: 24px 16px;
+    padding: 54px 16px 24px;
+  }
+
+  .enrollment-success-close {
+    top: 12px;
+    right: 12px;
+    padding: 8px 12px;
+    font-size: 11px;
   }
 
   .enrollment-success-grid {
@@ -1508,5 +1541,114 @@
     grid-column: 3;
     justify-self: start;
     margin-top: 1px;
+  }
+}
+
+/* Omaggio + pagamento del periodo successivo */
+.enrollment-pay-row--next {
+  border-style: dashed;
+  border-color: #d7cfff;
+  background: #fdfcff;
+}
+
+.enrollment-pay-row--next.is-checked {
+  border-style: solid;
+  border-color: rgba(109, 74, 255, .42);
+  background: #f8f5ff;
+}
+
+.enrollment-followup-box {
+  display: grid;
+  gap: 11px;
+  margin: 0 0 2px 69px;
+  padding: 14px 15px;
+  border: 1px solid #dcd4ff;
+  border-radius: 15px;
+  background: linear-gradient(135deg, #fbf9ff, #fff);
+}
+
+.enrollment-followup-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.enrollment-followup-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.enrollment-followup-head span,
+.enrollment-followup-box label > span {
+  color: #8b83a5;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.enrollment-followup-head strong {
+  color: #2b2442;
+  font-size: 13px;
+}
+
+.enrollment-followup-head > b {
+  color: #613eea;
+  font-size: 17px;
+  white-space: nowrap;
+}
+
+.enrollment-followup-box label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.enrollment-followup-box select {
+  min-height: 43px;
+  width: 100%;
+  padding: 0 38px 0 12px;
+  border: 1px solid #d8dbe4;
+  border-radius: 11px;
+  background: #fff;
+  color: #2f3544;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  outline: none;
+}
+
+.enrollment-followup-box select:focus {
+  border-color: #8d73ff;
+  box-shadow: 0 0 0 3px rgba(109, 74, 255, .08);
+}
+
+.enrollment-followup-box > small {
+  color: #777f8e;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.enrollment-summary-followup {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 5px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #ded8f7;
+  color: #644bd1 !important;
+  font-weight: 750;
+}
+
+@media (max-width: 760px) {
+  .enrollment-followup-box {
+    margin-left: 0;
+  }
+
+  .enrollment-followup-head {
+    flex-direction: column;
+    gap: 4px;
   }
 }

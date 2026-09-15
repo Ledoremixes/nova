@@ -27,11 +27,12 @@ import {
   deleteOrchideaTeacher,
   fetchOrchideaCourses,
   fetchOrchideaTeachers,
-  fetchTeacherMonthlyPayouts,
   removeCourseTeacher,
   updateOrchideaTeacher,
 } from '../api/orchideaEntities'
 import { generateTeacherContractPdf } from '../utils/teacherContractPdf'
+import { fetchAllieviPaymentsMonth } from '../api/orchideaPayments'
+import { buildTeacherMonthlyPayouts } from '../lib/teacherPayouts'
 
 const CONTRACT_DEFAULTS_KEY = 'nova.teacherContractDefaults.v2'
 
@@ -297,9 +298,11 @@ export default function InsegnantiPage() {
     queryFn: fetchOrchideaCourses,
   })
 
-  const payoutsQuery = useQuery({
-    queryKey: ['orchidea-teacher-payouts', month],
-    queryFn: () => fetchTeacherMonthlyPayouts({ month }),
+  // I compensi usano la stessa sorgente autorevole della sezione Pagamenti.
+  // Così un pagamento visibile in Pagamenti non può più risultare invisibile qui.
+  const payoutPaymentsQuery = useQuery({
+    queryKey: ['orchidea-allievi-payments', { month, search: '', courseId: 'all', status: 'all' }],
+    queryFn: () => fetchAllieviPaymentsMonth({ month, search: '', courseId: 'all', status: 'all' }),
   })
 
   const createMutation = useMutation({
@@ -331,7 +334,7 @@ export default function InsegnantiPage() {
     mutationFn: assignCourseToTeacher,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orchidea-courses-for-teachers'] })
-      queryClient.invalidateQueries({ queryKey: ['orchidea-teacher-payouts'] })
+      queryClient.invalidateQueries({ queryKey: ['orchidea-allievi-payments'] })
       setCourseToAssign('')
     },
   })
@@ -340,13 +343,19 @@ export default function InsegnantiPage() {
     mutationFn: removeCourseTeacher,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orchidea-courses-for-teachers'] })
-      queryClient.invalidateQueries({ queryKey: ['orchidea-teacher-payouts'] })
+      queryClient.invalidateQueries({ queryKey: ['orchidea-allievi-payments'] })
     },
   })
 
   const teachers = teachersQuery.data || []
   const courses = useMemo(() => coursesQuery.data || [], [coursesQuery.data])
-  const payouts = useMemo(() => payoutsQuery.data || [], [payoutsQuery.data])
+  const payoutPaymentRows = useMemo(() => payoutPaymentsQuery.data || [], [payoutPaymentsQuery.data])
+  const payouts = useMemo(() => buildTeacherMonthlyPayouts({
+    teachers,
+    courses,
+    paymentRows: payoutPaymentRows,
+    month,
+  }), [teachers, courses, payoutPaymentRows, month])
   const payoutsByName = useMemo(() => new Map(payouts.map((item) => [norm(item.teacher_name), item])), [payouts])
   const totalPayouts = payouts.reduce((sum, item) => sum + Number(item.total || 0), 0)
 
@@ -454,7 +463,7 @@ export default function InsegnantiPage() {
         <div className="page-card tesserati-stat-card"><span>Totale insegnanti</span><strong>{teachers.length}</strong></div>
         <div className="page-card tesserati-stat-card"><span>Attivi</span><strong>{teachers.filter((t) => t.active !== false).length}</strong></div>
         <div className="page-card tesserati-stat-card"><span>Assegnazioni corsi</span><strong>{totalAssignedLinks}</strong></div>
-        <div className="page-card tesserati-stat-card"><span>Compensi mese</span><strong>{money(totalPayouts)}</strong></div>
+        <div className="page-card tesserati-stat-card"><span>Compensi mese</span><strong>{payoutPaymentsQuery.isLoading ? '…' : payoutPaymentsQuery.error ? '—' : money(totalPayouts)}</strong></div>
       </div>
 
       <div className="page-card">
@@ -464,6 +473,12 @@ export default function InsegnantiPage() {
         {teachersQuery.isLoading ? <p>Caricamento insegnanti…</p> : null}
         {teachersQuery.error ? <p className="form-error">Errore: {teachersQuery.error.message}</p> : null}
         {coursesQuery.error ? <p className="form-error">Errore corsi: {coursesQuery.error.message}</p> : null}
+        {payoutPaymentsQuery.error ? (
+          <div className="form-error">
+            Non riesco a leggere i pagamenti del mese: {payoutPaymentsQuery.error.message}. I compensi non vengono mostrati come 0 € per evitare dati falsi.
+            <button type="button" className="actionBtn" onClick={() => payoutPaymentsQuery.refetch()}>Riprova</button>
+          </div>
+        ) : null}
 
         <div className="cardsGrid teacher-card-grid">
           {teachers.map((row) => {
@@ -489,7 +504,11 @@ export default function InsegnantiPage() {
 
                 <div className="teacher-payout-card-inline">
                   <Euro size={18} />
-                  <div><span>Da pagare nel mese</span><strong>{money(payout.total)}</strong><small>{payout.students_count || 0} corsisti paganti · {assigned.length || 0} corsi assegnati</small></div>
+                  <div>
+                    <span>Da pagare nel mese</span>
+                    <strong>{payoutPaymentsQuery.isLoading ? 'Calcolo…' : payoutPaymentsQuery.error ? 'Non disponibile' : money(payout.total)}</strong>
+                    <small>{payoutPaymentsQuery.error ? 'Errore lettura pagamenti: premi Riprova in alto' : `${payout.students_count || 0} corsisti paganti · ${assigned.length || 0} corsi assegnati`}</small>
+                  </div>
                 </div>
 
                 <div className="teacher-contact-grid">
@@ -556,13 +575,13 @@ export default function InsegnantiPage() {
                   const payout = payoutsByName.get(norm(selectedTeacher.full_name)) || { total: 0, rows: [] }
                   return (
                     <div className="teacher-payout-detail">
-                      <strong>{money(payout.total)}</strong>
-                      <p>Calcolato sul mese selezionato, usando i corsi assegnati e le quote segnate come pagate.</p>
+                      <strong>{payoutPaymentsQuery.isLoading ? 'Calcolo…' : payoutPaymentsQuery.error ? 'Non disponibile' : money(payout.total)}</strong>
+                      <p>Calcolato sugli stessi pagamenti mostrati nella sezione Pagamenti, ripartiti sui corsi assegnati e senza includere la tessera corsista.</p>
                       <div className="teacher-payout-list">
                         {(payout.rows || []).slice(0, 8).map((item) => (
                           <span key={item.enrollment_id}><em>{item.student_name}</em><b>{item.course_name}</b><strong>{money(item.teacher_quota)}</strong></span>
                         ))}
-                        {(!payout.rows || payout.rows.length === 0) ? <small>Nessun compenso da mostrare nel mese selezionato.</small> : null}
+                        {payoutPaymentsQuery.error ? <small>Impossibile calcolare i compensi finché i pagamenti non sono leggibili.</small> : (!payout.rows || payout.rows.length === 0) ? <small>Nessun compenso da mostrare nel mese selezionato.</small> : null}
                       </div>
                     </div>
                   )

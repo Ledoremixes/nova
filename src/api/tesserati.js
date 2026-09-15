@@ -186,6 +186,41 @@ async function fetchOrchideaTesseramentiViaBridge(config) {
   return withSource(parseRpcJsonArray(data), 'tesseramenti', 'Orchidea Allievi', config.mode)
 }
 
+async function fetchOrchideaTesseramentiViaServer(config) {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  if (sessionError) throw sessionError
+
+  const token = sessionData?.session?.access_token
+  if (!token) {
+    const error = new Error('Sessione Nova mancante.')
+    error.code = 'NOVA_AUTH_REQUIRED'
+    throw error
+  }
+
+  const response = await fetch('/api/orchidea-students', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+    },
+  })
+
+  let payload = null
+  try {
+    payload = await response.json()
+  } catch {
+    payload = null
+  }
+
+  if (!response.ok) {
+    const error = new Error(payload?.error || `Errore collegamento archivio tesserati (${response.status})`)
+    error.status = response.status
+    throw error
+  }
+
+  return withSource(Array.isArray(payload?.students) ? payload.students : [], 'tesseramenti', 'Orchidea Allievi', config.mode)
+}
+
 async function updateOrchideaTesseramentoViaBridge(id, payload) {
   const { data, error } = await orchideaSupabase.rpc('nova_update_tesseramento', {
     p_id: id,
@@ -211,15 +246,23 @@ async function fetchOrchideaTesseramenti() {
   if (hasDedicatedOrchideaConfig) {
     const authStatus = await getOrchideaAuthStatus()
     if (!authStatus.authenticated) {
+      // Prima scelta: endpoint server protetto dal login Nova. Non richiede che
+      // la segreteria abbia già una seconda sessione browser sul progetto Orchidea.
       try {
-        return await fetchOrchideaTesseramentiViaBridge(config)
-      } catch (bridgeError) {
-        const authError = new Error(
-          'Il database Orchidea Allievi è configurato, ma non hai una sessione attiva sul portale allievi e la funzione bridge Nova non è disponibile. Esegui SQL_ORCHIDEA_ALLIEVI_ACCESSO_OPERATORI_NOVA.sql oppure crea lo stesso utente anche su Orchidea Allievi con la stessa password.'
-        )
-        authError.code = 'ORCHIDEA_AUTH_REQUIRED'
-        authError.cause = bridgeError
-        throw authError
+        return await fetchOrchideaTesseramentiViaServer(config)
+      } catch (serverError) {
+        // Compatibilità con installazioni precedenti: proviamo anche il bridge RPC.
+        try {
+          return await fetchOrchideaTesseramentiViaBridge(config)
+        } catch (bridgeError) {
+          const authError = new Error(
+            'Non riesco a collegarmi all’archivio tesserati in questo momento. Nova ha già tentato il ripristino automatico: riprova tra qualche secondo.'
+          )
+          authError.code = 'ORCHIDEA_AUTH_REQUIRED'
+          authError.cause = serverError
+          authError.bridgeCause = bridgeError
+          throw authError
+        }
       }
     }
   }
@@ -233,10 +276,15 @@ async function fetchOrchideaTesseramenti() {
   if (error) {
     if (isMissingTableError(error) || isPermissionError(error)) {
       try {
-        return await fetchOrchideaTesseramentiViaBridge(config)
-      } catch (bridgeError) {
-        error._handledTesseramentiError = true
-        error._bridgeError = bridgeError
+        return await fetchOrchideaTesseramentiViaServer(config)
+      } catch (serverError) {
+        try {
+          return await fetchOrchideaTesseramentiViaBridge(config)
+        } catch (bridgeError) {
+          error._handledTesseramentiError = true
+          error._serverError = serverError
+          error._bridgeError = bridgeError
+        }
       }
     }
     throw error

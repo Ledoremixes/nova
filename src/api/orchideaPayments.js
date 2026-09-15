@@ -1,5 +1,6 @@
 import dayjs from 'dayjs'
 import { orchideaSupabase } from './orchideaSupabase'
+import { supabase } from './supabase'
 import { summarizeMonthlyTuitionPayments } from '../lib/paymentLedger'
 import { enrollmentIsActiveForMonth, resolveEnrollmentPricing } from '../lib/packagePricing'
 import { fetchPackagesCatalog } from './packagesCatalog'
@@ -8,6 +9,35 @@ import { COURSE_MEMBERSHIP_FEE, fetchMembershipFeeRecords, resolveMembershipFeeS
 
 export function euro(value) {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
+}
+
+
+async function fetchPaymentReadSnapshotViaServer() {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  if (sessionError || !sessionData?.session?.access_token) {
+    throw new Error('Sessione Nova non disponibile per verificare i pagamenti.')
+  }
+
+  const response = await fetch('/api/orchidea-payments-read', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Accept: 'application/json',
+    },
+  })
+
+  let body = {}
+  try {
+    body = await response.json()
+  } catch {
+    body = {}
+  }
+
+  if (!response.ok) throw new Error(body.error || `Errore lettura pagamenti (${response.status})`)
+  return {
+    payments: Array.isArray(body.payments) ? body.payments : [],
+    pricingHistory: Array.isArray(body.pricingHistory) ? body.pricingHistory : [],
+  }
 }
 
 function uuidOrNull(value) {
@@ -281,12 +311,40 @@ async function fetchAllieviPaymentsMonthDirect({ month, search = '', courseId = 
   if (studentsRes.error) throw new Error(studentsRes.error.message || 'Errore caricamento allievi')
   if (coursesRes.error) throw new Error(coursesRes.error.message || 'Errore caricamento corsi')
 
+  let paymentRows = paymentsRes.error ? [] : (paymentsRes.data || [])
+  let pricingHistoryRows = pricingHistoryRes.error ? [] : (pricingHistoryRes.data || [])
+
+  // Un errore/RLS sulla tabella pagamenti non deve mai trasformarsi silenziosamente
+  // in "0 pagamenti". Se la sessione Orchidea del browser non è pronta oppure la
+  // SELECT restituisce un archivio sospettosamente vuoto, verifichiamo tramite il
+  // backend Nova protetto dal login dell'operatore.
+  const shouldVerifyPaymentsOnServer = Boolean(
+    paymentsRes.error
+    || pricingHistoryRes.error
+    || ((enrollmentsRes.data || []).length > 0 && paymentRows.length === 0),
+  )
+
+  if (shouldVerifyPaymentsOnServer) {
+    try {
+      const snapshot = await fetchPaymentReadSnapshotViaServer()
+      if (snapshot.payments.length > paymentRows.length || paymentsRes.error) paymentRows = snapshot.payments
+      if (snapshot.pricingHistory.length > pricingHistoryRows.length || pricingHistoryRes.error) pricingHistoryRows = snapshot.pricingHistory
+    } catch (serverError) {
+      if (paymentsRes.error) {
+        throw new Error(`Non riesco a leggere i pagamenti Orchidea: ${paymentsRes.error.message || serverError.message}`)
+      }
+      // Se la lettura diretta era valida ma semplicemente vuota, manteniamo il dato
+      // diretto; il fallback server è solo una verifica aggiuntiva.
+      console.warn('Verifica server pagamenti non disponibile:', serverError?.message || serverError)
+    }
+  }
+
   let rows = normalizeDirectRows({
     enrollments: enrollmentsRes.data || [],
     students: studentsRes.data || [],
     courses: coursesRes.data || [],
-    payments: paymentsRes.error ? [] : (paymentsRes.data || []),
-    pricingHistory: pricingHistoryRes.error ? [] : (pricingHistoryRes.data || []),
+    payments: paymentRows,
+    pricingHistory: pricingHistoryRows,
     packages,
     membershipFees,
     selectedMonth,
@@ -472,6 +530,14 @@ async function rollbackPackagePaymentWrites({ createdIds = [], previousRows = []
   return failures.length === 0
 }
 
+export async function rollbackAllievoPackagePaymentResult(result) {
+  if (!result?.rollback) return true
+  return rollbackPackagePaymentWrites({
+    createdIds: result.rollback.createdIds || [],
+    previousRows: result.rollback.previousRows || [],
+  })
+}
+
 export async function setAllievoPackagePayment({
   tesseramentoId,
   startMonth,
@@ -625,7 +691,19 @@ export async function setAllievoPackagePayment({
     throw safeError
   }
 
-  return { kind: packageItem?.tipo === 'omaggio' ? 'omaggio' : 'package', rows: saved, months, groupId, coverageFrom, coverageTo, cashAmount }
+  return {
+    kind: packageItem?.tipo === 'omaggio' ? 'omaggio' : 'package',
+    rows: saved,
+    months,
+    groupId,
+    coverageFrom,
+    coverageTo,
+    cashAmount,
+    rollback: {
+      createdIds: [...createdIds],
+      previousRows: [...touchedPrevious],
+    },
+  }
 }
 
 export async function setAllievoMonthlyPayment({ tesseramentoId, month, amount, status, note = '', method = 'Contanti' }) {

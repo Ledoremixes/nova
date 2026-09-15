@@ -154,6 +154,11 @@ export default function TesseratiPage() {
   const { data: students = [], isLoading, error } = useQuery({
     queryKey: ['tesseramenti-orchidea'],
     queryFn: fetchTesserati,
+    retry: (failureCount, queryError) => {
+      if (queryError?.code === 'ORCHIDEA_AUTH_REQUIRED') return failureCount < 3
+      return failureCount < 1
+    },
+    retryDelay: (attempt) => Math.min(300 * (attempt + 1), 1000),
   })
 
   const detailsQuery = useQuery({
