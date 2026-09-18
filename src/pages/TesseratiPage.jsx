@@ -154,11 +154,13 @@ export default function TesseratiPage() {
   const { data: students = [], isLoading, error } = useQuery({
     queryKey: ['tesseramenti-orchidea'],
     queryFn: fetchTesserati,
-    retry: (failureCount, queryError) => {
-      if (queryError?.code === 'ORCHIDEA_AUTH_REQUIRED') return failureCount < 3
-      return failureCount < 1
-    },
-    retryDelay: (attempt) => Math.min(300 * (attempt + 1), 1000),
+    // fetchTesserati ha già fallback server/bridge: ripetere 3-4 volte la
+    // stessa catena rendeva il caricamento molto lento quando la seconda
+    // sessione Orchidea era in ritardo.
+    retry: (failureCount) => failureCount < 1,
+    retryDelay: 300,
+    staleTime: 3 * 60_000,
+    gcTime: 15 * 60_000,
   })
 
   const detailsQuery = useQuery({

@@ -6,6 +6,17 @@ const LIST_KEY = 'quota_tessera_assicurativa'
 export const EVENT_MEMBERSHIP_FEE = 3
 export const COURSE_MEMBERSHIP_FEE = 25
 
+const MEMBERSHIP_CACHE_TTL = 60_000
+let membershipCache = null
+let membershipCacheExpiresAt = 0
+let membershipInFlight = null
+
+export function invalidateMembershipFeeCache() {
+  membershipCache = null
+  membershipCacheExpiresAt = 0
+  membershipInFlight = null
+}
+
 function parseValue(value) {
   if (!value) return {}
   try {
@@ -39,15 +50,28 @@ function normalizeRecord(row = {}) {
 }
 
 export async function fetchMembershipFeeRecords() {
-  const { data, error } = await supabase
-    .from('lookup_options')
-    .select('id,label,value,created_at')
-    .eq('section_key', SECTION_KEY)
-    .eq('list_key', LIST_KEY)
-    .limit(10000)
+  if (membershipCache && Date.now() < membershipCacheExpiresAt) return membershipCache
+  if (membershipInFlight) return membershipInFlight
 
-  if (error) throw new Error(error.message || 'Errore caricamento stato tessere assicurative')
-  return (data || []).map(normalizeRecord)
+  membershipInFlight = (async () => {
+    const { data, error } = await supabase
+      .from('lookup_options')
+      .select('id,label,value,created_at')
+      .eq('section_key', SECTION_KEY)
+      .eq('list_key', LIST_KEY)
+      .limit(10000)
+
+    if (error) throw new Error(error.message || 'Errore caricamento stato tessere assicurative')
+    membershipCache = (data || []).map(normalizeRecord)
+    membershipCacheExpiresAt = Date.now() + MEMBERSHIP_CACHE_TTL
+    return membershipCache
+  })()
+
+  try {
+    return await membershipInFlight
+  } finally {
+    membershipInFlight = null
+  }
 }
 
 export function resolveMembershipFeeState(student = {}, storedRecord = null) {
@@ -86,7 +110,7 @@ export function resolveMembershipFeeState(student = {}, storedRecord = null) {
 }
 
 
-async function fetchStoredMembershipFeeRecord(studentId) {
+export async function fetchMembershipFeeRecord(studentId) {
   if (!studentId) return null
   const { data, error } = await supabase
     .from('lookup_options')
@@ -142,6 +166,7 @@ export async function setMembershipFeePaidAmount({ studentId, paidAmount, source
       .select('id,label,value,created_at')
       .single()
     if (error) throw new Error(error.message || 'Errore aggiornamento quota tessera assicurativa')
+    invalidateMembershipFeeCache()
     return normalizeRecord(data)
   }
 
@@ -160,6 +185,7 @@ export async function setMembershipFeePaidAmount({ studentId, paidAmount, source
     .single()
 
   if (error) throw new Error(error.message || 'Errore salvataggio quota tessera assicurativa')
+  invalidateMembershipFeeCache()
   return normalizeRecord(data)
 }
 
@@ -168,7 +194,7 @@ export async function markConvertedCorsistaMembership(student = {}) {
 
   // Non sovrascrive mai una scelta già fatta dalla segreteria. È importante, per
   // esempio, quando un corsista da €25 viene temporaneamente rimosso e poi riattivato.
-  const existing = await fetchStoredMembershipFeeRecord(student.id)
+  const existing = await fetchMembershipFeeRecord(student.id)
   if (existing) return existing
 
   const paymentStatus = String(student.payment_status || '').trim().toLowerCase()

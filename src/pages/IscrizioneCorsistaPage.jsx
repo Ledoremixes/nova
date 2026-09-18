@@ -26,17 +26,17 @@ import {
   WalletCards,
   X,
 } from 'lucide-react'
-import { fetchOrchideaCourses, fetchOrchideaStudents, addCourseParticipant, removeCourseParticipant } from '../api/orchideaEntities'
+import { fetchOrchideaCourseCatalog, fetchOrchideaStudents, addCourseParticipant, removeCourseParticipant } from '../api/orchideaEntities'
 import { fetchTesseratoDetails, updateTesserato } from '../api/tesserati'
 import { fetchPackagesCatalog } from '../api/packagesCatalog'
 import {
   COURSE_MEMBERSHIP_FEE,
-  fetchMembershipFeeRecords,
+  fetchMembershipFeeRecord,
   markConvertedCorsistaMembership,
   resolveMembershipFeeState,
   setMembershipFeePaidAmount,
 } from '../api/membershipFees'
-import { rollbackAllievoPackagePaymentResult, setAllievoPackagePayment } from '../api/orchideaPayments'
+import { invalidatePaymentsReadCache, rollbackAllievoPackagePaymentResult, setAllievoPackagePayment } from '../api/orchideaPayments'
 import { createQuickCorsista } from '../api/studentEnrollment'
 import { packagesForCourseSelection, resolveCoursePricing } from '../lib/coursePriceList'
 import { enrollmentIsActiveForMonth } from '../lib/packagePricing'
@@ -159,21 +159,31 @@ export default function IscrizioneCorsistaPage() {
   const studentsQuery = useQuery({
     queryKey: ['orchidea-atleti-corsisti'],
     queryFn: () => fetchOrchideaStudents({ onlyCorsisti: false }),
+    staleTime: 3 * 60_000,
+    gcTime: 15 * 60_000,
   })
 
   const coursesQuery = useQuery({
-    queryKey: ['orchidea-courses-for-atleti'],
-    queryFn: fetchOrchideaCourses,
+    queryKey: ['orchidea-course-catalog'],
+    queryFn: fetchOrchideaCourseCatalog,
+    enabled: mode !== 'search',
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
   })
 
   const packagesQuery = useQuery({
     queryKey: ['nova-packages-catalog', { activeOnly: true }],
     queryFn: () => fetchPackagesCatalog({ includeInactive: false }),
+    enabled: mode !== 'search',
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
   })
 
   const membershipQuery = useQuery({
-    queryKey: ['membership-fee-records'],
-    queryFn: fetchMembershipFeeRecords,
+    queryKey: ['membership-fee-record', selectedStudent?.id],
+    queryFn: () => fetchMembershipFeeRecord(selectedStudent.id),
+    enabled: Boolean(mode === 'existing' && selectedStudent?.id),
+    staleTime: 60_000,
   })
 
   const detailsQuery = useQuery({
@@ -247,9 +257,7 @@ export default function IscrizioneCorsistaPage() {
   const effectiveFollowUpPackageId = giftFollowUpPackageId || recommendedMonthly?.id || followUpPackages[0]?.id || ''
   const followUpPackage = followUpPackages.find((item) => String(item.id) === String(effectiveFollowUpPackageId)) || recommendedMonthly || followUpPackages[0] || null
 
-  const storedMembership = selectedStudent?.id
-    ? (membershipQuery.data || []).find((row) => String(row.tesseramento_id) === String(selectedStudent.id))
-    : null
+  const storedMembership = selectedStudent?.id ? (membershipQuery.data || null) : null
   const membershipState = mode === 'new'
     ? resolveMembershipFeeState({ payment_status: 'unpaid' }, null)
     : resolveMembershipFeeState(selectedStudent || {}, storedMembership || null)
@@ -469,6 +477,7 @@ export default function IscrizioneCorsistaPage() {
     },
     onSuccess: async (data) => {
       setResult(data)
+      invalidatePaymentsReadCache()
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['orchidea-atleti-corsisti'] }),
         queryClient.invalidateQueries({ queryKey: ['tesseramenti-orchidea'] }),

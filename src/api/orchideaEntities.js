@@ -79,6 +79,52 @@ export async function fetchOrchideaStudents({ onlyCorsisti = false } = {}) {
   return onlyCorsisti ? normalized.filter((row) => row.is_corsista) : normalized
 }
 
+const COURSE_CATALOG_CACHE_TTL = 10 * 60_000
+let courseCatalogCache = null
+let courseCatalogExpiresAt = 0
+let courseCatalogInFlight = null
+
+export function invalidateOrchideaCourseCatalogCache() {
+  courseCatalogCache = null
+  courseCatalogExpiresAt = 0
+  courseCatalogInFlight = null
+}
+
+export async function fetchOrchideaCourseCatalog() {
+  const now = Date.now()
+  if (courseCatalogCache && now < courseCatalogExpiresAt) return courseCatalogCache
+  if (courseCatalogInFlight) return courseCatalogInFlight
+
+  courseCatalogInFlight = (async () => {
+    const select = 'id,nome,disciplina,livello,giorno_settimana,ora_inizio,ora_fine,prezzo_mensile,sala,attivo,colore,descrizione'
+    const direct = await orchideaSupabase
+      .from('corsi')
+      .select(select)
+      .order('attivo', { ascending: false })
+      .order('nome', { ascending: true })
+
+    let rows
+    if (!direct.error) {
+      rows = (direct.data || []).map(normalizeCourse)
+    } else if (isPermissionError(direct.error) || isMissingTableError(direct.error)) {
+      const rpcRows = await rpcJsonArray('nova_corsi_list')
+      rows = rpcRows.map(normalizeCourse)
+    } else {
+      throw new Error(direct.error.message || 'Errore caricamento catalogo corsi')
+    }
+
+    courseCatalogCache = rows
+    courseCatalogExpiresAt = Date.now() + COURSE_CATALOG_CACHE_TTL
+    return rows
+  })()
+
+  try {
+    return await courseCatalogInFlight
+  } finally {
+    courseCatalogInFlight = null
+  }
+}
+
 function normalizeCourse(row = {}) {
   const participantRows = row.iscrizioni_corsi || row.iscrizioni || row.partecipanti || []
   const teachers = Array.isArray(row.teachers) ? row.teachers : []
@@ -279,6 +325,7 @@ function normalizeRpcCourse(data) {
 }
 
 export async function createOrchideaCourse(payload) {
+  invalidateOrchideaCourseCatalogCache()
   const clean = cleanCoursePayload(payload)
   if (!clean.nome) throw new Error('Il nome del corso è obbligatorio.')
 
@@ -309,6 +356,7 @@ export async function createOrchideaCourse(payload) {
 }
 
 export async function updateOrchideaCourse(id, payload) {
+  invalidateOrchideaCourseCatalogCache()
   const clean = cleanCoursePayload(payload, { includeUpdatedAt: true })
 
   const { data, error } = await orchideaSupabase
@@ -344,6 +392,7 @@ function isCourseDependencyError(error) {
 }
 
 export async function deleteOrchideaCourse(id) {
+  invalidateOrchideaCourseCatalogCache()
   if (!id) throw new Error('Corso non selezionato.')
 
   const { data: deletedRows, error } = await orchideaSupabase

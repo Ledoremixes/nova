@@ -1,0 +1,9 @@
+TESSERATI REALTIME / CACHE VELOCE
+
+- Mantiene la cache condivisa introdotta per velocizzare Nova.
+- Aggiunge una sottoscrizione Supabase Realtime sulla tabella tesseramenti.
+- Quando il sito Orchidea inserisce/modifica un tesseramento, Nova invalida la cache e aggiorna le sezioni aperte senza refresh manuale.
+- Aggiunge un controllo leggero ogni 10 secondi (conteggio + ultima modifica) come fallback se Realtime non consegna l'evento.
+- L'intera anagrafica viene ricaricata solo quando cambia realmente qualcosa.
+- Al ritorno sulla scheda/finestra Nova effettua subito un refresh per evitare dati vecchi.
+- Le cache correlate (Tesserati, Corsisti, Dashboard, Iscrizione/Tesseramento corsista) vengono invalidate insieme.

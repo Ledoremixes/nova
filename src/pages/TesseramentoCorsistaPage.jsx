@@ -209,6 +209,8 @@ export default function TesseramentoCorsistaPage() {
   const studentsQuery = useQuery({
     queryKey: ['orchidea-atleti-corsisti'],
     queryFn: () => fetchOrchideaStudents({ onlyCorsisti: false }),
+    staleTime: 3 * 60_000,
+    gcTime: 15 * 60_000,
   })
 
   const students = useMemo(() => studentsQuery.data || [], [studentsQuery.data])

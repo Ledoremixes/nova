@@ -74,6 +74,8 @@ export default function GruppiPage() {
     queryKey: ['orchidea-students-for-course-picker'],
     queryFn: () => fetchOrchideaStudents(),
     enabled: Boolean(selectedCourse?.id),
+    staleTime: 3 * 60_000,
+    gcTime: 15 * 60_000,
   })
 
   function closeCourseEditor() {

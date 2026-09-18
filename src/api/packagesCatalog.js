@@ -5,6 +5,17 @@ const SECTION_KEY = 'pagamenti'
 const LIST_KEY = 'pacchetti_corsi'
 const DEFAULT_PACKAGES = COURSE_PRICE_LIST.map((item) => ({ ...item, attivo: true }))
 
+const PACKAGES_CACHE_TTL = 10 * 60_000
+let packagesCache = null
+let packagesCacheExpiresAt = 0
+let packagesInFlight = null
+
+export function invalidatePackagesCatalogCache() {
+  packagesCache = null
+  packagesCacheExpiresAt = 0
+  packagesInFlight = null
+}
+
 function parseMetadata(value) {
   if (!value) return {}
   try {
@@ -108,14 +119,25 @@ async function ensureDefaultPackages() {
 }
 
 export async function fetchPackagesCatalog({ includeInactive = true } = {}) {
-  // Il pacchetto base deve esistere sempre, anche se il catalogo contiene già
-  // altre formule create in precedenza. Lo creiamo solo se manca, senza
-  // sovrascrivere eventuali modifiche successive fatte dalla segreteria.
-  const rows = await ensureDefaultPackages()
+  const now = Date.now()
+  if (!packagesCache || now >= packagesCacheExpiresAt) {
+    if (!packagesInFlight) {
+      packagesInFlight = ensureDefaultPackages()
+        .then((rows) => {
+          packagesCache = rows
+          packagesCacheExpiresAt = Date.now() + PACKAGES_CACHE_TTL
+          return rows
+        })
+        .finally(() => { packagesInFlight = null })
+    }
+    await packagesInFlight
+  }
+  const rows = packagesCache || []
   return rows.filter((item) => includeInactive || item.attivo)
 }
 
 export async function createPackageCatalog(payload) {
+  invalidatePackagesCatalogCache()
   const nome = validatePackage(payload)
   const { data, error } = await supabase
     .from('lookup_options')
@@ -136,6 +158,7 @@ export async function createPackageCatalog(payload) {
 }
 
 export async function updatePackageCatalog(id, payload) {
+  invalidatePackagesCatalogCache()
   if (!id) throw new Error('Pacchetto non indicato.')
   const nome = validatePackage(payload)
   const { data, error } = await supabase
@@ -157,6 +180,7 @@ export async function updatePackageCatalog(id, payload) {
 }
 
 export async function deletePackageCatalog(id) {
+  invalidatePackagesCatalogCache()
   if (!id) throw new Error('Pacchetto non indicato.')
   const { error } = await supabase
     .from('lookup_options')

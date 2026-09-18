@@ -22,6 +22,7 @@ import {
   FileText,
   UserPlus,
   ScanLine,
+  CircleDollarSign,
 } from 'lucide-react'
 import { useAuth } from '../../context/authContext'
 
@@ -37,6 +38,7 @@ const items = [
   { to: '/visite-mediche', label: 'Visite mediche', icon: HeartPulse, roles: ['admin'] },
   { to: '/calendario', label: 'Calendario', icon: CalendarDays, roles: ['admin'] },
   { to: '/pagamenti', label: 'Pagamenti', icon: Wallet, roles: ['admin', 'user'] },
+  { to: '/registra-pagamento', label: 'Registra pagamento', icon: CircleDollarSign, roles: ['admin', 'user'], subItem: true },
   { to: '/pacchetti', label: 'Pacchetti', icon: PackageCheck, roles: ['admin', 'user'] },
   { to: '/contabilita', label: 'Contabilità', icon: BarChart3, roles: ['admin'] },
   { to: '/prima-nota', label: 'Prima nota', icon: Receipt, roles: ['admin'] },

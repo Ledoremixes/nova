@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { invalidateTesseratiCache } from './tesserati'
 
 export async function createQuickCorsista(payload) {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
@@ -27,5 +28,6 @@ export async function createQuickCorsista(payload) {
   }
 
   if (!body.student?.id) throw new Error('Il corsista è stato creato ma Nova non ha ricevuto il suo identificativo.')
+  invalidateTesseratiCache()
   return body
 }

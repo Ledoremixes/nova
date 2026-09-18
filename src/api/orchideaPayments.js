@@ -1,24 +1,51 @@
 import dayjs from 'dayjs'
 import { orchideaSupabase } from './orchideaSupabase'
 import { supabase } from './supabase'
-import { summarizeMonthlyTuitionPayments } from '../lib/paymentLedger'
+import { paymentMatchesAccountingMonth, summarizeMonthlyTuitionPayments } from '../lib/paymentLedger'
 import { enrollmentIsActiveForMonth, resolveEnrollmentPricing } from '../lib/packagePricing'
 import { fetchPackagesCatalog } from './packagesCatalog'
 import { resolveCoursePricing } from '../lib/coursePriceList'
-import { COURSE_MEMBERSHIP_FEE, fetchMembershipFeeRecords, resolveMembershipFeeState } from './membershipFees'
+import { COURSE_MEMBERSHIP_FEE, fetchMembershipFeeRecord, fetchMembershipFeeRecords, resolveMembershipFeeState } from './membershipFees'
+import { fetchOrchideaCourseCatalog, fetchOrchideaStudents } from './orchideaEntities'
 
 export function euro(value) {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
 }
 
+const PAYMENT_MONTH_CACHE_TTL = 60_000
+const paymentMonthCache = new Map()
+const paymentMonthInFlight = new Map()
 
-async function fetchPaymentReadSnapshotViaServer() {
+export function invalidatePaymentsReadCache() {
+  paymentMonthCache.clear()
+  paymentMonthInFlight.clear()
+}
+
+function filterPaymentRows(rows, { search = '', courseId = 'all', status = 'all' } = {}) {
+  let filtered = Array.isArray(rows) ? rows : []
+  const term = String(search || '').trim().toLowerCase()
+  if (term) {
+    filtered = filtered.filter((row) => [row.nomeCompleto, row.email, row.cf, row.numero_tessera, row.telefono]
+      .some((value) => String(value || '').toLowerCase().includes(term)))
+  }
+  if (courseId !== 'all') {
+    filtered = filtered.filter((row) => row.corsi.some((course) => String(course.id) === String(courseId)))
+  }
+  if (status !== 'all') filtered = filtered.filter((row) => row.stato_pagamento === status)
+  return filtered
+}
+
+
+async function fetchPaymentReadSnapshotViaServer({ month = '', studentId = '' } = {}) {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
   if (sessionError || !sessionData?.session?.access_token) {
     throw new Error('Sessione Nova non disponibile per verificare i pagamenti.')
   }
 
-  const response = await fetch('/api/orchidea-payments-read', {
+  const params = new URLSearchParams()
+  if (month) params.set('month', month)
+  if (studentId) params.set('studentId', String(studentId))
+  const response = await fetch(`/api/orchidea-payments-read${params.size ? `?${params.toString()}` : ''}`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${sessionData.session.access_token}`,
@@ -295,83 +322,183 @@ function normalizeDirectRows({ enrollments = [], students = [], courses = [], pa
   }).sort((a, b) => a.nomeCompleto.localeCompare(b.nomeCompleto))
 }
 
+async function fetchAllieviPaymentsMonthSnapshot(selectedMonth) {
+  const cached = paymentMonthCache.get(selectedMonth)
+  if (cached && Date.now() < cached.expiresAt) return cached.rows
+  if (paymentMonthInFlight.has(selectedMonth)) return paymentMonthInFlight.get(selectedMonth)
+
+  const promise = (async () => {
+    const monthStart = `${selectedMonth}-01`
+    const monthEnd = dayjs(monthStart).endOf('month').format('YYYY-MM-DD')
+    const [enrollmentsRes, students, courses, paymentsRes, pricingHistoryRes, packages, membershipFees] = await Promise.all([
+      orchideaSupabase
+        .from('iscrizioni_corsi')
+        .select('id,stato,tesseramento_id,corso_id,tariffa_mensile,quota_allievo_mensile,quota_insegnante_mensile,percentuale_insegnante,tipo_pagamento,data_iscrizione,data_inizio,data_fine,rinnovo_attivo,pacchetto_id,pacchetto_nome,pacchetto_totale_mensile,quota_pacchetto_percentuale,created_at')
+        .limit(10000),
+      fetchOrchideaStudents({ onlyCorsisti: false }),
+      fetchOrchideaCourseCatalog(),
+      orchideaSupabase
+        .from('pagamenti')
+        .select('*')
+        .or(`periodo.eq.${selectedMonth},and(mese.gte.${monthStart},mese.lte.${monthEnd}),and(scadenza.gte.${monthStart},scadenza.lte.${monthEnd})`)
+        .limit(5000),
+      orchideaSupabase
+        .from('nova_package_pricing_history')
+        .select('*')
+        .lte('effective_from', monthEnd)
+        .limit(10000),
+      fetchPackagesCatalog({ includeInactive: false }).catch(() => []),
+      fetchMembershipFeeRecords().catch(() => []),
+    ])
+
+    if (enrollmentsRes.error) throw new Error(enrollmentsRes.error.message || 'Errore caricamento iscrizioni corsi')
+
+    let paymentRows = paymentsRes.error ? [] : (paymentsRes.data || [])
+    let pricingHistoryRows = pricingHistoryRes.error ? [] : (pricingHistoryRes.data || [])
+
+    const shouldVerifyPaymentsOnServer = Boolean(
+      paymentsRes.error
+      || pricingHistoryRes.error
+      || ((enrollmentsRes.data || []).length > 0 && paymentRows.length === 0),
+    )
+
+    if (shouldVerifyPaymentsOnServer) {
+      try {
+        const snapshot = await fetchPaymentReadSnapshotViaServer({ month: selectedMonth })
+        const serverPaymentsForMonth = snapshot.payments.filter((row) => paymentMatchesAccountingMonth(row, selectedMonth))
+        if (serverPaymentsForMonth.length > paymentRows.length || paymentsRes.error) paymentRows = serverPaymentsForMonth
+        if (snapshot.pricingHistory.length > pricingHistoryRows.length || pricingHistoryRes.error) pricingHistoryRows = snapshot.pricingHistory
+      } catch (serverError) {
+        if (paymentsRes.error) {
+          throw new Error(`Non riesco a leggere i pagamenti Orchidea: ${paymentsRes.error.message || serverError.message}`)
+        }
+        console.warn('Verifica server pagamenti non disponibile:', serverError?.message || serverError)
+      }
+    }
+
+    const rows = normalizeDirectRows({
+      enrollments: enrollmentsRes.data || [],
+      students,
+      courses,
+      payments: paymentRows,
+      pricingHistory: pricingHistoryRows,
+      packages,
+      membershipFees,
+      selectedMonth,
+    })
+
+    paymentMonthCache.set(selectedMonth, { rows, expiresAt: Date.now() + PAYMENT_MONTH_CACHE_TTL })
+    return rows
+  })()
+
+  paymentMonthInFlight.set(selectedMonth, promise)
+  try {
+    return await promise
+  } finally {
+    paymentMonthInFlight.delete(selectedMonth)
+  }
+}
+
 async function fetchAllieviPaymentsMonthDirect({ month, search = '', courseId = 'all', status = 'all' }) {
   const selectedMonth = month || dayjs().format('YYYY-MM')
-  const [enrollmentsRes, studentsRes, coursesRes, paymentsRes, pricingHistoryRes, packages, membershipFees] = await Promise.all([
-    orchideaSupabase.from('iscrizioni_corsi').select('*').limit(10000),
-    orchideaSupabase.from('tesseramenti').select('*').limit(10000),
-    orchideaSupabase.from('corsi').select('*').limit(2000),
-    orchideaSupabase.from('pagamenti').select('*').limit(10000),
-    orchideaSupabase.from('nova_package_pricing_history').select('*').limit(20000),
-    fetchPackagesCatalog({ includeInactive: false }).catch(() => []),
-    fetchMembershipFeeRecords().catch(() => []),
-  ])
-
-  if (enrollmentsRes.error) throw new Error(enrollmentsRes.error.message || 'Errore caricamento iscrizioni corsi')
-  if (studentsRes.error) throw new Error(studentsRes.error.message || 'Errore caricamento allievi')
-  if (coursesRes.error) throw new Error(coursesRes.error.message || 'Errore caricamento corsi')
-
-  let paymentRows = paymentsRes.error ? [] : (paymentsRes.data || [])
-  let pricingHistoryRows = pricingHistoryRes.error ? [] : (pricingHistoryRes.data || [])
-
-  // Un errore/RLS sulla tabella pagamenti non deve mai trasformarsi silenziosamente
-  // in "0 pagamenti". Se la sessione Orchidea del browser non è pronta oppure la
-  // SELECT restituisce un archivio sospettosamente vuoto, verifichiamo tramite il
-  // backend Nova protetto dal login dell'operatore.
-  const shouldVerifyPaymentsOnServer = Boolean(
-    paymentsRes.error
-    || pricingHistoryRes.error
-    || ((enrollmentsRes.data || []).length > 0 && paymentRows.length === 0),
-  )
-
-  if (shouldVerifyPaymentsOnServer) {
-    try {
-      const snapshot = await fetchPaymentReadSnapshotViaServer()
-      if (snapshot.payments.length > paymentRows.length || paymentsRes.error) paymentRows = snapshot.payments
-      if (snapshot.pricingHistory.length > pricingHistoryRows.length || pricingHistoryRes.error) pricingHistoryRows = snapshot.pricingHistory
-    } catch (serverError) {
-      if (paymentsRes.error) {
-        throw new Error(`Non riesco a leggere i pagamenti Orchidea: ${paymentsRes.error.message || serverError.message}`)
-      }
-      // Se la lettura diretta era valida ma semplicemente vuota, manteniamo il dato
-      // diretto; il fallback server è solo una verifica aggiuntiva.
-      console.warn('Verifica server pagamenti non disponibile:', serverError?.message || serverError)
-    }
-  }
-
-  let rows = normalizeDirectRows({
-    enrollments: enrollmentsRes.data || [],
-    students: studentsRes.data || [],
-    courses: coursesRes.data || [],
-    payments: paymentRows,
-    pricingHistory: pricingHistoryRows,
-    packages,
-    membershipFees,
-    selectedMonth,
-  })
-
-  const term = search.trim().toLowerCase()
-  if (term) {
-    rows = rows.filter((row) => [row.nomeCompleto, row.email, row.cf, row.numero_tessera, row.telefono]
-      .some((value) => String(value || '').toLowerCase().includes(term)))
-  }
-
-  if (courseId !== 'all') {
-    rows = rows.filter((row) => row.corsi.some((course) => String(course.id) === String(courseId)))
-  }
-
-  if (status !== 'all') {
-    rows = rows.filter((row) => row.stato_pagamento === status)
-  }
-
-  return rows
+  const rows = await fetchAllieviPaymentsMonthSnapshot(selectedMonth)
+  return filterPaymentRows(rows, { search, courseId, status })
 }
 
 export async function fetchAllieviPaymentsMonth({ month, search = '', courseId = 'all', status = 'all' }) {
   const selectedMonth = month || dayjs().format('YYYY-MM')
-  // Nova usa sempre il calcolo diretto dalle iscrizioni attive, così se togli/aggiungi corsi
-  // o modifichi il pacchetto non restano quote vecchie salvate nei pagamenti.
   return fetchAllieviPaymentsMonthDirect({ month: selectedMonth, search, courseId, status })
+}
+
+export async function fetchStudentPaymentMonth({ tesseramentoId, month, student = null }) {
+  if (!tesseramentoId) return null
+  const selectedMonth = month || dayjs().format('YYYY-MM')
+  const cached = paymentMonthCache.get(selectedMonth)
+  if (cached && Date.now() < cached.expiresAt) {
+    const found = cached.rows.find((row) => String(row.tesseramento_id) === String(tesseramentoId))
+    if (found) return found
+  }
+
+  const monthStart = `${selectedMonth}-01`
+  const monthEnd = dayjs(monthStart).endOf('month').format('YYYY-MM-DD')
+  const [enrollmentsRes, courses, paymentsRes, pricingHistoryRes, packages, membershipRecord, students] = await Promise.all([
+    orchideaSupabase
+      .from('iscrizioni_corsi')
+      .select('id,stato,tesseramento_id,corso_id,tariffa_mensile,quota_allievo_mensile,quota_insegnante_mensile,percentuale_insegnante,tipo_pagamento,data_iscrizione,data_inizio,data_fine,rinnovo_attivo,pacchetto_id,pacchetto_nome,pacchetto_totale_mensile,quota_pacchetto_percentuale,created_at')
+      .eq('tesseramento_id', tesseramentoId)
+      .limit(1000),
+    fetchOrchideaCourseCatalog(),
+    orchideaSupabase
+      .from('pagamenti')
+      .select('*')
+      .eq('tesseramento_id', tesseramentoId)
+      .or(`periodo.eq.${selectedMonth},and(mese.gte.${monthStart},mese.lte.${monthEnd}),and(scadenza.gte.${monthStart},scadenza.lte.${monthEnd})`)
+      .limit(500),
+    orchideaSupabase
+      .from('nova_package_pricing_history')
+      .select('*')
+      .eq('tesseramento_id', tesseramentoId)
+      .lte('effective_from', monthEnd)
+      .limit(1000),
+    fetchPackagesCatalog({ includeInactive: false }).catch(() => []),
+    fetchMembershipFeeRecord(tesseramentoId).catch(() => null),
+    student ? Promise.resolve([student]) : fetchOrchideaStudents({ onlyCorsisti: false }),
+  ])
+
+  if (enrollmentsRes.error) throw new Error(enrollmentsRes.error.message || 'Errore caricamento corsi del corsista')
+
+  let paymentRows = paymentsRes.error ? [] : (paymentsRes.data || [])
+  let pricingHistoryRows = pricingHistoryRes.error ? [] : (pricingHistoryRes.data || [])
+  if (paymentsRes.error || pricingHistoryRes.error) {
+    try {
+      const snapshot = await fetchPaymentReadSnapshotViaServer({ month: selectedMonth, studentId: tesseramentoId })
+      if (paymentsRes.error) paymentRows = snapshot.payments.filter((row) => String(row.tesseramento_id) === String(tesseramentoId))
+      if (pricingHistoryRes.error) pricingHistoryRows = snapshot.pricingHistory.filter((row) => String(row.tesseramento_id) === String(tesseramentoId))
+    } catch (serverError) {
+      if (paymentsRes.error) throw new Error(serverError.message || 'Errore lettura pagamenti corsista')
+    }
+  }
+
+  const studentRows = student
+    ? [student]
+    : students.filter((item) => String(item.id) === String(tesseramentoId))
+
+  const rows = normalizeDirectRows({
+    enrollments: enrollmentsRes.data || [],
+    students: studentRows,
+    courses,
+    payments: paymentRows,
+    pricingHistory: pricingHistoryRows,
+    packages,
+    membershipFees: membershipRecord ? [membershipRecord] : [],
+    selectedMonth,
+  })
+
+  const found = rows.find((row) => String(row.tesseramento_id) === String(tesseramentoId))
+  if (found) return found
+
+  const selectedStudent = studentRows.find((item) => String(item.id) === String(tesseramentoId)) || student || {}
+  const membershipState = resolveMembershipFeeState(selectedStudent, membershipRecord)
+  return normalizePaymentRow({
+    tesseramento_id: tesseramentoId,
+    nome: selectedStudent.nome || '',
+    cognome: selectedStudent.cognome || '',
+    nome_completo: selectedStudent.nomeCompleto || `${selectedStudent.nome || ''} ${selectedStudent.cognome || ''}`.trim(),
+    email: selectedStudent.email || '',
+    cf: selectedStudent.cf || '',
+    telefono: selectedStudent.telefono || '',
+    numero_tessera: selectedStudent.numero_tessera || '',
+    mese: selectedMonth,
+    quota_mese: 0,
+    pagato: 0,
+    residuo: 0,
+    stato_pagamento: 'da_pagare',
+    membership_fee_paid: membershipState.paid_amount,
+    membership_fee_remaining: membershipState.remaining,
+    membership_fee_status: membershipState.status,
+    membership_fee_label: membershipState.label,
+    corsi: [],
+  })
 }
 
 async function setAllievoMonthlyPaymentDirect({ tesseramentoId, month, amount, status, note = '', method = 'Contanti' }) {
@@ -431,6 +558,7 @@ async function setAllievoMonthlyPaymentDirect({ tesseramentoId, month, amount, s
       payload,
     )
     if (error) throw new Error(error.message || 'Errore aggiornamento pagamento')
+    invalidatePaymentsReadCache()
     return data
   }
 
@@ -445,6 +573,7 @@ async function setAllievoMonthlyPaymentDirect({ tesseramentoId, month, amount, s
   )
 
   if (error) throw new Error(error.message || 'Errore creazione pagamento. Verifica la tabella pagamenti di Orchidea Allievi.')
+  invalidatePaymentsReadCache()
   return data
 }
 
@@ -454,15 +583,14 @@ function moneyRound(value) {
 }
 
 async function fetchStudentMonthlyDue(tesseramentoId, selectedMonth) {
-  const [enrollmentsRes, coursesRes, pricingHistoryRes, packages] = await Promise.all([
+  const [enrollmentsRes, courses, pricingHistoryRes, packages] = await Promise.all([
     orchideaSupabase.from('iscrizioni_corsi').select('*').eq('tesseramento_id', tesseramentoId).limit(1000),
-    orchideaSupabase.from('corsi').select('*').limit(2000),
+    fetchOrchideaCourseCatalog(),
     orchideaSupabase.from('nova_package_pricing_history').select('*').eq('tesseramento_id', tesseramentoId).limit(5000),
     fetchPackagesCatalog({ includeInactive: false }).catch(() => []),
   ])
   if (enrollmentsRes.error) throw new Error(enrollmentsRes.error.message || 'Errore lettura corsi del corsista')
-  if (coursesRes.error) throw new Error(coursesRes.error.message || 'Errore lettura corsi')
-  const coursesById = new Map((coursesRes.data || []).map((item) => [String(item.id), item]))
+  const coursesById = new Map((courses || []).map((item) => [String(item.id), item]))
   const history = pricingHistoryRes.error ? [] : (pricingHistoryRes.data || [])
   const activeEnrollments = (enrollmentsRes.data || []).filter((row) => enrollmentIsActiveForMonth(row, selectedMonth))
   const activeCourses = activeEnrollments.map((row) => coursesById.get(String(row.corso_id || row.course_id || '')) || {}).filter(Boolean)
@@ -590,6 +718,7 @@ export async function setAllievoPackagePayment({
       payload,
     )
     if (error) throw new Error(error.message || 'Errore registrazione gettone')
+    invalidatePaymentsReadCache()
     return { kind: 'gettone', rows: [data], months: [selectedStart], groupId, coverageFrom: null, coverageTo: null, cashAmount }
   }
   const duration = Math.max(1, Number(packageItem.durata_mesi || 1))
@@ -691,6 +820,7 @@ export async function setAllievoPackagePayment({
     throw safeError
   }
 
+  invalidatePaymentsReadCache()
   return {
     kind: packageItem?.tipo === 'omaggio' ? 'omaggio' : 'package',
     rows: saved,

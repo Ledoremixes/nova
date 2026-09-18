@@ -1,0 +1,40 @@
+NOVA - 18/09/2026
+Pagamento guidato + ottimizzazione prestazioni segreteria
+
+1. Nuova sottosezione "Registra pagamento" sotto Pagamenti
+- Mantiene invariata la macrosezione Pagamenti.
+- Flusso guidato in 4 passaggi: Persona -> Mese -> Pagamento -> Conferma.
+- Ricerca corsista locale e immediata su nome, telefono, CF e tessera.
+- Selezione mese con controllo saldo già registrato.
+- Gestione tessera corsista separata dalla quota corsi.
+- Scelta pacchetto: omaggio, gettone, mensile, trimestrale, annuale.
+- In caso di pagamento già parziale propone direttamente il saldo residuo.
+- Incasso parziale disponibile per la quota mensile.
+- La tessera da 25 euro non viene mai inclusa nell'omaggio.
+- Riepilogo sticky/compatto pensato per tablet.
+- Schermata finale con totale, periodo e pulsante nuovo pagamento.
+- Protezione di rollback quando un pagamento corsi riesce ma il salvataggio tessera fallisce.
+
+2. Velocità ricerca Iscrizione corsista
+- All'apertura della pagina di ricerca viene caricata solo l'anagrafica.
+- Corsi, pacchetti e stato tessera vengono caricati solo quando servono.
+- Il catalogo corsi usa una lettura leggera senza partecipanti e insegnanti.
+- Precaricamento automatico in background di anagrafiche, catalogo corsi e pacchetti subito dopo il login.
+
+3. Velocità Pagamenti
+- Ricerca e filtri della macrosezione Pagamenti ora lavorano in memoria: digitare nella ricerca non rilancia più query complete al database.
+- Snapshot mensile dei pagamenti in cache per 60 secondi e richieste contemporanee deduplicate.
+- I pagamenti letti dal DB vengono limitati al mese selezionato.
+- Lo storico prezzi viene limitato alle versioni effettive entro il mese selezionato.
+- Tesserati, catalogo corsi, pacchetti e quote tessera usano cache condivise.
+- Il fallback server Pagamenti accetta mese/corsista e non scarica più automaticamente l'intero archivio da 20.000 righe.
+
+4. Ottimizzazione tablet / realtime
+- Tornando su Nova dopo aver cambiato app o scheda non viene più ricaricata automaticamente tutta l'anagrafica.
+- Al focus viene eseguito solo il controllo leggero di revisione; il refetch completo avviene solo se i tesseramenti sono realmente cambiati.
+- Il realtime dei nuovi tesseramenti online resta attivo.
+
+Controlli
+- ESLint eseguito sui file modificati: nessun errore.
+- Parsing JSX/ESM eseguito con Babel parser: OK.
+- Build Vite non eseguibile nel container Linux perché il node_modules disponibile proviene da Windows e manca il binding nativo Rolldown Linux; non è un errore del codice modificato.

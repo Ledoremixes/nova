@@ -15,6 +15,7 @@ import UtilitaPage from '../pages/UtilitaPage'
 import ForbiddenPage from '../pages/ForbiddenPage'
 import ContabilitaPage from '../pages/ContabilitaPage'
 import PagamentiPage from '../pages/PagamentiPage'
+import RegistraPagamentoPage from '../pages/RegistraPagamentoPage'
 import AtletiPage from '../pages/AtletiPage'
 import IscrizioneCorsistaPage from '../pages/IscrizioneCorsistaPage'
 import TesseramentoCorsistaPage from '../pages/TesseramentoCorsistaPage'
@@ -55,6 +56,7 @@ export const router = createBrowserRouter([
       { path: 'visite-mediche', element: (<ProtectedRoute roles={['admin']}><VisiteMedichePage /></ProtectedRoute>) },
       { path: 'calendario', element: (<ProtectedRoute roles={['admin']}><CalendarioPage /></ProtectedRoute>) },
       { path: 'pagamenti', element: <PagamentiPage /> },
+      { path: 'registra-pagamento', element: <RegistraPagamentoPage /> },
       { path: 'pacchetti', element: <PacchettiPage /> },
       { path: 'gestione-eventi', element: (<ProtectedRoute roles={['admin']}><GestioneEventiPage /></ProtectedRoute>) },
       { path: 'siae', element: (<ProtectedRoute roles={['admin', 'user']}><SiaePage /></ProtectedRoute>) },

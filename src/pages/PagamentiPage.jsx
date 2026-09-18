@@ -21,7 +21,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import '../styles/PagamentiPage.css'
-import { fetchOrchideaCourses } from '../api/orchideaEntities'
+import { fetchOrchideaCourseCatalog } from '../api/orchideaEntities'
 import { euro, fetchAllieviPaymentsMonth, setAllievoMonthlyPayment, setAllievoPackagePayment } from '../api/orchideaPayments'
 import { fetchPackagesCatalog } from '../api/packagesCatalog'
 import { packagesForCourseSelection, resolveCoursePricing } from '../lib/coursePriceList'
@@ -104,18 +104,25 @@ export default function PagamentiPage() {
   const [feedback, setFeedback] = useState('')
 
   const coursesQuery = useQuery({
-    queryKey: ['orchidea-courses-for-payments'],
-    queryFn: fetchOrchideaCourses,
+    queryKey: ['orchidea-course-catalog'],
+    queryFn: fetchOrchideaCourseCatalog,
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
   })
 
   const paymentsQuery = useQuery({
-    queryKey: ['orchidea-allievi-payments', { month, search, courseId, status }],
-    queryFn: () => fetchAllieviPaymentsMonth({ month, search, courseId, status }),
+    queryKey: ['orchidea-allievi-payments', month],
+    queryFn: () => fetchAllieviPaymentsMonth({ month }),
+    staleTime: 60_000,
+    gcTime: 15 * 60_000,
+    placeholderData: (previousData) => previousData,
   })
 
   const packagesQuery = useQuery({
     queryKey: ['nova-packages-catalog', { activeOnly: true }],
     queryFn: () => fetchPackagesCatalog({ includeInactive: false }),
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
   })
 
   const setPaymentMutation = useMutation({
@@ -155,7 +162,17 @@ export default function PagamentiPage() {
     },
   })
 
-  const rows = useMemo(() => paymentsQuery.data || [], [paymentsQuery.data])
+  const baseRows = useMemo(() => paymentsQuery.data || [], [paymentsQuery.data])
+  const rows = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    return baseRows.filter((row) => {
+      if (term && ![row.nomeCompleto, row.email, row.cf, row.numero_tessera, row.telefono]
+        .some((value) => String(value || '').toLowerCase().includes(term))) return false
+      if (courseId !== 'all' && !row.corsi.some((course) => String(course.id) === String(courseId))) return false
+      if (status !== 'all' && row.stato_pagamento !== status) return false
+      return true
+    })
+  }, [baseRows, search, courseId, status])
   const courses = coursesQuery.data || []
   const packages = packagesQuery.data || []
   const paymentPackages = paymentEditor ? packagesForCourseSelection(paymentEditor.corsi || [], packages) : packages

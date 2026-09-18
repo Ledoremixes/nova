@@ -1,0 +1,10 @@
+NOVA - Gestione corsi dal Pagamento guidato (18/09/2026)
+
+- Aggiunto pulsante "Aggiungi / elimina corsi" nel Passaggio 2 del flusso Registra pagamento.
+- Il pulsante apre un popup leggero: non aggiunge una nuova sezione e non rallenta il flusso normale.
+- Catalogo corsi e dettagli iscrizioni vengono caricati solo quando il popup viene aperto.
+- Possibile aggiungere o togliere corsi con decorrenza dal mese selezionato.
+- La rimozione non cancella la storia: chiude il corso al mese selezionato, lasciando invariati i mesi precedenti.
+- Dopo il salvataggio Nova ricalcola automaticamente quota, residuo e pacchetto proposto per il mese.
+- Se il mese contiene gia movimenti, viene mostrato un avviso di ricontrollare il saldo prima dell'incasso.
+- Aggiunto rollback best-effort per evitare modifiche corsi parziali in caso di errore.

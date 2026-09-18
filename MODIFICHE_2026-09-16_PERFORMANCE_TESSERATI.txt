@@ -1,0 +1,21 @@
+OTTIMIZZAZIONE PERFORMANCE ANAGRAFICHE - 16/09/2026
+
+Problema individuato:
+- Tesserati, Corsisti, Dashboard, Iscrizione, Tesseramento e altre viste usavano queryKey diverse pur scaricando lo stesso archivio.
+- La cache globale React Query durava solo 30 secondi.
+- Il fix login Segreteria aveva aggiunto fallback server/bridge e la pagina Tesserati poteva ripetere l'intera catena fino a piu' tentativi.
+- L'endpoint server dei tesserati restituiva select(*) fino a 5000 righe, piu' dati del necessario.
+
+Correzioni:
+- cache condivisa di 3 minuti dentro fetchTesserati, riusata da tutte le sezioni;
+- deduplicazione delle richieste contemporanee (una sola fetch reale in-flight);
+- invalidazione automatica cache dopo creazione/modifica/tesseramento/numero tessera;
+- staleTime 3 minuti e gcTime 15 minuti per le viste anagrafiche;
+- Tesserati non ripete piu' 3-4 volte l'intera catena di fallback;
+- endpoint GET server limitato ai campi realmente usati, senza select(*).
+
+Effetto atteso:
+- il primo caricamento dopo login resta dipendente dalla rete/database;
+- i passaggi Dashboard -> Tesserati -> Corsisti -> Iscrizione/Tesseramento riusano la stessa anagrafica e dovrebbero risultare quasi immediati;
+- meno chiamate Supabase/Vercel e meno trasferimento dati;
+- nessuna cache obsoleta dopo scritture, perche' le mutazioni la invalidano.

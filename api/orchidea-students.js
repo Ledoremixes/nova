@@ -17,6 +17,30 @@ function normalizeCf(value) {
   return clean(value).replace(/\s+/g, '').toUpperCase()
 }
 
+const TESSERAMENTI_LIST_SELECT = `
+  id,
+  nome,
+  cognome,
+  nascita,
+  luogo,
+  cf,
+  email,
+  telefono,
+  residenza,
+  status,
+  payment_status,
+  valid_from,
+  valid_until,
+  qr_token,
+  numero_tessera,
+  tessera_attiva,
+  is_corsista,
+  stagione,
+  auth_user_id,
+  created_at,
+  updated_at
+`
+
 async function requireNovaOperator(req) {
   const novaUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || ''
   const novaKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -131,7 +155,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const { data, error } = await orchidea
         .from('tesseramenti')
-        .select('*')
+        .select(TESSERAMENTI_LIST_SELECT)
         .order('created_at', { ascending: false })
         .limit(5000)
 

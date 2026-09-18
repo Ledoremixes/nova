@@ -66,18 +66,34 @@ export default async function handler(req, res) {
     await requireNovaOperator(req)
     const orchidea = orchideaAdminClient()
 
-    const [paymentsRes, pricingHistoryRes] = await Promise.all([
-      orchidea
-        .from('pagamenti')
-        .select('*')
-        .order('updated_at', { ascending: false, nullsFirst: false })
-        .limit(20000),
-      orchidea
-        .from('nova_package_pricing_history')
-        .select('*')
-        .order('effective_from', { ascending: false })
-        .limit(20000),
-    ])
+    const month = String(req.query?.month || '').slice(0, 7)
+    const studentId = String(req.query?.studentId || '').trim()
+    const monthStart = /^\d{4}-\d{2}$/.test(month) ? `${month}-01` : ''
+    const monthEnd = monthStart
+      ? new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).toISOString().slice(0, 10)
+      : ''
+
+    let paymentsQuery = orchidea
+      .from('pagamenti')
+      .select('*')
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .limit(studentId ? 1000 : monthStart ? 5000 : 20000)
+
+    if (studentId) paymentsQuery = paymentsQuery.eq('tesseramento_id', studentId)
+    if (monthStart) {
+      paymentsQuery = paymentsQuery.or(`periodo.eq.${month},and(mese.gte.${monthStart},mese.lte.${monthEnd}),and(scadenza.gte.${monthStart},scadenza.lte.${monthEnd})`)
+    }
+
+    let pricingQuery = orchidea
+      .from('nova_package_pricing_history')
+      .select('*')
+      .order('effective_from', { ascending: false })
+      .limit(studentId ? 1000 : monthStart ? 10000 : 20000)
+
+    if (studentId) pricingQuery = pricingQuery.eq('tesseramento_id', studentId)
+    if (monthEnd) pricingQuery = pricingQuery.lte('effective_from', monthEnd)
+
+    const [paymentsRes, pricingHistoryRes] = await Promise.all([paymentsQuery, pricingQuery])
 
     if (paymentsRes.error) throw paymentsRes.error
 
