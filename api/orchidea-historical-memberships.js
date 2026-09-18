@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'node:crypto'
+import { isValidHistoricalCf, splitHistoricalRecords } from '../src/lib/historicalFiscalCode.js'
 
 const SIGNATURE_BUCKET = 'nova-tesseramenti-firme'
 const MAX_BATCH_SIZE = 4
@@ -142,6 +143,7 @@ async function findExisting(admin, record) {
 }
 
 async function insertHistoricalStudent(admin, record, defaults) {
+  if (!isValidHistoricalCf(record.cf)) throw new Error('Codice fiscale non valido: anagrafica esclusa dall’importazione.')
   const acceptedAt = new Date(record.accepted_at || Date.now())
   if (Number.isNaN(acceptedAt.getTime())) throw new Error('Data di accettazione non valida.')
 
@@ -260,21 +262,31 @@ export default async function handler(req, res) {
       return json(res, 400, { error: `Invia da 1 a ${MAX_BATCH_SIZE} tesseramenti per volta.` })
     }
 
-    if (records.some((record) => Boolean(record.signature_data_url))) {
+    // Validate the actual code, never the flag supplied by the JSON file.
+    // Excluded people do not reach the registry lookup, insert or signature upload.
+    const { eligible, excluded } = splitHistoricalRecords(records)
+    if (eligible.some((record) => Boolean(record.signature_data_url))) {
       await ensureSignatureBucket(admin)
     }
 
     const summary = {
-      processed: 0,
+      processed: excluded.length,
       inserted: 0,
       skipped_existing: 0,
+      skipped_invalid_cf: excluded.length,
+      excluded: excluded.map((record) => ({
+        source_message_id: clean(record?.source_message_id) || null,
+        name: `${clean(record?.nome)} ${clean(record?.cognome)}`.trim() || 'Senza nome',
+        cf: clean(record?.cf),
+        reason: 'Codice fiscale non valido: anagrafica non importata.',
+      })),
       signatures_uploaded: 0,
       signatures_already_present: 0,
       signatures_missing: 0,
       errors: [],
     }
 
-    for (const record of records) {
+    for (const record of eligible) {
       try {
         let student = await findExisting(admin, record)
         const existing = Boolean(student)

@@ -13,6 +13,7 @@ import { hasCustomMembershipNumber, membershipCode } from '../lib/membership'
 import { changeTesseratoPassword } from '../api/orchideaEntities'
 import { markConvertedCorsistaMembership } from '../api/membershipFees'
 import { importHistoricalMembershipBatch } from '../api/historicalMembershipImport'
+import { splitHistoricalRecords } from '../lib/historicalFiscalCode'
 import '../styles/TesseratiPage.css'
 
 const emptyStudentForm = {
@@ -327,7 +328,27 @@ export default function TesseratiPage() {
       }
       if (!payload.records.length) throw new Error('Il pacchetto non contiene tesseramenti da importare.')
 
-      setHistoricalPackage(payload)
+      const { eligible, excluded } = splitHistoricalRecords(payload.records)
+      if (!eligible.length) throw new Error('Nessuna anagrafica importabile: tutti i codici fiscali sono mancanti o non validi.')
+      const signatures = eligible.filter((record) => Boolean(record.signature_data_url)).length
+      setHistoricalPackage({
+        ...payload,
+        records: eligible,
+        excluded_records: excluded.map((record) => ({
+          source_message_id: record?.source_message_id,
+          nome: record?.nome,
+          cognome: record?.cognome,
+          cf: record?.cf,
+        })),
+        summary: {
+          ...payload.summary,
+          people: eligible.length,
+          signatures,
+          missing_signatures: eligible.length - signatures,
+          formally_invalid_fiscal_codes: 0,
+          excluded_invalid_fiscal_codes: excluded.length + Number(payload.summary?.excluded_invalid_fiscal_codes || 0),
+        },
+      })
       setHistoricalFileName(file.name)
     } catch (error) {
       setHistoricalPackage(null)
@@ -345,6 +366,7 @@ export default function TesseratiPage() {
       processed: 0,
       inserted: 0,
       skipped_existing: 0,
+      skipped_invalid_cf: 0,
       signatures_uploaded: 0,
       signatures_already_present: 0,
       signatures_missing: 0,
@@ -372,6 +394,7 @@ export default function TesseratiPage() {
         aggregate.processed += Number(summary.processed || 0)
         aggregate.inserted += Number(summary.inserted || 0)
         aggregate.skipped_existing += Number(summary.skipped_existing || 0)
+        aggregate.skipped_invalid_cf += Number(summary.skipped_invalid_cf || 0)
         aggregate.signatures_uploaded += Number(summary.signatures_uploaded || 0)
         aggregate.signatures_already_present += Number(summary.signatures_already_present || 0)
         aggregate.signatures_missing += Number(summary.signatures_missing || 0)
@@ -434,6 +457,7 @@ export default function TesseratiPage() {
             <p>
               Nova inserisce soltanto le anagrafiche mancanti. Chi è già presente non viene modificato;
               la firma originale viene archiviata separatamente e non vengono creati account o password.
+              Le anagrafiche con codice fiscale non valido vengono escluse dall’importazione.
             </p>
           </div>
 
@@ -474,18 +498,16 @@ export default function TesseratiPage() {
               <strong>{historicalFileName}</strong>
               <span>{historicalPackage.summary?.people ?? historicalPackage.records.length} persone</span>
               <span>{historicalPackage.summary?.signatures ?? '—'} firme</span>
-              <span>{historicalPackage.summary?.formally_invalid_fiscal_codes ?? 0} codici fiscali da verificare</span>
+              <span>{historicalPackage.summary?.excluded_invalid_fiscal_codes ?? 0} anagrafiche escluse per codice fiscale non valido</span>
               <small>
                 Stagione {historicalPackage.import_defaults?.season || '2026/2027'} · tesseramento attivo · pagamento non registrato
               </small>
-              {historicalPackage.records.some((record) => record.cf_formally_valid === false) ? (
+              {historicalPackage.excluded_records.length ? (
                 <details>
-                  <summary>Mostra i codici fiscali da verificare (verranno comunque importati)</summary>
+                  <summary>Mostra le anagrafiche escluse (non verranno importate)</summary>
                   <ul>
-                    {historicalPackage.records
-                      .filter((record) => record.cf_formally_valid === false)
-                      .map((record) => (
-                        <li key={record.source_message_id}>
+                    {historicalPackage.excluded_records.map((record, index) => (
+                        <li key={record.source_message_id || index}>
                           <strong>{record.nome} {record.cognome}</strong>: {record.cf}
                         </li>
                       ))}
@@ -508,6 +530,7 @@ export default function TesseratiPage() {
               <strong>Importazione completata</strong>
               <span>{historicalImportResult.inserted} nuove anagrafiche inserite</span>
               <span>{historicalImportResult.skipped_existing} già presenti e lasciate invariate</span>
+              <span>{Number(historicalPackage.summary?.excluded_invalid_fiscal_codes || 0) + historicalImportResult.skipped_invalid_cf} escluse per codice fiscale non valido</span>
               <span>
                 {historicalImportResult.signatures_uploaded} firme archiviate · {historicalImportResult.signatures_already_present} già presenti
               </span>
