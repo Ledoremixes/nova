@@ -1,0 +1,27 @@
+IMPORT TESSERAMENTI STORICI GMAIL
+
+- Aggiunto in Tesserati un pannello visibile solo agli amministratori.
+- Il pannello accetta il pacchetto JSON preparato dalle email storiche.
+- L'importazione lavora in piccoli blocchi con avanzamento visibile ed è ripetibile.
+- Il codice fiscale è la chiave principale di confronto.
+- Se l'anagrafica esiste già, nessun suo campo viene aggiornato o sostituito.
+- Per codici fiscali anomali viene usato anche il confronto forte email + data di nascita + nome completo.
+- Le nuove anagrafiche vengono create senza utente Auth e senza password.
+- Le nuove anagrafiche sono Tesserati (non Corsisti), stagione 2026/2027, tessera attiva.
+- Il pagamento resta non registrato perché le email non contengono prove di pagamento.
+- Data e ora originali, consensi e firma PNG vengono conservati nel bucket privato
+  nova-tesseramenti-firme con un manifest JSON dedicato.
+- Anche per un tesserato già presente, Nova può archiviare la firma storica senza
+  modificare l'anagrafica.
+- Il percorso firma è deterministico sull'ID Gmail: un secondo import non crea duplicati.
+- Non è stata modificata la logica del sito Orchidea: l'avviso per chi tenta un
+  nuovo tesseramento verrà aggiunto in un intervento separato.
+
+PACCHETTO DATI PREPARATO
+
+- 824 email trovate.
+- 12 invii automatici vuoti esclusi.
+- 641 persone uniche dopo deduplicazione e correzioni riconoscibili.
+- 640 firme originali recuperate.
+- 1 tesseramento reale senza firma nell'email originale.
+- 59 codici fiscali formalmente non validi mantenuti, come richiesto, per verifica futura.

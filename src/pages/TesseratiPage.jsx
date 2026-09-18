@@ -12,6 +12,7 @@ import {
 import { hasCustomMembershipNumber, membershipCode } from '../lib/membership'
 import { changeTesseratoPassword } from '../api/orchideaEntities'
 import { markConvertedCorsistaMembership } from '../api/membershipFees'
+import { importHistoricalMembershipBatch } from '../api/historicalMembershipImport'
 import '../styles/TesseratiPage.css'
 
 const emptyStudentForm = {
@@ -150,6 +151,13 @@ export default function TesseratiPage() {
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [studentForm, setStudentForm] = useState(emptyStudentForm)
   const [passwordForm, setPasswordForm] = useState({ password: '', password2: '' })
+  const historicalFileInputRef = useRef(null)
+  const [historicalPackage, setHistoricalPackage] = useState(null)
+  const [historicalFileName, setHistoricalFileName] = useState('')
+  const [historicalImportError, setHistoricalImportError] = useState('')
+  const [historicalImportRunning, setHistoricalImportRunning] = useState(false)
+  const [historicalImportProgress, setHistoricalImportProgress] = useState(0)
+  const [historicalImportResult, setHistoricalImportResult] = useState(null)
 
   const { data: students = [], isLoading, error } = useQuery({
     queryKey: ['tesseramenti-orchidea'],
@@ -300,6 +308,89 @@ export default function TesseratiPage() {
     passwordMutation.mutate({ student: selectedStudent, newPassword: passwordForm.password })
   }
 
+  async function handleHistoricalPackage(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setHistoricalImportError('')
+    setHistoricalImportResult(null)
+    setHistoricalImportProgress(0)
+
+    try {
+      const payload = JSON.parse(await file.text())
+      if (
+        payload?.format !== 'nova_historical_membership_import' ||
+        Number(payload?.version) !== 1 ||
+        !Array.isArray(payload?.records)
+      ) {
+        throw new Error('Il file selezionato non è il pacchetto dei tesseramenti storici Nova.')
+      }
+      if (!payload.records.length) throw new Error('Il pacchetto non contiene tesseramenti da importare.')
+
+      setHistoricalPackage(payload)
+      setHistoricalFileName(file.name)
+    } catch (error) {
+      setHistoricalPackage(null)
+      setHistoricalFileName('')
+      setHistoricalImportError(error.message || 'Impossibile leggere il file di importazione.')
+    } finally {
+      event.target.value = ''
+    }
+  }
+
+  async function runHistoricalImport() {
+    if (!historicalPackage?.records?.length || historicalImportRunning) return
+
+    const aggregate = {
+      processed: 0,
+      inserted: 0,
+      skipped_existing: 0,
+      signatures_uploaded: 0,
+      signatures_already_present: 0,
+      signatures_missing: 0,
+      errors: [],
+    }
+
+    setHistoricalImportError('')
+    setHistoricalImportResult(null)
+    setHistoricalImportProgress(0)
+    setHistoricalImportRunning(true)
+
+    try {
+      const records = historicalPackage.records
+      const batchSize = 4
+
+      for (let index = 0; index < records.length; index += batchSize) {
+        const batch = records.slice(index, index + batchSize)
+        const summary = await importHistoricalMembershipBatch({
+          format: historicalPackage.format,
+          version: historicalPackage.version,
+          defaults: historicalPackage.import_defaults || {},
+          records: batch,
+        })
+
+        aggregate.processed += Number(summary.processed || 0)
+        aggregate.inserted += Number(summary.inserted || 0)
+        aggregate.skipped_existing += Number(summary.skipped_existing || 0)
+        aggregate.signatures_uploaded += Number(summary.signatures_uploaded || 0)
+        aggregate.signatures_already_present += Number(summary.signatures_already_present || 0)
+        aggregate.signatures_missing += Number(summary.signatures_missing || 0)
+        aggregate.errors.push(...(summary.errors || []))
+        setHistoricalImportProgress(Math.min(records.length, index + batch.length))
+      }
+
+      setHistoricalImportResult(aggregate)
+      queryClient.invalidateQueries({ queryKey: ['tesseramenti-orchidea'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-registry'] })
+    } catch (error) {
+      setHistoricalImportError(
+        `${error.message || 'Importazione interrotta.'} Puoi riavviarla: le persone già inserite non verranno duplicate.`
+      )
+    } finally {
+      setHistoricalImportRunning(false)
+    }
+  }
+
   const details = detailsQuery.data || { enrollments: [], payments: [] }
   const canResetSelectedPassword = Boolean(selectedStudent?.auth_user_id || selectedStudent?.email)
 
@@ -334,6 +425,109 @@ export default function TesseratiPage() {
           <strong>{stats.missingNumbers}</strong>
         </div>
       </div>
+
+      {isAdmin ? (
+        <div className="page-card historical-import-card">
+          <div className="historical-import-card__copy">
+            <div className="dashboard-hero__eyebrow">Migrazione una tantum</div>
+            <h2>Importa tesseramenti storici Gmail</h2>
+            <p>
+              Nova inserisce soltanto le anagrafiche mancanti. Chi è già presente non viene modificato;
+              la firma originale viene archiviata separatamente e non vengono creati account o password.
+            </p>
+          </div>
+
+          <input
+            ref={historicalFileInputRef}
+            className="historical-import-card__file"
+            type="file"
+            accept=".json,application/json"
+            onChange={handleHistoricalPackage}
+          />
+
+          <div className="historical-import-card__actions">
+            <button
+              className="topbar__button"
+              type="button"
+              onClick={() => historicalFileInputRef.current?.click()}
+              disabled={historicalImportRunning}
+            >
+              {historicalPackage ? 'Cambia file' : 'Seleziona file importazione'}
+            </button>
+
+            {historicalPackage ? (
+              <button
+                className="topbar__button topbar__button--primary"
+                type="button"
+                onClick={runHistoricalImport}
+                disabled={historicalImportRunning}
+              >
+                {historicalImportRunning
+                  ? `Importazione ${historicalImportProgress}/${historicalPackage.records.length}…`
+                  : `Importa ${historicalPackage.records.length} anagrafiche`}
+              </button>
+            ) : null}
+          </div>
+
+          {historicalPackage ? (
+            <div className="historical-import-preview">
+              <strong>{historicalFileName}</strong>
+              <span>{historicalPackage.summary?.people ?? historicalPackage.records.length} persone</span>
+              <span>{historicalPackage.summary?.signatures ?? '—'} firme</span>
+              <span>{historicalPackage.summary?.formally_invalid_fiscal_codes ?? 0} codici fiscali da verificare</span>
+              <small>
+                Stagione {historicalPackage.import_defaults?.season || '2026/2027'} · tesseramento attivo · pagamento non registrato
+              </small>
+              {historicalPackage.records.some((record) => record.cf_formally_valid === false) ? (
+                <details>
+                  <summary>Mostra i codici fiscali da verificare (verranno comunque importati)</summary>
+                  <ul>
+                    {historicalPackage.records
+                      .filter((record) => record.cf_formally_valid === false)
+                      .map((record) => (
+                        <li key={record.source_message_id}>
+                          <strong>{record.nome} {record.cognome}</strong>: {record.cf}
+                        </li>
+                      ))}
+                  </ul>
+                </details>
+              ) : null}
+            </div>
+          ) : null}
+
+          {historicalImportRunning ? (
+            <div className="historical-import-progress" aria-label="Avanzamento importazione">
+              <span style={{ width: `${Math.round((historicalImportProgress / historicalPackage.records.length) * 100)}%` }} />
+            </div>
+          ) : null}
+
+          {historicalImportError ? <p className="form-error">{historicalImportError}</p> : null}
+
+          {historicalImportResult ? (
+            <div className={historicalImportResult.errors.length ? 'historical-import-result has-warnings' : 'historical-import-result'}>
+              <strong>Importazione completata</strong>
+              <span>{historicalImportResult.inserted} nuove anagrafiche inserite</span>
+              <span>{historicalImportResult.skipped_existing} già presenti e lasciate invariate</span>
+              <span>
+                {historicalImportResult.signatures_uploaded} firme archiviate · {historicalImportResult.signatures_already_present} già presenti
+              </span>
+              {historicalImportResult.signatures_missing ? <span>{historicalImportResult.signatures_missing} firma mancante nella mail originale</span> : null}
+              {historicalImportResult.errors.length ? (
+                <details>
+                  <summary>{historicalImportResult.errors.length} elementi da controllare</summary>
+                  <ul>
+                    {historicalImportResult.errors.map((item, index) => (
+                      <li key={`${item.source_message_id || 'errore'}-${index}`}>
+                        <strong>{item.name}</strong>: {item.error}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="page-card">
         <div className="section-head">
