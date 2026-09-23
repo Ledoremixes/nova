@@ -493,6 +493,7 @@ export default function PagamentiPage() {
                 {row.corsi.length > 2 ? <em>+{row.corsi.length - 2}</em> : null}
               </div>
             </div>
+            {row.pricing_components?.length ? <div className="payments-pricing-breakdown">{row.pricing_components.map((component) => <span key={`row-price-${component.id}`}><em>{component.nome}</em><b>{euro(component.prezzo)}</b></span>)}</div> : null}
 
             {Number(row.membership_fee_remaining || 0) > 0 ? (
               <div className={`payments-membership-alert ${row.membership_fee_status === 'partial' ? 'is-partial' : 'is-due'}`}>
@@ -582,7 +583,7 @@ export default function PagamentiPage() {
                 {packagesQuery.error ? <small className="payments-inline-error">{packagesQuery.error.message}</small> : null}
                 {paymentEditor?.pricing_group_label ? <small>Listino automatico: <strong>{paymentEditor.pricing_group_label}</strong>. Puoi scegliere omaggio, gettone, mensile, trimestrale o annuale.</small> : null}
               </label>
-              {selectedPackage ? <div className={`payments-package-selected ${isGiftPackage ? 'is-gift' : ''}`}><PackageCheck size={18} /><div><strong>{selectedPackage.nome}</strong><span>{isGiftPackage ? '1 mese di corsi coperto a 0 € · tessera corsista sempre esclusa' : isTokenPackage ? `Lezione singola · nessuna copertura mensile · prezzo ${euro(selectedPackage.prezzo)}` : `${selectedPackage.durata_mesi} ${selectedPackage.durata_mesi === 1 ? 'mese' : 'mesi'} di copertura · prezzo proposto ${euro(selectedPackage.prezzo)}`}</span></div></div> : null}
+              {selectedPackage ? <div className={`payments-package-selected ${isGiftPackage ? 'is-gift' : ''}`}><PackageCheck size={18} /><div><strong>{selectedPackage.nome}</strong><span>{isGiftPackage ? '1 mese di corsi coperto a 0 € · tessera corsista sempre esclusa' : isTokenPackage ? `Lezione singola · nessuna copertura mensile · prezzo ${euro(selectedPackage.prezzo)}` : selectedPackage.is_half_month ? `Metà mese calcolata sul mensile da ${euro(selectedPackage.full_month_price)} · totale ${euro(selectedPackage.prezzo)}` : `${selectedPackage.durata_mesi} ${selectedPackage.durata_mesi === 1 ? 'mese' : 'mesi'} di copertura · prezzo proposto ${euro(selectedPackage.prezzo)}`}</span>{selectedPackage.components?.length ? <div className="payments-selected-breakdown">{selectedPackage.components.map((component) => <small key={`selected-price-${component.id}`}><span>{component.nome}</span><b>{euro(component.prezzo)}</b></small>)}</div> : null}</div></div> : null}
             </div>
 
             {isGiftPackage && giftMembershipToCollect > 0 ? (
@@ -650,7 +651,7 @@ export default function PagamentiPage() {
             </div>
 
             <div className="payments-student-info-grid">
-              <div><span>Pacchetto</span><strong>{selectedRow.tipo_pacchetto}</strong><small>{selectedRow.corsi.length} corsi collegati</small><div className="payments-course-chips">{selectedRow.corsi.map((course) => <em key={course.id || course.nome}>{course.nome || 'Corso'}</em>)}</div></div>
+              <div><span>Pacchetto</span><strong>{selectedRow.tipo_pacchetto}</strong><small>{selectedRow.corsi.length} corsi collegati</small>{selectedRow.pricing_components?.length ? <div className="payments-detail-pricing-breakdown">{selectedRow.pricing_components.map((component) => <small key={`detail-price-${component.id}`}><span>{component.nome}</span><b>{euro(component.prezzo)}</b></small>)}</div> : null}<div className="payments-course-chips">{selectedRow.corsi.map((course) => <em key={course.id || course.nome}>{course.nome || 'Corso'}</em>)}</div></div>
               <div><span>Formula</span><strong>{selectedRow.formula}</strong><small>{selectedRow.stato_pagamento === 'gettone' ? 'pagamento per singola lezione' : 'totale mensile del pacchetto'}</small></div>
               {selectedRow.stato_pagamento === 'gettone' ? (
                 <>

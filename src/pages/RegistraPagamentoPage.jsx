@@ -35,6 +35,7 @@ import { fetchTesseratoDetails } from '../api/tesserati'
 import { COURSE_MEMBERSHIP_FEE, setMembershipFeePaidAmount } from '../api/membershipFees'
 import { packagesForCourseSelection, resolveCoursePricing } from '../lib/coursePriceList'
 import { enrollmentIsActiveForMonth } from '../lib/packagePricing'
+import { courseDisplayName } from '../lib/courseLabels'
 import '../styles/RegistraPagamentoPage.css'
 
 const currentMonth = dayjs().format('YYYY-MM')
@@ -93,6 +94,7 @@ export default function RegistraPagamentoPage() {
   const [payMembership, setPayMembership] = useState(false)
   const [payCourses, setPayCourses] = useState(null)
   const [partialMode, setPartialMode] = useState(false)
+  const [customAmountMode, setCustomAmountMode] = useState(false)
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState('Contanti')
   const [note, setNote] = useState('')
@@ -245,8 +247,10 @@ export default function RegistraPagamentoPage() {
   const amountInvalid = Boolean(
     effectivePayCourses
     && !isGift
-    && (courseAmount <= 0 || (canPartial && courseAmount > Number(payment?.residuo || maxCourseAmount || 0) + 0.001)),
+    && (courseAmount <= 0 || (partialMode && canPartial && courseAmount > Number(payment?.residuo || maxCourseAmount || 0) + 0.001)),
   )
+  const listPrice = Number(selectedPackage?.prezzo || 0)
+  const hasCustomAmount = Boolean(customAmountMode && !isGift && Math.abs(courseAmount - listPrice) > 0.001)
 
   function choosePackage(packageId) {
     const item = packageId === '__residue__'
@@ -255,6 +259,7 @@ export default function RegistraPagamentoPage() {
     setSelectedPackageId(String(packageId))
     setPayCourses(true)
     setPartialMode(false)
+    setCustomAmountMode(false)
     setAmount(item?.tipo === 'omaggio' ? '0.00' : Number(item?.prezzo || 0).toFixed(2))
   }
 
@@ -321,6 +326,7 @@ export default function RegistraPagamentoPage() {
       setSelectedPackageId('')
       setPayCourses(null)
       setPartialMode(false)
+      setCustomAmountMode(false)
       setAmount('')
       setNote('')
 
@@ -377,7 +383,9 @@ export default function RegistraPagamentoPage() {
               packageItem: selectedPackage,
               amount: isGift ? 0 : courseAmount,
               method: isGift ? 'Omaggio' : method,
-              note: note.trim() || `${selectedPackage.nome} registrato da Pagamento guidato Nova`,
+              note: note.trim() || (hasCustomAmount
+                ? `${selectedPackage.nome} · importo personalizzato ${euro(courseAmount)} (listino ${euro(listPrice)}) · Pagamento guidato Nova`
+                : `${selectedPackage.nome} registrato da Pagamento guidato Nova`),
             })
             courseMode = 'package'
           }
@@ -398,6 +406,8 @@ export default function RegistraPagamentoPage() {
           month,
           packageItem: effectivePayCourses ? selectedPackage : null,
           courseCash: effectivePayCourses ? courseAmount : 0,
+          customAmount: effectivePayCourses && hasCustomAmount,
+          listPrice: effectivePayCourses ? listPrice : 0,
           membershipCash: membershipSaved ? membershipRemaining : 0,
           totalCash,
           method: totalCash > 0 ? method : 'Omaggio',
@@ -464,6 +474,7 @@ export default function RegistraPagamentoPage() {
     setPayMembership(false)
     setPayCourses(null)
     setPartialMode(false)
+    setCustomAmountMode(false)
     setAmount('')
     setMethod('Contanti')
     setNote('')
@@ -480,6 +491,7 @@ export default function RegistraPagamentoPage() {
     setPayMembership(false)
     setPayCourses(null)
     setPartialMode(false)
+    setCustomAmountMode(false)
     setAmount('')
     setNote('')
     setResult(null)
@@ -498,6 +510,7 @@ export default function RegistraPagamentoPage() {
     setSelectedPackageId('')
     setPayCourses(null)
     setPartialMode(false)
+    setCustomAmountMode(false)
     setAmount('')
     setNote('')
     setCourseManagerOpen(false)
@@ -521,7 +534,7 @@ export default function RegistraPagamentoPage() {
 
           <div className="guided-payment-success-grid">
             <div><span>Periodo</span><strong>{monthLabel(result.month)}</strong></div>
-            <div><span>Pagamento corsi</span><strong>{result.packageItem?.nome || 'Nessuno'}</strong><small>{euro(result.courseCash)}</small></div>
+            <div><span>Pagamento corsi</span><strong>{result.packageItem?.nome || 'Nessuno'}</strong><small>{euro(result.courseCash)}{result.customAmount ? ` · personalizzato (listino ${euro(result.listPrice)})` : ''}</small></div>
             <div><span>Tessera corsista</span><strong>{result.membershipCash > 0 ? 'Incassata' : 'Non incassata ora'}</strong><small>{result.membershipCash > 0 ? euro(result.membershipCash) : '—'}</small></div>
             <div><span>Totale incassato</span><strong>{euro(result.totalCash)}</strong><small>{result.method}</small></div>
           </div>
@@ -624,18 +637,31 @@ export default function RegistraPagamentoPage() {
               ) : null}
 
               {periodReady ? (
-                <div className="guided-payment-course-tools">
-                  <div>
-                    {payment.corsi?.length ? (
-                      <div className="guided-payment-course-list">
-                        {payment.corsi.map((course) => <span key={course.id}>{course.nome}</span>)}
-                      </div>
-                    ) : <div className="guided-payment-warning">Questo corsista non ha corsi attivi nel mese selezionato.</div>}
+                <>
+                  <div className="guided-payment-course-tools">
+                    <div>
+                      {payment.corsi?.length ? (
+                        <div className="guided-payment-course-list">
+                          {payment.corsi.map((course) => <span key={course.id}>{courseDisplayName(course)}</span>)}
+                        </div>
+                      ) : <div className="guided-payment-warning">Questo corsista non ha corsi attivi nel mese selezionato.</div>}
+                    </div>
+                    <button type="button" className="guided-payment-course-manage-button" onClick={openCourseManager}>
+                      <BookOpenCheck size={17} /> Aggiungi / elimina corsi
+                    </button>
                   </div>
-                  <button type="button" className="guided-payment-course-manage-button" onClick={openCourseManager}>
-                    <BookOpenCheck size={17} /> Aggiungi / elimina corsi
-                  </button>
-                </div>
+                  {recommendedMonthly ? (
+                    <div className="guided-payment-pricing-breakdown">
+                      <div><span>Quota mensile prevista</span><strong>{recommendedMonthly.nome}</strong></div>
+                      <b>{euro(recommendedMonthly.prezzo)}</b>
+                      {Array.isArray(recommendedMonthly.components) && recommendedMonthly.components.length ? (
+                        <div className="guided-payment-pricing-components">
+                          {recommendedMonthly.components.map((component) => <span key={`pricing-${component.id}`}><em>{component.nome}</em><strong>{euro(component.prezzo)}</strong></span>)}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </>
               ) : null}
             </article>
           ) : null}
@@ -691,22 +717,31 @@ export default function RegistraPagamentoPage() {
                         <small>{item.tipo === 'omaggio' ? 'OMAGGIO' : String(item.tipo || 'PACCHETTO').toUpperCase()}</small>
                         <strong>{item.nome}</strong>
                         <b>{item.tipo === 'omaggio' ? 'GRATIS' : euro(item.prezzo)}</b>
-                        <span>{item.durata_mesi > 1 ? `${item.durata_mesi} mesi di copertura` : item.tipo === 'gettone' ? 'Lezione singola' : '1 mese di copertura'}</span>
+                        <span>{item.durata_mesi > 1 ? `${item.durata_mesi} mesi di copertura` : item.tipo === 'gettone' ? 'Lezione singola' : item.is_half_month ? `50% di ${euro(item.full_month_price)}` : '1 mese di copertura'}</span>
+                        {Array.isArray(item.components) && item.components.length ? <span className="guided-payment-package-breakdown">{item.components.map((component) => `${component.nome} ${euro(component.prezzo)}`).join(' + ')}</span> : null}
                       </button>
                     )) : null}
                   </div>
 
                   {canPartial && selectedPackage?.tipo !== 'residuo' ? (
                     <label className="guided-payment-partial-toggle">
-                      <input type="checkbox" checked={partialMode} onChange={(event) => setPartialMode(event.target.checked)} />
+                      <input type="checkbox" checked={partialMode} onChange={(event) => { const checked = event.target.checked; setPartialMode(checked); if (checked) { setCustomAmountMode(false); setAmount(Number(selectedPackage?.prezzo || 0).toFixed(2)) } }} />
                       <span><strong>Incasso parziale</strong><small>Usalo se il corsista versa solo una parte della quota del mese.</small></span>
+                    </label>
+                  ) : null}
+
+                  {!isGift && !isToken && selectedPackage?.tipo !== 'residuo' && Number(payment?.pagato || 0) <= 0 ? (
+                    <label className="guided-payment-partial-toggle guided-payment-custom-toggle">
+                      <input type="checkbox" checked={customAmountMode} onChange={(event) => { const checked = event.target.checked; setCustomAmountMode(checked); if (checked) { setPartialMode(false); setAmount(Number(selectedPackage?.prezzo || 0).toFixed(2)) } else { setAmount(Number(selectedPackage?.prezzo || 0).toFixed(2)) } }} />
+                      <span><strong>Importo personalizzato / sconto</strong><small>Modifica la cifra realmente incassata: il pacchetto verrà comunque considerato completamente saldato.</small></span>
                     </label>
                   ) : null}
 
                   {!isGift ? (
                     <label className="guided-payment-field">
                       <span>Importo incassato ora</span>
-                      <div><Euro size={18} /><input type="number" min="0" step="0.01" value={effectiveAmount} onChange={(event) => setAmount(event.target.value)} disabled={!partialMode && !isToken} /></div>
+                      <div><Euro size={18} /><input type="number" min="0" step="0.01" value={effectiveAmount} onChange={(event) => setAmount(event.target.value)} disabled={!partialMode && !customAmountMode && !isToken} /></div>
+                      {customAmountMode ? <small className="guided-payment-custom-hint">Listino {euro(listPrice)} · verranno registrati {euro(courseAmount)} come incasso reale e la quota risulterà saldata.</small> : null}
                       {amountInvalid ? <small className="is-error">L’importo non è valido per il saldo selezionato.</small> : null}
                     </label>
                   ) : (
@@ -789,7 +824,7 @@ export default function RegistraPagamentoPage() {
                     >
                       <span className="guided-payment-course-picker-icon">{selected ? <Minus size={16} /> : <Plus size={16} />}</span>
                       <span>
-                        <strong>{course.nome}</strong>
+                        <strong>{courseDisplayName(course)}</strong>
                         <small>{[course.livello, course.giorno_settimana, course.ora_inizio].filter(Boolean).join(' · ') || course.disciplina || 'Corso Orchidea'}</small>
                       </span>
                       <b>{selected ? 'Assegnato' : 'Aggiungi'}</b>

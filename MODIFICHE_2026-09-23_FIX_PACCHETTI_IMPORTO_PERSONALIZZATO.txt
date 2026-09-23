@@ -1,0 +1,29 @@
+NOVA - 23/09/2026
+FIX PACCHETTI AUTOMATICI + IMPORTO PERSONALIZZATO
+
+1) PACCHETTI STANDARD
+- Ripristinato il riconoscimento automatico in base alla combinazione dei corsi.
+- 1 corso, Country, Bachata + Salsa, 2 corsi Special, 3 corsi e All You Can Dance NON possono più avere associazioni manuali ai corsi.
+- Le associazioni course_ids eventualmente salvate per errore sui pacchetti standard vengono ignorate immediatamente e Nova prova a rimuoverle automaticamente dal catalogo al primo caricamento.
+- Esempio verificato: Bachata base + Salsa base => Mensile 2 corsi Bachata + Salsa, non Mensile 1 corso.
+
+2) PACCHETTI PERSONALIZZATI
+- Solo i pacchetti creati manualmente possono essere associati a uno o più corsi.
+- I pacchetti personalizzati specifici per corso mantengono la precedenza sul listino generico dello stesso periodo, utile per regole diverse dei singoli insegnanti (es. Country).
+- Restano le etichette operative Country base martedì / Country base venerdì.
+
+3) REGISTRA PAGAMENTO
+- Aggiunta opzione "Importo personalizzato / sconto" separata da "Incasso parziale".
+- Importo personalizzato: registra l'incasso reale ma considera il pacchetto completamente saldato.
+- Incasso parziale: continua invece a lasciare il residuo.
+- Nel riepilogo viene indicato anche il prezzo di listino quando l'importo è personalizzato.
+
+4) ISCRIZIONE CORSISTA
+- Stessa possibilità di importo personalizzato/sconto anche nel pagamento effettuato durante l'iscrizione.
+- Il totale e il riepilogo usano l'incasso reale.
+
+VERIFICHE
+- Parsing JSX/JS: OK
+- ESLint file modificati: OK
+- Test logica Bachata + Salsa: OK
+- Build Vite non eseguibile nel container Linux per binding nativo Rolldown mancante nello node_modules fornito; errore ambientale, non di sintassi/applicazione.

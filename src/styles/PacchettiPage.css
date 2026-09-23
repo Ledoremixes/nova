@@ -777,3 +777,79 @@
 .packages-danger-primary { background: #c32748 !important; color: #fff !important; border-color: #c32748 !important; }
 @media (max-width: 1100px) { .packages-catalog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .packages-catalog-stats, .packages-catalog-grid, .packages-catalog-form { grid-template-columns: 1fr; } .packages-catalog-toolbar { align-items: stretch; flex-direction: column; } .packages-catalog-form__wide, .packages-catalog-active { grid-column: auto; } }
+
+/* 2026-09-23: associazione pacchetti -> corsi */
+.packages-catalog-card__courses {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 12px;
+  border: 1px solid rgba(112, 72, 245, .12);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbf9ff, #fff);
+  color: #6d5dfc;
+}
+.packages-catalog-card__courses > div { min-width: 0; }
+.packages-catalog-card__courses span,
+.packages-catalog-card__courses strong { display: block; }
+.packages-catalog-card__courses span { color: #7c748f; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.packages-catalog-card__courses strong { margin-top: 2px; color: #29243c; font-size: 13px; line-height: 1.35; }
+
+.packages-course-scope {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(112, 72, 245, .14);
+  border-radius: 18px;
+  background: linear-gradient(135deg, #fcfaff, #fff);
+}
+.packages-course-scope__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.packages-course-scope__head span,
+.packages-course-scope__head strong { display: block; }
+.packages-course-scope__head span { color: #d72591; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; }
+.packages-course-scope__head strong { margin-top: 3px; color: #211d32; font-size: 15px; }
+.packages-course-scope__head button { border: 0; background: transparent; color: #7048f5; font-weight: 800; cursor: pointer; }
+.packages-course-scope__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.packages-course-scope__grid > button {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  padding: 12px;
+  border: 1px solid rgba(62,54,97,.12);
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+}
+.packages-course-scope__grid > button.is-selected { border-color: rgba(112,72,245,.4); background: #f6f1ff; box-shadow: 0 0 0 3px rgba(112,72,245,.06); }
+.packages-course-scope__check { width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid #d9d4e8; border-radius: 8px; color: #fff; background: #fff; }
+.packages-course-scope__grid > button.is-selected .packages-course-scope__check { border-color: #7048f5; background: #7048f5; }
+.packages-course-scope__grid strong,
+.packages-course-scope__grid small { display: block; text-transform: none; letter-spacing: normal; }
+.packages-course-scope__grid strong { color: #211d32; font-size: 14px; }
+.packages-course-scope__grid small { margin-top: 2px; color: #7c748f; font-weight: 600; }
+.packages-course-scope__hint,
+.packages-course-scope__loading { color: #6f6880 !important; text-transform: none !important; letter-spacing: normal !important; font-weight: 600 !important; line-height: 1.45; }
+
+@media (max-width: 760px) {
+  .packages-course-scope__grid { grid-template-columns: 1fr; }
+  .packages-course-scope__head { align-items: flex-start; flex-direction: column; }
+}
+
+/* 2026-09-23 · componenti tariffarie cumulative */
+.packages-catalog-stackable {
+  align-items: flex-start;
+}
+.packages-catalog-stackable span {
+  font-weight: 800;
+}
+.packages-catalog-stackable small {
+  line-height: 1.45;
+}
+.packages-catalog-card__courses small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted, #64748b);
+  font-size: 0.76rem;
+}

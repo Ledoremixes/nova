@@ -37,8 +37,18 @@ function normalizePackage(row = {}) {
     prezzo: Math.max(0, Number(metadata.prezzo ?? row.prezzo ?? 0)),
     descrizione: metadata.descrizione ?? row.descrizione ?? '',
     pricing_key: metadata.pricing_key ?? row.pricing_key ?? null,
+    pricing_key_explicit: Object.prototype.hasOwnProperty.call(metadata, 'pricing_key'),
     pricing_group: metadata.pricing_group ?? row.pricing_group ?? null,
     pricing_period: metadata.pricing_period ?? row.pricing_period ?? null,
+    // Le formule del listino automatico non devono mai essere legate manualmente ai corsi:
+    // vengono rilevate da Nova in base alla combinazione di corsi dell'allievo.
+    course_ids: metadata.pricing_key
+      ? []
+      : (Array.isArray(metadata.course_ids) ? metadata.course_ids.map(String).filter(Boolean) : []),
+    stackable: metadata.pricing_key ? false : metadata.stackable === true,
+    covered_course_count: metadata.pricing_key
+      ? null
+      : (Number(metadata.covered_course_count || 0) > 0 ? Math.max(1, Math.floor(Number(metadata.covered_course_count))) : null),
     attivo: row.attivo !== undefined ? row.attivo !== false : row.is_active !== false,
     ordine: Number(row.ordine ?? row.sort_order ?? 0),
     created_at: row.created_at || null,
@@ -49,7 +59,7 @@ function normalizePackage(row = {}) {
 function metadataForPackage(payload) {
   const tipo = payload.tipo || 'mensile'
   return JSON.stringify({
-    schema: 1,
+    schema: 3,
     tipo,
     durata_mesi: tipo === 'gettone' ? 1 : Math.max(1, Number(payload.durata_mesi || 1)),
     prezzo: Math.max(0, Number(payload.prezzo || 0)),
@@ -57,6 +67,13 @@ function metadataForPackage(payload) {
     pricing_key: payload.pricing_key || null,
     pricing_group: payload.pricing_group || null,
     pricing_period: payload.pricing_period || null,
+    course_ids: payload.pricing_key
+      ? []
+      : (Array.isArray(payload.course_ids) ? [...new Set(payload.course_ids.map(String).filter(Boolean))] : []),
+    stackable: payload.pricing_key ? false : payload.stackable === true,
+    covered_course_count: payload.pricing_key || payload.stackable !== true
+      ? null
+      : (Number(payload.covered_course_count || 0) > 0 ? Math.max(1, Math.floor(Number(payload.covered_course_count))) : null),
   })
 }
 
@@ -65,6 +82,12 @@ function validatePackage(payload) {
   if (!nome) throw new Error('Inserisci il nome del pacchetto.')
   const prezzo = Number(payload.prezzo)
   if (!Number.isFinite(prezzo) || prezzo < 0) throw new Error('Inserisci un prezzo valido.')
+  if (!payload.pricing_key && payload.stackable === true && !(Array.isArray(payload.course_ids) && payload.course_ids.length)) {
+    throw new Error('Una componente cumulabile deve avere almeno un corso associato.')
+  }
+  if (!payload.pricing_key && payload.stackable === true && Number(payload.covered_course_count || 0) > Number(payload.course_ids?.length || 0)) {
+    throw new Error('Il numero di corsi coperti non può superare i corsi abilitati selezionati.')
+  }
   return nome
 }
 
@@ -84,8 +107,55 @@ async function fetchRows({ includeInactive = true } = {}) {
   return data || []
 }
 
+async function clearAutomaticPackageCourseAssignments(rows = []) {
+  const repairs = rows.map((row) => {
+    const metadata = parseMetadata(row.value)
+    const normalized = normalizePackage({ ...row, _metadata: metadata })
+    const currentCourseIds = Array.isArray(metadata.course_ids) ? metadata.course_ids.map(String).filter(Boolean) : []
+    const automaticKey = normalized.pricing_key || null
+
+    // Oltre a svuotare course_ids, autoripariamo i vecchi record standard che
+    // erano stati salvati come pricing_key=null dopo una modifica manuale.
+    if (!automaticKey) return null
+    const needsRepair = metadata.pricing_key !== automaticKey
+      || metadata.pricing_group !== normalized.pricing_group
+      || metadata.pricing_period !== normalized.pricing_period
+      || currentCourseIds.length > 0
+    if (!needsRepair) return null
+
+    return {
+      row,
+      metadata: {
+        ...metadata,
+        schema: 3,
+        pricing_key: automaticKey,
+        pricing_group: normalized.pricing_group || null,
+        pricing_period: normalized.pricing_period || null,
+        course_ids: [],
+        stackable: false,
+        covered_course_count: null,
+      },
+    }
+  }).filter(Boolean)
+
+  if (!repairs.length) return rows
+
+  await Promise.all(repairs.map(async ({ row, metadata }) => {
+    const { error } = await supabase
+      .from('lookup_options')
+      .update({ value: JSON.stringify(metadata) })
+      .eq('id', row.id)
+      .eq('section_key', SECTION_KEY)
+      .eq('list_key', LIST_KEY)
+    if (error) console.warn('Ripristino metadata pacchetto automatico non riuscito:', row.id, error.message)
+  }))
+
+  return fetchRows({ includeInactive: true })
+}
+
 async function ensureDefaultPackages() {
-  const rows = await fetchRows({ includeInactive: true })
+  let rows = await fetchRows({ includeInactive: true })
+  rows = await clearAutomaticPackageCourseAssignments(rows)
   const normalized = rows.map(normalizePackage)
   const existingKeys = new Set(normalized.map((item) => item.pricing_key).filter(Boolean))
   const existingNames = new Set(normalized.map((item) => String(item.nome || '').trim().toLowerCase()))

@@ -1,0 +1,24 @@
+NOVA - PACCHETTI ASSOCIATI AI CORSI (23/09/2026)
+
+Modifiche principali
+- Ogni pacchetto puo' ora essere associato a uno o piu' corsi tramite course_ids, salvati nei metadata di lookup_options: non serve alcuna migrazione SQL.
+- Se course_ids e' vuoto, il pacchetto resta generale.
+- I pacchetti specifici del corso hanno precedenza sul listino generale dello stesso periodo.
+- Un pacchetto associato a un insieme di corsi viene proposto solo se tutti i corsi della quota del corsista rientrano in quell'insieme. Questo evita che una formula Country venga usata per coprire per errore anche Salsa/Bachata.
+- La logica e' applicata sia a Iscrizione corsista sia a Registra pagamento.
+
+Country base
+- Nelle schermate operative e nella gestione pacchetti i due corsi Country base vengono distinti automaticamente usando il giorno:
+  * Country base martedi
+  * Country base venerdi
+- Non viene modificato il nome originale nel database: e' un'etichetta operativa sicura basata sul giorno del corso.
+
+Gestione Pacchetti
+- Aggiunta sezione "Corsi abilitati" con selezione multipla.
+- Le card mostrano per quali corsi e' valido ogni pacchetto.
+- Ricerca estesa anche ai nomi dei corsi collegati.
+- Esempio: creando "Country 1 corso e mezzo" mensile a 45 euro e selezionando i due Country base, il pacchetto sara' proposto solo nelle quote composte esclusivamente da quei corsi.
+
+Compatibilita'
+- I pacchetti esistenti senza associazioni restano generali e continuano a funzionare.
+- I vecchi metadata vengono letti senza richiedere conversioni manuali.

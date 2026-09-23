@@ -1,0 +1,37 @@
+NOVA - Quote composte per corsi con regole diverse (23/09/2026)
+
+OBIETTIVO
+Gestire correttamente allievi che frequentano corsi con listini/insegnanti differenti senza creare un pacchetto manuale per ogni combinazione possibile.
+
+NUOVA LOGICA
+- I pacchetti standard continuano a essere rilevati automaticamente.
+- Un pacchetto personalizzato può essere marcato come "Componente cumulabile della quota".
+- Una componente cumulabile deve avere i corsi esatti che copre.
+- Se l'allievo ha anche altri corsi, Nova calcola il listino dei corsi rimanenti e somma le voci.
+
+ESEMPIO
+Country 1 corso e mezzo = 45 EUR, associato ai corsi Country che compongono le 3 ore.
+Kizomba base = 1 corso standard = 40 EUR.
+Nova propone:
+- Country 1 corso e mezzo: 45 EUR
+- Kizomba base: 40 EUR
+- Totale mensile: 85 EUR
+
+META MESE
+La voce metà mese non è più un pacchetto fisso generico.
+Nova genera automaticamente il 50% della quota mensile reale:
+- 1 corso 40 EUR -> metà mese 20 EUR
+- Bachata + Salsa 50 EUR -> metà mese 25 EUR
+- Country 45 EUR + Kizomba 40 EUR -> metà mese 42,50 EUR
+  (22,50 EUR Country + 20 EUR Kizomba)
+Il vecchio pacchetto personalizzato chiamato esattamente "Metà mese" viene nascosto nei flussi operativi per evitare importi errati.
+
+DOVE SI VEDE
+- Pacchetti: flag "Componente cumulabile della quota".
+- Iscrizione corsista: quota composta con dettaglio delle singole voci e metà mese calcolata.
+- Registra pagamento: quota prevista con breakdown, opzioni corrette e metà mese calcolata.
+- Pagamenti: nome della quota composta e dettaglio delle componenti.
+- Scheda Corsista: totale mensile e breakdown delle componenti.
+
+DATABASE
+Non è richiesta una nuova tabella né SQL: il flag stackable viene salvato nei metadata JSON già presenti in lookup_options.

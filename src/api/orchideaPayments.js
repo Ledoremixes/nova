@@ -167,6 +167,7 @@ function normalizePaymentRow(row = {}) {
     recommended_package_name: row.recommended_package_name || '',
     pricing_group: row.pricing_group || null,
     pricing_group_label: row.pricing_group_label || '',
+    pricing_components: Array.isArray(row.pricing_components) ? row.pricing_components : [],
     membership_fee_charged: Number(row.membership_fee_charged || 0),
     membership_fee_paid: Number(row.membership_fee_paid || 0),
     membership_fee_remaining: Number(row.membership_fee_remaining || 0),
@@ -283,11 +284,12 @@ function normalizeDirectRows({ enrollments = [], students = [], courses = [], pa
     return normalizePaymentRow({
       ...row,
       formula: ledger.packageType && ledger.packageType !== 'gettone' ? ledger.packageType : (automaticPricing ? 'Mensile' : row.formula),
-      tipo_pacchetto: ledger.packageName || automaticPricing?.pricing_group_label || row.tipo_pacchetto,
+      tipo_pacchetto: ledger.packageName || automaticPricing?.nome || automaticPricing?.pricing_group_label || row.tipo_pacchetto,
       recommended_package_id: automaticPricing?.id || null,
       recommended_package_name: automaticPricing?.nome || '',
       pricing_group: automaticPricing?.pricing_group || null,
       pricing_group_label: automaticPricing?.pricing_group_label || '',
+      pricing_components: automaticPricing?.components || [],
       quota_mese: displayQuota,
       pagato: displayPaid,
       residuo: ledger.residue,
@@ -666,6 +668,20 @@ export async function rollbackAllievoPackagePaymentResult(result) {
   })
 }
 
+
+function packageComponentsNote(packageItem = {}) {
+  const components = Array.isArray(packageItem.components) ? packageItem.components : []
+  if (!components.length) return ''
+  return `Dettaglio quota: ${components.map((item) => `${item.nome} ${euro(item.prezzo)}`).join(' + ')}`
+}
+
+function noteWithPackageBreakdown(note, packageItem) {
+  const base = String(note || '').trim()
+  const detail = packageComponentsNote(packageItem)
+  if (!detail || base.includes('Dettaglio quota:')) return base
+  return [base, detail].filter(Boolean).join(' · ')
+}
+
 export async function setAllievoPackagePayment({
   tesseramentoId,
   startMonth,
@@ -677,6 +693,7 @@ export async function setAllievoPackagePayment({
   if (!tesseramentoId) throw new Error('Corsista non selezionato')
   if (!packageItem?.id && !packageItem?.special) throw new Error('Seleziona un pacchetto')
   const selectedStart = startMonth || dayjs().format('YYYY-MM')
+  const savedNote = noteWithPackageBreakdown(note, packageItem)
 
   // Il gettone è una singola lezione: viene sempre INSERITO come movimento autonomo
   // e non aggiorna mai il record quota_mensile. In questo modo non può chiudere il mese.
@@ -695,7 +712,7 @@ export async function setAllievoPackagePayment({
       stato: 'pagato',
       metodo: method || null,
       descrizione: `${packageItem.nome || 'A gettone'} · lezione singola`,
-      note: note || null,
+      note: savedNote || null,
       tipo: 'gettone_corso',
       pagato_il: dayjs().format('YYYY-MM-DD'),
       data_pagamento: dayjs().format('YYYY-MM-DD'),
@@ -771,7 +788,7 @@ export async function setAllievoPackagePayment({
         descrizione: packageItem?.tipo === 'omaggio'
           ? `${packageItem.nome || 'Omaggio'} · copertura gratuita ${selectedStart} / ${months[months.length - 1]}`
           : `${packageItem.nome} · copertura ${selectedStart} / ${months[months.length - 1]}`,
-        note: note || null,
+        note: savedNote || null,
         tipo: 'quota_mensile',
         pagato_il: dayjs().format('YYYY-MM-DD'),
         data_pagamento: dayjs().format('YYYY-MM-DD'),

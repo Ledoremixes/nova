@@ -1,0 +1,19 @@
+NOVA - 23/09/2026
+
+1. Iscrizione corsista
+- L'opzione "Importo personalizzato / sconto" resta sempre visibile nel Passaggio 4.
+- Finche' non si seleziona il pagamento del pacchetto e' visibile ma disabilitata.
+- Dopo l'attivazione permette di registrare un importo differente dal listino.
+- Il pacchetto viene comunque segnato come interamente coperto; non resta un residuo.
+- Nel pagamento viene salvato l'incasso reale e nelle note resta il riferimento al prezzo di listino.
+
+2. Ripristino listino automatico
+- I nomi ufficiali del listino vengono riconosciuti come formule automatiche anche se una modifica precedente aveva salvato pricing_key=null.
+- I pacchetti standard non usano course_ids.
+- I pacchetti personalizzati continuano invece a poter essere associati a uno o piu' corsi.
+
+3. SQL
+- Eseguire reset_pacchetti_standard_2026_2027.sql nel database Supabase di NOVA che contiene public.lookup_options.
+- Lo script riclassifica i pacchetti standard e azzera solo le loro associazioni corso.
+- Prezzi, descrizioni, stato attivo e ordine restano invariati.
+- In caso di mese omaggio, l'importo personalizzato e' disponibile anche sul pacchetto pagato per il periodo successivo.

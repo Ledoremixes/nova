@@ -126,6 +126,9 @@
 .guided-payment-partial-toggle span { display: flex; flex-direction: column; }
 .guided-payment-partial-toggle strong { font-size: 10px; }
 .guided-payment-partial-toggle small { color: var(--gp-muted); font-size: 8px; }
+.guided-payment-custom-toggle { border-style: solid; background: #fbf8ff; }
+.guided-payment-custom-toggle:has(input:checked) { border-color: #9f7aea; background: #f5efff; }
+.guided-payment-custom-hint { color: #6d4acb !important; font-size: 8px; line-height: 1.4; }
 .guided-payment-method-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 13px; }
 .guided-payment-field { display: flex; flex-direction: column; gap: 6px; }
 .guided-payment-field > span { color: #666f7f; font-size: 9px; font-weight: 800; }
@@ -452,3 +455,24 @@
     min-width: 0;
   }
 }
+
+/* 2026-09-23 · quota composta e metà mese dinamica */
+.guided-payment-pricing-breakdown {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(99, 102, 241, .18);
+  border-radius: 14px;
+  background: rgba(99, 102, 241, .05);
+}
+.guided-payment-pricing-breakdown > div:first-child { display: grid; gap: 2px; }
+.guided-payment-pricing-breakdown > div:first-child span { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: #64748b; }
+.guided-payment-pricing-breakdown > div:first-child strong { color: #312e81; }
+.guided-payment-pricing-breakdown > b { font-size: 1.1rem; color: #4f46e5; }
+.guided-payment-pricing-components { grid-column: 1 / -1; display: grid; gap: 5px; padding-top: 8px; border-top: 1px dashed rgba(99, 102, 241, .2); }
+.guided-payment-pricing-components span { display: flex; justify-content: space-between; gap: 12px; font-size: .79rem; }
+.guided-payment-pricing-components em { font-style: normal; color: #475569; }
+.guided-payment-package-breakdown { display: block !important; margin-top: 3px; font-size: .72rem !important; color: #6d5bd0 !important; line-height: 1.35; }

@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronUp,
   CircleDollarSign,
+  Euro,
   IdCard,
   Mail,
   MapPin,
@@ -40,6 +41,7 @@ import { invalidatePaymentsReadCache, rollbackAllievoPackagePaymentResult, setAl
 import { createQuickCorsista } from '../api/studentEnrollment'
 import { packagesForCourseSelection, resolveCoursePricing } from '../lib/coursePriceList'
 import { enrollmentIsActiveForMonth } from '../lib/packagePricing'
+import { courseDisplayName } from '../lib/courseLabels'
 import '../styles/IscrizioneCorsistaPage.css'
 
 const currentMonth = dayjs().format('YYYY-MM')
@@ -151,8 +153,12 @@ export default function IscrizioneCorsistaPage() {
   const [selectedPackageId, setSelectedPackageId] = useState('')
   const [payMembershipNow, setPayMembershipNow] = useState(false)
   const [payPackageNow, setPayPackageNow] = useState(false)
+  const [customPackageAmount, setCustomPackageAmount] = useState(false)
+  const [packageAmount, setPackageAmount] = useState('')
   const [payNextPeriodAfterGift, setPayNextPeriodAfterGift] = useState(false)
   const [giftFollowUpPackageId, setGiftFollowUpPackageId] = useState('')
+  const [customFollowUpAmount, setCustomFollowUpAmount] = useState(false)
+  const [followUpAmount, setFollowUpAmount] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('Contanti')
   const [result, setResult] = useState(null)
 
@@ -272,12 +278,22 @@ export default function IscrizioneCorsistaPage() {
   const followUpStartMonth = dayjs(`${packageStartMonth}-01`)
     .add(Math.max(1, Number(selectedPackage?.durata_mesi || 1)), 'month')
     .format('YYYY-MM')
+  const followUpListPrice = Number(followUpPackage?.prezzo || 0)
+  const effectiveFollowUpAmount = customFollowUpAmount
+    ? Math.max(0, Number(String(followUpAmount || '').replace(',', '.')) || 0)
+    : followUpListPrice
+  const hasCustomFollowUpAmount = Boolean(customFollowUpAmount && Math.abs(effectiveFollowUpAmount - followUpListPrice) > 0.001)
   const followUpCash = isGiftPackage && payNextPeriodAfterGift && followUpPackage
-    ? Number(followUpPackage.prezzo || 0)
+    ? effectiveFollowUpAmount
     : 0
+  const selectedPackageListPrice = Number(selectedPackage?.prezzo || 0)
+  const effectivePackageAmount = customPackageAmount
+    ? Math.max(0, Number(String(packageAmount || '').replace(',', '.')) || 0)
+    : selectedPackageListPrice
+  const hasCustomPackageAmount = Boolean(customPackageAmount && Math.abs(effectivePackageAmount - selectedPackageListPrice) > 0.001)
 
   const cashNow = (membershipWillBePaid ? membershipRemaining : 0)
-    + (!isGiftPackage && payPackageNow ? Number(selectedPackage?.prezzo || 0) : 0)
+    + (!isGiftPackage && payPackageNow ? effectivePackageAmount : 0)
     + followUpCash
 
   const isNewFormValid = Boolean(
@@ -288,7 +304,11 @@ export default function IscrizioneCorsistaPage() {
     && newForm.cf.trim().length >= 6,
   )
   const personReady = mode === 'existing' ? Boolean(selectedStudent?.id) : mode === 'new' ? isNewFormValid : false
-  const canComplete = personReady && chosenCourses.length > 0 && Boolean(selectedPackage) && !detailsQuery.isLoading
+  const customAmountInvalid = Boolean(
+    (!isGiftPackage && payPackageNow && customPackageAmount && effectivePackageAmount <= 0)
+    || (isGiftPackage && payNextPeriodAfterGift && customFollowUpAmount && effectiveFollowUpAmount <= 0)
+  )
+  const canComplete = personReady && chosenCourses.length > 0 && Boolean(selectedPackage) && !detailsQuery.isLoading && !customAmountInvalid
 
   const completeMutation = useMutation({
     mutationFn: async () => {
@@ -371,11 +391,13 @@ export default function IscrizioneCorsistaPage() {
             tesseramentoId: student.id,
             startMonth: packageStartMonth,
             packageItem: selectedPackage,
-            amount: isGiftPackage ? 0 : Number(selectedPackage.prezzo || 0),
+            amount: isGiftPackage ? 0 : effectivePackageAmount,
             method: isGiftPackage ? 'Omaggio' : paymentMethod,
             note: isGiftPackage
               ? `${selectedPackage.nome} registrato da Iscrizione corsista · tessera esclusa dall'omaggio · ${opCode}`
-              : `${selectedPackage.nome} registrato da Iscrizione corsista · ${opCode}`,
+              : hasCustomPackageAmount
+                ? `${selectedPackage.nome} · importo personalizzato ${money(effectivePackageAmount)} (listino ${money(selectedPackageListPrice)}) · Iscrizione corsista · ${opCode}`
+                : `${selectedPackage.nome} registrato da Iscrizione corsista · ${opCode}`,
           })
         }
 
@@ -384,9 +406,11 @@ export default function IscrizioneCorsistaPage() {
             tesseramentoId: student.id,
             startMonth: followUpStartMonth,
             packageItem: followUpPackage,
-            amount: Number(followUpPackage.prezzo || 0),
+            amount: effectiveFollowUpAmount,
             method: paymentMethod,
-            note: `${followUpPackage.nome} pagato insieme al mese omaggio precedente · decorrenza ${followUpStartMonth} · ${opCode}`,
+            note: hasCustomFollowUpAmount
+              ? `${followUpPackage.nome} · importo personalizzato ${money(effectiveFollowUpAmount)} (listino ${money(followUpListPrice)}) · pagamento successivo a omaggio · decorrenza ${followUpStartMonth} · ${opCode}`
+              : `${followUpPackage.nome} pagato insieme al mese omaggio precedente · decorrenza ${followUpStartMonth} · ${opCode}`,
           })
         }
 
@@ -400,9 +424,13 @@ export default function IscrizioneCorsistaPage() {
           followUpPackageItem: isGiftPackage && payNextPeriodAfterGift ? followUpPackage : null,
           followUpPackagePayment: followUpPayment,
           followUpStartMonth: isGiftPackage && payNextPeriodAfterGift ? followUpStartMonth : null,
+          followUpListPrice: isGiftPackage && payNextPeriodAfterGift ? followUpListPrice : 0,
+          followUpCustomAmount: isGiftPackage && payNextPeriodAfterGift ? hasCustomFollowUpAmount : false,
           membershipPaid: membershipWillBePaid && membershipRemaining > 0,
           membershipCash: membershipWillBePaid ? membershipRemaining : 0,
-          packageCash: (!isGiftPackage && payPackageNow ? Number(selectedPackage?.prezzo || 0) : 0) + followUpCash,
+          packageCash: (!isGiftPackage && payPackageNow ? effectivePackageAmount : 0) + followUpCash,
+          packageListPrice: selectedPackageListPrice,
+          customPackageAmount: hasCustomPackageAmount,
           totalCash: cashNow,
           operationCode: opCode,
         }
@@ -493,8 +521,10 @@ export default function IscrizioneCorsistaPage() {
         setSelectedPackageId('')
         setPayMembershipNow(false)
         setPayPackageNow(false)
+        setCustomPackageAmount(false)
+        setPackageAmount('')
         setPayNextPeriodAfterGift(false)
-        setGiftFollowUpPackageId('')
+        setGiftFollowUpPackageId(''); setCustomFollowUpAmount(false); setFollowUpAmount('')
       }
     },
   })
@@ -506,8 +536,10 @@ export default function IscrizioneCorsistaPage() {
     setSelectedPackageId('')
     setPayMembershipNow(false)
     setPayPackageNow(false)
+    setCustomPackageAmount(false)
+    setPackageAmount('')
     setPayNextPeriodAfterGift(false)
-    setGiftFollowUpPackageId('')
+    setGiftFollowUpPackageId(''); setCustomFollowUpAmount(false); setFollowUpAmount('')
     setResult(null)
   }
 
@@ -519,8 +551,10 @@ export default function IscrizioneCorsistaPage() {
     setSelectedPackageId('')
     setPayMembershipNow(false)
     setPayPackageNow(false)
+    setCustomPackageAmount(false)
+    setPackageAmount('')
     setPayNextPeriodAfterGift(false)
-    setGiftFollowUpPackageId('')
+    setGiftFollowUpPackageId(''); setCustomFollowUpAmount(false); setFollowUpAmount('')
     setShowExtraData(false)
     setResult(null)
   }
@@ -532,8 +566,10 @@ export default function IscrizioneCorsistaPage() {
     setSelectedPackageId('')
     setPayMembershipNow(false)
     setPayPackageNow(false)
+    setCustomPackageAmount(false)
+    setPackageAmount('')
     setPayNextPeriodAfterGift(false)
-    setGiftFollowUpPackageId('')
+    setGiftFollowUpPackageId(''); setCustomFollowUpAmount(false); setFollowUpAmount('')
     setResult(null)
   }
 
@@ -546,8 +582,10 @@ export default function IscrizioneCorsistaPage() {
     setSelectedPackageId('')
     setPayMembershipNow(false)
     setPayPackageNow(false)
+    setCustomPackageAmount(false)
+    setPackageAmount('')
     setPayNextPeriodAfterGift(false)
-    setGiftFollowUpPackageId('')
+    setGiftFollowUpPackageId(''); setCustomFollowUpAmount(false); setFollowUpAmount('')
     setShowExtraData(false)
     setResult(null)
     completeMutation.reset()
@@ -559,8 +597,10 @@ export default function IscrizioneCorsistaPage() {
     setCourseIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
     setSelectedPackageId('')
     setPayPackageNow(false)
+    setCustomPackageAmount(false)
+    setPackageAmount('')
     setPayNextPeriodAfterGift(false)
-    setGiftFollowUpPackageId('')
+    setGiftFollowUpPackageId(''); setCustomFollowUpAmount(false); setFollowUpAmount('')
   }
 
   if (result) {
@@ -578,7 +618,7 @@ export default function IscrizioneCorsistaPage() {
           {result.operationCode ? <div className="enrollment-operation-code">Operazione verificata · {result.operationCode}</div> : null}
 
           <div className="enrollment-success-grid">
-            <div><span>Corsi</span><strong>{result.selectedCourses.length}</strong><small>{result.selectedCourses.map((course) => course.nome).join(' · ')}</small></div>
+            <div><span>Corsi</span><strong>{result.selectedCourses.length}</strong><small>{result.selectedCourses.map(courseDisplayName).join(' · ')}</small></div>
             <div><span>Pacchetto</span><strong>{result.packageItem?.nome || '—'}</strong><small>{result.packagePayment ? (result.packageItem?.tipo === 'omaggio' ? `Omaggio registrato · ${monthLabel(packageStartMonth)}${result.followUpPackageItem ? ` · poi ${result.followUpPackageItem.nome} da ${monthLabel(result.followUpStartMonth)}` : ''}` : `Pagato · decorrenza ${monthLabel(packageStartMonth)}`) : 'Da incassare'}</small></div>
             <div><span>Tessera corsista</span><strong>{result.membershipPaid || membershipRemaining <= 0 ? 'Pagata' : 'Da pagare'}</strong><small>{result.membershipPaid ? `${money(result.membershipCash)} registrati` : 'Resta visibile in rosso nei Pagamenti'}</small></div>
             <div><span>Incassato ora</span><strong>{money(result.totalCash)}</strong><small>{result.totalCash > 0 ? paymentMethod : 'Nessun incasso registrato'}</small></div>
@@ -722,7 +762,7 @@ export default function IscrizioneCorsistaPage() {
                   return (
                     <button type="button" key={course.id} className={`enrollment-course-choice ${checked ? 'is-selected' : ''} ${alreadyAssigned ? 'is-locked' : ''}`} onClick={() => toggleCourse(id)}>
                       <span className="enrollment-course-check">{checked ? <Check size={17} /> : null}</span>
-                      <span><strong>{course.nome}</strong><small>{[course.livello, course.giorno_settimana, course.ora_inizio].filter(Boolean).join(' · ') || course.disciplina || 'Corso attivo'}</small></span>
+                      <span><strong>{courseDisplayName(course)}</strong><small>{[course.livello, course.giorno_settimana, course.ora_inizio].filter(Boolean).join(' · ') || course.disciplina || 'Corso attivo'}</small></span>
                       {alreadyAssigned ? <em>Già assegnato</em> : null}
                     </button>
                   )
@@ -756,11 +796,16 @@ export default function IscrizioneCorsistaPage() {
                   const recommended = String(item.id) === String(recommendedMonthly?.id)
                   const gift = item.tipo === 'omaggio'
                   return (
-                    <button type="button" className={`enrollment-package-choice ${selected ? 'is-selected' : ''} ${gift ? 'is-gift' : ''}`} key={item.id || item.nome} onClick={() => { setSelectedPackageId(item.id); setPayPackageNow(false); setPayNextPeriodAfterGift(false); setGiftFollowUpPackageId('') }}>
+                    <button type="button" className={`enrollment-package-choice ${selected ? 'is-selected' : ''} ${gift ? 'is-gift' : ''}`} key={item.id || item.nome} onClick={() => { setSelectedPackageId(item.id); setPayPackageNow(false); setCustomPackageAmount(false); setPackageAmount(''); setPayNextPeriodAfterGift(false); setGiftFollowUpPackageId(''); setCustomFollowUpAmount(false); setFollowUpAmount('') }}>
                       <span className="enrollment-package-top"><em>{gift ? 'Omaggio' : item.tipo === 'gettone' ? 'Lezione singola' : item.tipo}</em>{gift && septemberGiftPromoEligible ? <b>Promo settembre</b> : recommended && !septemberGiftPromoEligible ? <b>Consigliato</b> : null}</span>
                       <strong>{item.nome}</strong>
                       <span className="enrollment-package-price">{gift ? 'GRATIS' : money(item.prezzo)}</span>
-                      <small>{gift ? 'Copre 1 mese di corsi a 0 € · la tessera da 25 € è sempre esclusa' : item.tipo === 'gettone' ? 'Non chiude il mese' : `${Math.max(1, Number(item.durata_mesi || 1))} ${Number(item.durata_mesi || 1) === 1 ? 'mese' : 'mesi'} di copertura`}</small>
+                      <small>{gift ? 'Copre 1 mese di corsi a 0 € · la tessera da 25 € è sempre esclusa' : item.tipo === 'gettone' ? 'Non chiude il mese' : item.is_half_month ? `50% della quota mensile completa (${money(item.full_month_price)})` : `${Math.max(1, Number(item.durata_mesi || 1))} ${Number(item.durata_mesi || 1) === 1 ? 'mese' : 'mesi'} di copertura`}</small>
+                      {Array.isArray(item.components) && item.components.length ? (
+                        <span className="enrollment-package-breakdown">
+                          {item.components.map((component) => <em key={`${item.id}-${component.id}`}>{component.nome} <b>{money(component.prezzo)}</b></em>)}
+                        </span>
+                      ) : null}
                     </button>
                   )
                 })}
@@ -800,13 +845,13 @@ export default function IscrizioneCorsistaPage() {
                     </div>
 
                     <label className={`enrollment-pay-row enrollment-pay-row--next ${payNextPeriodAfterGift ? 'is-checked' : ''}`}>
-                      <input type="checkbox" checked={payNextPeriodAfterGift} onChange={(event) => setPayNextPeriodAfterGift(event.target.checked)} />
+                      <input type="checkbox" checked={payNextPeriodAfterGift} onChange={(event) => { const checked = event.target.checked; setPayNextPeriodAfterGift(checked); if (!checked) { setCustomFollowUpAmount(false); setFollowUpAmount('') } }} />
                       <span className="enrollment-pay-icon"><CalendarRange size={21} /></span>
                       <span className="enrollment-pay-copy">
                         <strong>Ha già pagato anche da {monthLabel(followUpStartMonth)}?</strong>
                         <small>Attiva questa voce se stai incassando ora anche il periodo successivo all’omaggio.</small>
                       </span>
-                      <strong className="enrollment-pay-amount">{payNextPeriodAfterGift && followUpPackage ? money(followUpPackage.prezzo) : 'No'}</strong>
+                      <strong className="enrollment-pay-amount">{payNextPeriodAfterGift && followUpPackage ? money(effectiveFollowUpAmount) : 'No'}</strong>
                     </label>
 
                     {payNextPeriodAfterGift && followUpPackage ? (
@@ -816,14 +861,43 @@ export default function IscrizioneCorsistaPage() {
                             <span>Pacchetto dal {monthLabel(followUpStartMonth)}</span>
                             <strong>Registra il pagamento successivo</strong>
                           </div>
-                          <b>{money(followUpPackage.prezzo)}</b>
+                          <b>{customFollowUpAmount ? money(effectiveFollowUpAmount) : money(followUpPackage.prezzo)}</b>
                         </div>
                         <label>
                           <span>Pacchetto pagato</span>
-                          <select value={effectiveFollowUpPackageId} onChange={(event) => setGiftFollowUpPackageId(event.target.value)}>
+                          <select value={effectiveFollowUpPackageId} onChange={(event) => {
+                            const nextId = event.target.value
+                            setGiftFollowUpPackageId(nextId)
+                            if (customFollowUpAmount) {
+                              const nextPackage = followUpPackages.find((item) => String(item.id) === String(nextId))
+                              setFollowUpAmount(Number(nextPackage?.prezzo || 0).toFixed(2))
+                            }
+                          }}>
                             {followUpPackages.map((item) => <option key={item.id || item.nome} value={item.id}>{item.nome} · {money(item.prezzo)}</option>)}
                           </select>
                         </label>
+                        <div className="enrollment-custom-amount enrollment-custom-amount--followup">
+                          <label className="enrollment-custom-amount-toggle">
+                            <input
+                              type="checkbox"
+                              checked={customFollowUpAmount}
+                              onChange={(event) => {
+                                const checked = event.target.checked
+                                setCustomFollowUpAmount(checked)
+                                setFollowUpAmount(checked ? followUpListPrice.toFixed(2) : '')
+                              }}
+                            />
+                            <span><strong>Importo personalizzato / sconto</strong><small>Vale anche sul pagamento successivo al mese omaggio.</small></span>
+                          </label>
+                          {customFollowUpAmount ? (
+                            <label className="enrollment-custom-amount-field">
+                              <span>Importo incassato</span>
+                              <div><Euro size={17} /><input type="number" min="0" step="0.01" value={followUpAmount} onChange={(event) => setFollowUpAmount(event.target.value)} /></div>
+                              <small>Listino {money(followUpListPrice)} · incasso reale {money(effectiveFollowUpAmount)} · pacchetto saldato completamente</small>
+                              {customAmountInvalid && effectiveFollowUpAmount <= 0 ? <em>Inserisci un importo maggiore di zero.</em> : null}
+                            </label>
+                          ) : null}
+                        </div>
                         <small>L’omaggio resta su {monthLabel(packageStartMonth)}; questo pagamento parte automaticamente da {monthLabel(followUpStartMonth)}.</small>
                       </div>
                     ) : null}
@@ -832,11 +906,40 @@ export default function IscrizioneCorsistaPage() {
                   <label className={`enrollment-pay-row ${payPackageNow ? 'is-checked' : ''}`}>
                     <input type="checkbox" checked={payPackageNow} onChange={(event) => setPayPackageNow(event.target.checked)} />
                     <span className="enrollment-pay-icon"><PackageCheck size={21} /></span>
-                    <span className="enrollment-pay-copy"><strong>{selectedPackage.nome}</strong><small>{packageStartMonth === currentMonth ? `Decorrenza ${monthLabel(currentMonth)}` : `Decorrenza ${monthLabel(packageStartMonth)}`}</small></span>
-                    <strong className="enrollment-pay-amount">{money(selectedPackage.prezzo)}</strong>
+                    <span className="enrollment-pay-copy"><strong>{selectedPackage.nome}</strong><small>{packageStartMonth === currentMonth ? `Decorrenza ${monthLabel(currentMonth)}` : `Decorrenza ${monthLabel(packageStartMonth)}`}</small>{Array.isArray(selectedPackage.components) && selectedPackage.components.length ? <small className="enrollment-pay-breakdown">{selectedPackage.components.map((component) => `${component.nome} ${money(component.prezzo)}`).join(' + ')}</small> : null}</span>
+                    <strong className="enrollment-pay-amount">{payPackageNow && customPackageAmount ? money(effectivePackageAmount) : money(selectedPackage.prezzo)}</strong>
                   </label>
                 )}
               </div>
+
+              {!isGiftPackage ? (
+                <div className={`enrollment-custom-amount ${payPackageNow ? '' : 'is-disabled'}`}>
+                  <label className="enrollment-custom-amount-toggle">
+                    <input
+                      type="checkbox"
+                      checked={customPackageAmount}
+                      disabled={!payPackageNow}
+                      onChange={(event) => {
+                        const checked = event.target.checked
+                        setCustomPackageAmount(checked)
+                        setPackageAmount(checked ? selectedPackageListPrice.toFixed(2) : '')
+                      }}
+                    />
+                    <span>
+                      <strong>Importo personalizzato / sconto</strong>
+                      <small>{payPackageNow ? 'Puoi cambiare la cifra incassata senza lasciare un residuo sul pacchetto.' : 'Spunta il pagamento del pacchetto qui sopra per poter applicare uno sconto o una cifra concordata.'}</small>
+                    </span>
+                  </label>
+                  {customPackageAmount && payPackageNow ? (
+                    <label className="enrollment-custom-amount-field">
+                      <span>Importo incassato</span>
+                      <div><Euro size={17} /><input type="number" min="0" step="0.01" value={packageAmount} onChange={(event) => setPackageAmount(event.target.value)} /></div>
+                      <small>Listino {money(selectedPackageListPrice)} · incasso reale {money(effectivePackageAmount)} · pacchetto saldato completamente</small>
+                      {customAmountInvalid ? <em>Inserisci un importo maggiore di zero.</em> : null}
+                    </label>
+                  ) : null}
+                </div>
+              ) : null}
 
               {cashNow > 0 ? (
                 <div className="enrollment-method-row">
@@ -859,18 +962,18 @@ export default function IscrizioneCorsistaPage() {
 
           <div className="enrollment-summary-section">
             <span>Corsi</span>
-            {chosenCourses.length ? chosenCourses.map((course) => <small key={course.id}><Check size={14} /> {course.nome}</small>) : <em>Nessun corso selezionato</em>}
+            {chosenCourses.length ? chosenCourses.map((course) => <small key={course.id}><Check size={14} /> {courseDisplayName(course)}</small>) : <em>Nessun corso selezionato</em>}
           </div>
 
           <div className="enrollment-summary-section">
             <span>Pacchetto</span>
-            {selectedPackage ? <><strong>{selectedPackage.nome}</strong><small>{isGiftPackage ? `0 € corsi · ${monthLabel(packageStartMonth)} · tessera esclusa` : `${money(selectedPackage.prezzo)} · da ${monthLabel(packageStartMonth)}`}</small>{isGiftPackage && payNextPeriodAfterGift && followUpPackage ? <small className="enrollment-summary-followup"><CalendarRange size={13} /> Poi {followUpPackage.nome} · {money(followUpPackage.prezzo)} da {monthLabel(followUpStartMonth)}</small> : null}</> : <em>Da scegliere</em>}
+            {selectedPackage ? <><strong>{selectedPackage.nome}</strong><small>{isGiftPackage ? `0 € corsi · ${monthLabel(packageStartMonth)} · tessera esclusa` : `${customPackageAmount && payPackageNow ? `${money(effectivePackageAmount)} personalizzato · listino ${money(selectedPackageListPrice)}` : money(selectedPackage.prezzo)} · da ${monthLabel(packageStartMonth)}`}</small>{Array.isArray(selectedPackage.components) && selectedPackage.components.length ? <div className="enrollment-summary-breakdown">{selectedPackage.components.map((component) => <small key={`summary-${component.id}`}><span>{component.nome}</span><b>{money(component.prezzo)}</b></small>)}</div> : null}{isGiftPackage && payNextPeriodAfterGift && followUpPackage ? <small className="enrollment-summary-followup"><CalendarRange size={13} /> Poi {followUpPackage.nome} · {money(effectiveFollowUpAmount)}{hasCustomFollowUpAmount ? ` (listino ${money(followUpListPrice)})` : ''} da {monthLabel(followUpStartMonth)}</small> : null}</> : <em>Da scegliere</em>}
           </div>
 
           <div className="enrollment-summary-section enrollment-summary-payments">
             <span>Incasso di oggi</span>
             <div><small>Tessera</small><strong>{membershipWillBePaid ? money(membershipRemaining) : money(0)}</strong></div>
-            <div><small>Pacchetto</small><strong>{isGiftPackage ? (payNextPeriodAfterGift && followUpPackage ? `${money(followUpPackage.prezzo)} + omaggio` : 'Omaggio') : payPackageNow ? money(selectedPackage?.prezzo || 0) : money(0)}</strong></div>
+            <div><small>Pacchetto</small><strong>{isGiftPackage ? (payNextPeriodAfterGift && followUpPackage ? `${money(effectiveFollowUpAmount)} + omaggio` : 'Omaggio') : payPackageNow ? money(effectivePackageAmount) : money(0)}</strong></div>
           </div>
 
           <div className="enrollment-summary-total"><span>Totale da registrare ora</span><strong>{money(cashNow)}</strong><small>{cashNow > 0 ? (isGiftPackage && payNextPeriodAfterGift ? `${paymentMethod} · omaggio ${monthLabel(packageStartMonth)} + pagamento da ${monthLabel(followUpStartMonth)}` : paymentMethod) : isGiftPackage ? 'Mese corsi omaggio · nessun incasso' : 'Puoi salvare anche senza incassare'}</small></div>

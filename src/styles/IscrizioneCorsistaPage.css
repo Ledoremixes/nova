@@ -849,6 +849,34 @@
   white-space: nowrap;
 }
 
+.enrollment-custom-amount {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #e6defb;
+  border-radius: 14px;
+  background: #fbf9ff;
+}
+
+.enrollment-custom-amount-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.enrollment-custom-amount-toggle input { accent-color: #6d4aff; }
+.enrollment-custom-amount-toggle span { display: flex; flex-direction: column; gap: 2px; }
+.enrollment-custom-amount-toggle strong { color: #33295b; font-size: 12px; }
+.enrollment-custom-amount-toggle small { color: #7c748f; font-size: 10px; }
+.enrollment-custom-amount-field { display: flex; flex-direction: column; gap: 6px; max-width: 320px; }
+.enrollment-custom-amount-field > span { color: #565f70; font-size: 11px; font-weight: 800; }
+.enrollment-custom-amount-field > div { display: flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 11px; border: 1px solid #d8cff3; border-radius: 12px; background: #fff; }
+.enrollment-custom-amount-field input { width: 100%; border: 0; outline: 0; font: inherit; }
+.enrollment-custom-amount-field small { color: #6d4acb; font-size: 10px; }
+.enrollment-custom-amount-field em { color: #c73854; font-size: 10px; font-style: normal; }
+
 .enrollment-method-row {
   margin-top: 12px;
   max-width: 320px;
@@ -1652,3 +1680,49 @@
     gap: 4px;
   }
 }
+/* Importo personalizzato: resta visibile nel flusso di iscrizione anche prima
+   dell'incasso, così la segreteria sa subito che può applicare uno sconto. */
+.enrollment-custom-amount.is-disabled {
+  opacity: .72;
+}
+.enrollment-custom-amount.is-disabled .enrollment-custom-amount-toggle {
+  cursor: not-allowed;
+}
+.enrollment-custom-amount.is-disabled .enrollment-custom-amount-toggle strong {
+  color: #6f6880;
+}
+
+
+/* 2026-09-23 · dettaglio quota composta */
+.enrollment-package-breakdown {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(100, 116, 139, .24);
+}
+.enrollment-package-breakdown em {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-style: normal;
+  font-size: .74rem;
+  color: #64748b;
+}
+.enrollment-package-breakdown b { color: #334155; white-space: nowrap; }
+.enrollment-pay-breakdown { color: #6d5bd0 !important; font-weight: 700; }
+.enrollment-summary-breakdown {
+  display: grid;
+  gap: 4px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px dashed rgba(100, 116, 139, .24);
+}
+.enrollment-summary-breakdown small {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.enrollment-summary-breakdown b { color: #312e81; white-space: nowrap; }

@@ -1,0 +1,21 @@
+NOVA - Fix pacchetti standard + personalizzati - 23/09/2026
+
+Problema corretto:
+Un pacchetto personalizzato associato ai corsi (es. "Metà mese" da 20 euro)
+nascondeva il pacchetto standard dello stesso periodo (es. "Mensile · 2 corsi Bachata + Salsa" da 50 euro).
+
+Nuova logica:
+- Il listino automatico viene sempre rilevato e mostrato.
+- Il pacchetto standard resta la proposta consigliata di Nova.
+- I pacchetti personalizzati associati ai corsi vengono mostrati in aggiunta.
+- I pacchetti personalizzati restano visibili solo quando i corsi selezionati rientrano nei loro course_ids.
+- La logica è condivisa da Iscrizione corsista e Registra pagamento.
+
+Esempio verificato:
+Bachata Intermedio + Salsa Intermedio ->
+- Mensile · 2 corsi Bachata + Salsa = 50 euro (automatico/consigliato)
+- Metà mese = 20 euro (alternativa personalizzata, se associata a quei corsi)
+- Trimestrale · 2 corsi Bachata + Salsa = 135 euro
+- Annuale · 2 corsi Bachata + Salsa = 399 euro
+
+Per questa correzione NON è necessario eseguire altro SQL.
