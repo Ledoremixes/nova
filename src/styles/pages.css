@@ -3105,3 +3105,16 @@
     margin-left: 0;
   }
 }
+
+@media (max-width: 760px) {
+  .medical-visit-modal__header {
+    min-height: 72px;
+  }
+
+  .medical-visit-modal__close,
+  .course-editor-close {
+    position: relative;
+    z-index: 25;
+    flex: 0 0 auto;
+  }
+}

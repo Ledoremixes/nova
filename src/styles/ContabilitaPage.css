@@ -1432,3 +1432,25 @@
   font-size: 13px;
   line-height: 1.55;
 }
+
+/* 2026-09-24: modali contabilità sicuri sul viewport mobile */
+@media (max-width: 760px) {
+  .financial-modal-overlay {
+    align-items: flex-start;
+    overflow-y: auto;
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+
+  .financial-modal {
+    max-height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
+    margin: auto 0;
+    border-radius: 22px;
+  }
+
+  .financial-modal__header {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+  }
+}

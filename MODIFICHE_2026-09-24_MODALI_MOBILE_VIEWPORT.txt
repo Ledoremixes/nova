@@ -1,0 +1,8 @@
+MODIFICHE 2026-09-24 - MODALI MOBILE/TABLET
+
+- Corretto il problema dei modali troppo alti sui browser mobile con barra indirizzi dinamica.
+- I modali ora usano il viewport dinamico (dvh) e rispettano le safe-area del dispositivo.
+- Aggiunto spazio di sicurezza sopra e sotto, evitando che titolo e pulsante X finiscano sotto la barra del browser.
+- Su mobile gli header principali dei modali restano visibili durante lo scroll.
+- Applicato il comportamento ai modali generici Nova, Visite mediche, Pacchetti, modali ModuleKit, Contabilità, Gestione corsi da pagamento, Volontari e SIAE.
+- Mantenuti invariati dati e logiche funzionali.

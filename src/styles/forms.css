@@ -135,3 +135,43 @@ button {
     width: 100%;
   }
 }
+
+/* 2026-09-24: viewport mobile sicuro per tutti i modali Nova */
+@media (max-width: 760px) {
+  .modalOverlay {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-right: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    padding-left: 12px;
+  }
+
+  .modalCard {
+    flex: 0 0 auto;
+    width: 100%;
+    max-height: calc(100dvh - max(24px, env(safe-area-inset-top)) - max(24px, env(safe-area-inset-bottom)));
+    margin: auto 0;
+    border-radius: 20px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-padding-top: 88px;
+  }
+
+  .modalCard > .section-head,
+  .modalCard > .medical-visit-modal__header,
+  .modalCard > .course-editor-header {
+    position: sticky;
+    top: -16px;
+    z-index: 20;
+    margin: -16px -16px 16px;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.98);
+    border-bottom: 1px solid rgba(23, 32, 51, 0.08);
+    backdrop-filter: blur(12px);
+  }
+}

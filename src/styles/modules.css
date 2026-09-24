@@ -956,3 +956,24 @@
   .event-fixed-costs__row { grid-template-columns: 1fr 38px; }
   .event-fixed-costs__row label:first-child { grid-column: 1 / -1; }
 }
+
+/* 2026-09-24: header modali sempre raggiungibile su mobile */
+@media (max-width: 760px) {
+  .module-modal-overlay {
+    align-items: flex-start;
+    overflow-y: auto;
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+
+  .module-modal {
+    max-height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
+    margin: auto 0;
+  }
+
+  .module-modal__header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+}

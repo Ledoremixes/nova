@@ -853,3 +853,20 @@
   color: var(--muted, #64748b);
   font-size: 0.76rem;
 }
+
+@media (max-width: 760px) {
+  .packages-catalog-modal {
+    max-height: calc(100dvh - max(24px, env(safe-area-inset-top)) - max(24px, env(safe-area-inset-bottom)));
+  }
+
+  .packages-catalog-modal__hero {
+    position: sticky;
+    top: 0;
+    z-index: 15;
+    padding: 18px;
+  }
+
+  .packages-catalog-modal__hero h3 {
+    font-size: 22px;
+  }
+}

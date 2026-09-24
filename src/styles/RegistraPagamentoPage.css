@@ -483,3 +483,26 @@
 .guided-payment-pricing-components span { display: flex; justify-content: space-between; gap: 12px; font-size: .79rem; }
 .guided-payment-pricing-components em { font-style: normal; color: #475569; }
 .guided-payment-package-breakdown { display: block !important; margin-top: 3px; font-size: .72rem !important; color: #6d5bd0 !important; line-height: 1.35; }
+
+/* 2026-09-24: modale gestione corsi compatibile con viewport mobile reale */
+@media (max-width: 760px) {
+  .guided-payment-course-modal-backdrop {
+    align-items: flex-start;
+    overflow-y: auto;
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
+  .guided-payment-course-modal {
+    max-height: calc(100dvh - max(20px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)));
+    margin: auto 0;
+    border-radius: 20px;
+  }
+
+  .guided-payment-course-modal-head {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #fff;
+  }
+}
