@@ -2771,3 +2771,337 @@
 .admin-user-confirm-modal { width: min(520px, calc(100vw - 32px)); text-align: center; }
 .admin-user-confirm-modal h3 { font-size: 24px; margin: 0 0 10px; }
 .admin-user-confirm-modal p { color: var(--muted); line-height: 1.6; }
+
+/* Visite mediche */
+.visits-page .medical-visit-modal {
+  max-width: 980px;
+}
+
+.medical-visit-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.medical-visit-modal__header-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.medical-visit-modal__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  color: #6d4aff;
+  background: linear-gradient(180deg, rgba(109, 74, 255, 0.14) 0%, rgba(109, 74, 255, 0.08) 100%);
+  border: 1px solid rgba(109, 74, 255, 0.16);
+}
+
+.medical-visit-modal__header h3 {
+  margin: 0;
+  font-size: 28px;
+  color: #162033;
+}
+
+.medical-visit-modal__header p {
+  margin: 6px 0 0;
+  color: #667085;
+}
+
+.medical-visit-modal__close {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  border: 1px solid #e3e8f4;
+  background: #fff;
+  color: #344054;
+  cursor: pointer;
+}
+
+.medical-visit-modal__close:hover {
+  background: #f8faff;
+}
+
+.medical-visit-form > label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.medical-field__label {
+  font-size: 14px;
+  font-weight: 800;
+  color: #1f2a44;
+}
+
+.medical-field__hint {
+  color: #667085;
+  font-size: 12px;
+}
+
+.medical-student-picker {
+  position: relative;
+}
+
+.medical-student-picker__inputWrap,
+.medical-inputWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-radius: 16px;
+  border: 1px solid #d8e1ef;
+  background: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.medical-student-picker__inputWrap:focus-within,
+.medical-inputWrap:focus-within {
+  border-color: rgba(109, 74, 255, 0.45);
+  box-shadow: 0 0 0 4px rgba(109, 74, 255, 0.1);
+}
+
+.medical-student-picker__inputWrap svg,
+.medical-inputWrap svg {
+  flex: 0 0 auto;
+  color: #8b95a7;
+}
+
+.medical-student-picker__inputWrap input,
+.medical-inputWrap input {
+  border: 0;
+  box-shadow: none;
+  padding: 14px 0;
+  background: transparent;
+}
+
+.medical-student-picker__inputWrap input:focus,
+.medical-inputWrap input:focus {
+  box-shadow: none;
+}
+
+.medical-student-picker__toggle {
+  border: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  color: #667085;
+  cursor: pointer;
+  padding: 0;
+}
+
+.medical-selected-student {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f6f1ff 0%, #fcfbff 100%);
+  border: 1px solid rgba(109, 74, 255, 0.18);
+  color: #4b2ad1;
+}
+
+.medical-selected-student svg {
+  flex: 0 0 auto;
+}
+
+.medical-selected-student div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.medical-selected-student strong {
+  color: #1f2a44;
+}
+
+.medical-selected-student span {
+  color: #667085;
+  font-size: 13px;
+}
+
+.medical-selected-student__clear {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: #6d4aff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.medical-student-picker__menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 5;
+  max-height: 280px;
+  overflow: auto;
+  border-radius: 18px;
+  border: 1px solid #e3e8f4;
+  background: #fff;
+  box-shadow: 0 24px 44px rgba(15, 23, 42, 0.14);
+  padding: 8px;
+}
+
+.medical-student-picker__option {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.medical-student-picker__option:hover,
+.medical-student-picker__option.is-active {
+  background: #f6f8fc;
+}
+
+.medical-student-picker__option strong {
+  color: #162033;
+}
+
+.medical-student-picker__option span,
+.medical-student-picker__empty {
+  color: #667085;
+  font-size: 13px;
+}
+
+.medical-student-picker__empty {
+  padding: 14px;
+}
+
+.medical-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.medical-status-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  text-align: left;
+  border-radius: 18px;
+  border: 1px solid #d8e1ef;
+  background: linear-gradient(180deg, #ffffff 0%, #fafbff 100%);
+  cursor: pointer;
+}
+
+.medical-status-card strong {
+  display: block;
+  color: #1f2a44;
+}
+
+.medical-status-card span {
+  color: #667085;
+  font-size: 13px;
+}
+
+.medical-status-card.is-active.is-valid {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.1) 0%, rgba(255, 255, 255, 1) 100%);
+}
+
+.medical-status-card.is-active.is-neutral {
+  border-color: rgba(109, 74, 255, 0.28);
+  background: linear-gradient(180deg, rgba(109, 74, 255, 0.1) 0%, rgba(255, 255, 255, 1) 100%);
+}
+
+.medical-file-field {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px dashed #cfd7e6;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #fafbff 100%);
+}
+
+.medical-file-field__button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: #6d4aff;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.medical-file-field__button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.medical-file-field__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #667085;
+}
+
+.medical-file-field__meta span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.medical-visit-modal__actions {
+  margin-top: 8px;
+}
+
+@media (max-width: 860px) {
+  .medical-status-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .visits-page .medical-visit-modal {
+    max-width: 100%;
+  }
+
+  .medical-visit-modal__header {
+    align-items: flex-start;
+  }
+
+  .medical-visit-modal__header h3 {
+    font-size: 22px;
+  }
+
+  .medical-file-field {
+    grid-template-columns: 1fr;
+  }
+
+  .medical-selected-student {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .medical-selected-student__clear {
+    margin-left: 0;
+  }
+}

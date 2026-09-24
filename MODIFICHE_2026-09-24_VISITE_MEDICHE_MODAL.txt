@@ -1,0 +1,9 @@
+MODIFICHE 2026-09-24 - MODALE VISITE MEDICHE
+
+- Restyling completo del modale Nuova visita medica.
+- Inserita ricerca corsista con input dedicato.
+- Il menu a tendina mostra solo i corsisti coerenti con il testo digitato.
+- Inserita card del corsista selezionato con pulsante Cambia.
+- Migliorati campi data, medico/centro, note e upload file.
+- Inserito flag/stato visita con selezione grafica: Valida / Da verificare.
+- Migliorata la visualizzazione mobile del modale.

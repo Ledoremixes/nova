@@ -1,0 +1,6 @@
+MODIFICHE 2026-09-24 - REGISTRA PAGAMENTO MOBILE/TABLET
+
+- Sistemato il layout responsive di Registra pagamento.
+- Su mobile e tablet il riepilogo con il bottone "Registra pagamento" non resta più sopra ai passaggi.
+- Il riepilogo adesso viene mostrato sotto ai contenuti principali, così totale e bottone riflettono le eventuali modifiche a corsi, pacchetto e importo.
+- Nessuna modifica alla logica dei calcoli: cambiato solo il comportamento grafico responsive.

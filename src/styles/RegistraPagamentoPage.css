@@ -174,7 +174,14 @@
 
 @media (max-width: 1180px) {
   .guided-payment-layout { grid-template-columns: 1fr; }
-  .guided-payment-summary { position: static; order: -1; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px 16px; }
+  .guided-payment-summary {
+    position: static;
+    order: 2;
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+    gap: 10px 16px;
+  }
   .guided-payment-summary-head, .guided-payment-summary-person { border-bottom: 0; padding: 0; }
   .guided-payment-summary-row { border-bottom: 0; padding: 3px 0; }
   .guided-payment-summary-total { margin: 0; }
