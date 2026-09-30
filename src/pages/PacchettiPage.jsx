@@ -32,7 +32,7 @@ function typeLabel(value) {
 function emptyForm() {
   return {
     nome: '', tipo: 'mensile', durata_mesi: 1, prezzo: '', descrizione: '', attivo: true, ordine: 0,
-    pricing_key: null, pricing_group: null, pricing_period: null, course_ids: [], stackable: false, covered_course_count: '',
+    pricing_key: null, pricing_group: null, pricing_period: null, course_ids: [],
   }
 }
 
@@ -119,8 +119,6 @@ export default function PacchettiPage() {
       pricing_group: item.pricing_group || null,
       pricing_period: item.pricing_period || null,
       course_ids: item.pricing_key ? [] : (Array.isArray(item.course_ids) ? item.course_ids.map(String) : []),
-      stackable: item.pricing_key ? false : item.stackable === true,
-      covered_course_count: item.pricing_key ? '' : (item.covered_course_count || ''),
     })
     setEditor({ mode: 'edit', item })
   }
@@ -141,14 +139,7 @@ export default function PacchettiPage() {
 
   function submit(event) {
     event.preventDefault()
-    const payload = form.pricing_key
-      ? { ...form, course_ids: [], stackable: false, covered_course_count: null }
-      : {
-          ...form,
-          covered_course_count: form.stackable
-            ? (Number(form.covered_course_count || 0) > 0 ? Math.floor(Number(form.covered_course_count)) : null)
-            : null,
-        }
+    const payload = form.pricing_key ? { ...form, course_ids: [] } : form
     saveMutation.mutate({ id: editor?.item?.id, payload })
   }
 
@@ -195,13 +186,12 @@ export default function PacchettiPage() {
               <div className="packages-catalog-card__courses">
                 <BookOpenCheck size={17} />
                 <div>
-                  <span>{item.pricing_key ? 'Rilevamento' : item.stackable ? 'Componente cumulabile' : 'Valido per'}</span>
+                  <span>{item.pricing_key ? 'Rilevamento' : 'Valido per'}</span>
                   {item.pricing_key
                     ? <strong>Automatico in base ai corsi iscritti</strong>
                     : linkedCourses.length
                       ? <strong>{linkedCourses.map(courseDisplayName).join(' · ')}</strong>
                       : <strong>Tutti i corsi compatibili</strong>}
-                  {item.stackable ? <small>Copre {item.covered_course_count || item.course_ids?.length || 1} corsi tra quelli abilitati e si somma automaticamente agli eventuali corsi rimanenti.</small> : null}
                 </div>
               </div>
               <p>{item.descrizione || 'Nessuna descrizione interna.'}</p>
@@ -220,7 +210,7 @@ export default function PacchettiPage() {
         <div className="modalOverlay" onClick={() => setEditor(null)}>
           <form className="modalCard packages-catalog-modal" onSubmit={submit} onClick={(e) => e.stopPropagation()}>
             <div className="packages-catalog-modal__hero">
-              <div><div className="dashboard-hero__eyebrow">{editor.mode === 'create' ? 'Nuova formula' : 'Modifica formula'}</div><h3>{editor.mode === 'create' ? 'Crea pacchetto' : form.nome}</h3><p>{form.pricing_key ? 'Questo è un pacchetto del listino automatico: Nova lo abbina da sola alla corretta combinazione di corsi. Non servono associazioni manuali.' : form.stackable ? 'Questa formula è una componente della quota: Nova la applica ai corsi associati e somma automaticamente gli eventuali altri corsi.' : 'Per i pacchetti personalizzati puoi scegliere i corsi per cui sono validi. Se lasci vuoto, la formula resta generale.'}</p></div>
+              <div><div className="dashboard-hero__eyebrow">{editor.mode === 'create' ? 'Nuova formula' : 'Modifica formula'}</div><h3>{editor.mode === 'create' ? 'Crea pacchetto' : form.nome}</h3><p>{form.pricing_key ? 'Questo è un pacchetto del listino automatico: Nova lo abbina da sola alla corretta combinazione di corsi. Non servono associazioni manuali.' : 'Per i pacchetti personalizzati puoi scegliere i corsi per cui sono validi. Se lasci vuoto, la formula resta generale.'}</p></div>
               <button type="button" className="package-editor-close" onClick={() => setEditor(null)}><X size={20} /></button>
             </div>
 
@@ -231,32 +221,9 @@ export default function PacchettiPage() {
               {form.tipo === 'gettone' ? <label>Copertura<input value="Lezione singola" disabled /><small>Il gettone non chiude e non copre l’intero mese.</small></label> : <label>Mesi coperti<input type="number" min="1" max="24" step="1" value={form.durata_mesi} onChange={(e) => setForm({ ...form, durata_mesi: Number(e.target.value || 1) })} required disabled={Boolean(form.pricing_key)} /></label>}
 
               {!form.pricing_key ? (
-                <label className="check-card packages-catalog-stackable packages-catalog-form__wide">
-                  <input type="checkbox" checked={form.stackable} onChange={(e) => setForm({ ...form, stackable: e.target.checked })} />
-                  <span>Componente cumulabile della quota</span>
-                  <small>Attivala quando questa cifra copre solo una parte dell’iscrizione e deve sommarsi agli altri corsi. Esempio: 3 ore Country 45 € + Kizomba base 40 € = 85 €.</small>
-                </label>
-              ) : null}
-
-              {!form.pricing_key && form.stackable ? (
-                <label>Quanti corsi copre questa quota?
-                  <input
-                    type="number"
-                    min="1"
-                    max={Math.max(1, form.course_ids.length || 1)}
-                    step="1"
-                    value={form.covered_course_count}
-                    onChange={(e) => setForm({ ...form, covered_course_count: e.target.value })}
-                    placeholder={form.course_ids.length ? String(form.course_ids.length) : 'Es. 3'}
-                  />
-                  <small>Se lasci vuoto, Nova usa tutti i corsi abilitati selezionati. Per “3 ore Country” imposta 3.</small>
-                </label>
-              ) : null}
-
-              {!form.pricing_key ? (
               <div className="packages-course-scope packages-catalog-form__wide">
                 <div className="packages-course-scope__head">
-                  <div><span>{form.stackable ? 'Corsi in cui è valida la componente' : 'Corsi abilitati'}</span><strong>{form.course_ids.length ? `${form.course_ids.length} selezionati` : form.stackable ? 'Seleziona i corsi validi' : 'Tutti i corsi compatibili'}</strong></div>
+                  <div><span>Corsi abilitati</span><strong>{form.course_ids.length ? `${form.course_ids.length} selezionati` : 'Tutti i corsi compatibili'}</strong></div>
                   {form.course_ids.length ? <button type="button" onClick={() => setForm((current) => ({ ...current, course_ids: [] }))}>Azzera selezione</button> : null}
                 </div>
                 {coursesQuery.isLoading ? <div className="packages-course-scope__loading">Caricamento corsi…</div> : null}
@@ -273,12 +240,12 @@ export default function PacchettiPage() {
                     )
                   })}
                 </div>
-                <small className="packages-course-scope__hint">{form.stackable ? 'Seleziona qui il bacino di corsi per cui la tariffa è valida; sopra indica quanti ne copre. Nova userà la componente quando l’allievo frequenta quel numero di corsi del bacino e sommerà automaticamente gli altri corsi.' : 'I corsi selezionati definiscono l’area di validità del pacchetto. Una formula normale resta un’alternativa completa e non viene sommata ad altri pacchetti.'}</small>
+                <small className="packages-course-scope__hint">I corsi selezionati definiscono l’area di validità del pacchetto. Esempio: selezionando solo i due Country base, la formula non verrà proposta a un corsista che ha anche Salsa o Bachata nella stessa quota.</small>
               </div>
               ) : (
                 <div className="packages-course-scope packages-catalog-form__wide">
                   <div className="packages-course-scope__head"><div><span>Associazione corsi</span><strong>Gestita automaticamente</strong></div></div>
-                  <small className="packages-course-scope__hint">I pacchetti standard come 1 corso, Bachata + Salsa, 3 corsi e All You Can Dance vengono scelti in base ai corsi effettivamente iscritti. Per regole particolari degli insegnanti usa invece un pacchetto personalizzato e, quando deve sommarsi ad altri corsi, attiva “Componente cumulabile”.</small>
+                  <small className="packages-course-scope__hint">I pacchetti standard come 1 corso, Bachata + Salsa, 3 corsi e All You Can Dance vengono scelti in base ai corsi effettivamente iscritti. Le associazioni manuali precedenti vengono rimosse automaticamente.</small>
                 </div>
               )}
 

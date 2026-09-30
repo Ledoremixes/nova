@@ -45,10 +45,6 @@ function normalizePackage(row = {}) {
     course_ids: metadata.pricing_key
       ? []
       : (Array.isArray(metadata.course_ids) ? metadata.course_ids.map(String).filter(Boolean) : []),
-    stackable: metadata.pricing_key ? false : metadata.stackable === true,
-    covered_course_count: metadata.pricing_key
-      ? null
-      : (Number(metadata.covered_course_count || 0) > 0 ? Math.max(1, Math.floor(Number(metadata.covered_course_count))) : null),
     attivo: row.attivo !== undefined ? row.attivo !== false : row.is_active !== false,
     ordine: Number(row.ordine ?? row.sort_order ?? 0),
     created_at: row.created_at || null,
@@ -59,7 +55,7 @@ function normalizePackage(row = {}) {
 function metadataForPackage(payload) {
   const tipo = payload.tipo || 'mensile'
   return JSON.stringify({
-    schema: 3,
+    schema: 2,
     tipo,
     durata_mesi: tipo === 'gettone' ? 1 : Math.max(1, Number(payload.durata_mesi || 1)),
     prezzo: Math.max(0, Number(payload.prezzo || 0)),
@@ -70,10 +66,6 @@ function metadataForPackage(payload) {
     course_ids: payload.pricing_key
       ? []
       : (Array.isArray(payload.course_ids) ? [...new Set(payload.course_ids.map(String).filter(Boolean))] : []),
-    stackable: payload.pricing_key ? false : payload.stackable === true,
-    covered_course_count: payload.pricing_key || payload.stackable !== true
-      ? null
-      : (Number(payload.covered_course_count || 0) > 0 ? Math.max(1, Math.floor(Number(payload.covered_course_count))) : null),
   })
 }
 
@@ -82,12 +74,6 @@ function validatePackage(payload) {
   if (!nome) throw new Error('Inserisci il nome del pacchetto.')
   const prezzo = Number(payload.prezzo)
   if (!Number.isFinite(prezzo) || prezzo < 0) throw new Error('Inserisci un prezzo valido.')
-  if (!payload.pricing_key && payload.stackable === true && !(Array.isArray(payload.course_ids) && payload.course_ids.length)) {
-    throw new Error('Una componente cumulabile deve avere almeno un corso associato.')
-  }
-  if (!payload.pricing_key && payload.stackable === true && Number(payload.covered_course_count || 0) > Number(payload.course_ids?.length || 0)) {
-    throw new Error('Il numero di corsi coperti non può superare i corsi abilitati selezionati.')
-  }
   return nome
 }
 
@@ -127,13 +113,11 @@ async function clearAutomaticPackageCourseAssignments(rows = []) {
       row,
       metadata: {
         ...metadata,
-        schema: 3,
+        schema: 2,
         pricing_key: automaticKey,
         pricing_group: normalized.pricing_group || null,
         pricing_period: normalized.pricing_period || null,
         course_ids: [],
-        stackable: false,
-        covered_course_count: null,
       },
     }
   }).filter(Boolean)

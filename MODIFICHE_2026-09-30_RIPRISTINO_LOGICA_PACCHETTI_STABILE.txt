@@ -1,0 +1,9 @@
+MODIFICHE 2026-09-30 - RIPRISTINO LOGICA PACCHETTI STABILE
+
+- Rimossa completamente la logica delle quote/componenti cumulabili.
+- Ripristinata la logica standard automatica per 1 corso, Country, Bachata+Salsa, 2 corsi special, 3 corsi e All You Can Dance.
+- Mensile, trimestrale e annuale standard vengono sempre proposti; se un record DB manca o e' stato alterato, Nova usa il listino 2026/2027 incorporato.
+- I pacchetti personalizzati con corsi associati sono solo opzioni aggiuntive e non sostituiscono/nascondono mai i pacchetti standard.
+- In Pacchetti eliminati i campi "componente cumulabile" e "quanti corsi copre".
+- Un pacchetto personalizzato associato ai corsi Country viene mostrato quando la selezione dell'allievo rientra nei corsi Country abilitati.
+- Conservate le modifiche successive non legate al listino: importo personalizzato/sconto, gestione corsi dal pagamento, modale visite mediche, riepilogo pagamento in fondo su mobile/tablet e fix viewport modali.
