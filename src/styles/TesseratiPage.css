@@ -927,3 +927,63 @@ button.tesserati-password-button:disabled {
   transform: translateY(-1px);
   box-shadow: 0 11px 22px rgba(37, 99, 235, .27);
 }
+
+/* Paginazione archivio tesserati: mantiene fluida la tabella anche oltre 1000 record. */
+.tesserati-pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tesserati-pagination-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tesserati-pagination-controls select,
+.tesserati-pagination-controls button {
+  min-height: 36px;
+  border: 1px solid #dde2ec;
+  border-radius: 10px;
+  background: #fff;
+  color: #263247;
+  padding: 0 10px;
+  font: inherit;
+}
+
+.tesserati-pagination-controls button {
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.tesserati-pagination-controls button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.tesserati-pagination-controls > span {
+  min-width: 48px;
+  text-align: center;
+  color: #6d4aff;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+@media (max-width: 760px) {
+  .tesserati-pagination-controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+.student-list-toolbar .tesserati-pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}

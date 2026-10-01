@@ -149,6 +149,8 @@ export default function TesseratiPage() {
   const [stagione, setStagione] = useState('')
   const [status, setStatus] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(100)
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [studentForm, setStudentForm] = useState(emptyStudentForm)
   const [passwordForm, setPasswordForm] = useState({ password: '', password2: '' })
@@ -200,6 +202,13 @@ export default function TesseratiPage() {
       return matchesSearch && matchesSeason && matchesStatus && matchesRole
     })
   }, [students, search, stagione, status, roleFilter])
+
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const pagedStudents = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filteredStudents.slice(start, start + pageSize)
+  }, [filteredStudents, currentPage, pageSize])
 
   const stats = useMemo(() => {
     return {
@@ -585,18 +594,21 @@ export default function TesseratiPage() {
             data-lpignore="true"
             data-1p-ignore="true"
             onChange={(e) => {
-              if (!selectedStudent) setSearch(e.target.value)
+              if (!selectedStudent) {
+                setSearch(e.target.value)
+                setPage(1)
+              }
             }}
           />
 
-          <select className="filterSelect" value={stagione} onChange={(e) => setStagione(e.target.value)}>
+          <select className="filterSelect" value={stagione} onChange={(e) => { setStagione(e.target.value); setPage(1) }}>
             <option value="">Tutte le stagioni</option>
             {stagioniDisponibili.map((item) => (
               <option key={item} value={item}>{item}</option>
             ))}
           </select>
 
-          <select className="filterSelect" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <select className="filterSelect" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }}>
             <option value="">Tutti gli stati</option>
             <option value="pending_payment">In attesa pagamento</option>
             <option value="active">Attiva</option>
@@ -604,7 +616,7 @@ export default function TesseratiPage() {
             <option value="blocked">Bloccata</option>
           </select>
 
-          <select className="filterSelect" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+          <select className="filterSelect" value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1) }}>
             <option value="">Tutti i ruoli</option>
             <option value="corsista">Solo corsisti</option>
             <option value="tesserato">Solo tesserati</option>
@@ -625,7 +637,20 @@ export default function TesseratiPage() {
             <div className="student-list-toolbar">
               <div>
                 <strong>{filteredStudents.length} tesserati trovati</strong>
-                <small>Archivio operativo stagione corrente</small>
+                <small>{stats.total} anagrafiche totali nell’archivio · pagina {currentPage} di {totalPages}</small>
+              </div>
+              <div className="tesserati-pagination-controls">
+                <label>
+                  <span>Righe</span>
+                  <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1) }}>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={200}>200</option>
+                  </select>
+                </label>
+                <button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={currentPage <= 1}>Precedente</button>
+                <span>{currentPage} / {totalPages}</span>
+                <button type="button" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={currentPage >= totalPages}>Successiva</button>
               </div>
             </div>
 
@@ -649,7 +674,7 @@ export default function TesseratiPage() {
                       <td colSpan="8">Nessun tesserato trovato.</td>
                     </tr>
                   ) : (
-                    filteredStudents.map((student) => (
+                    pagedStudents.map((student) => (
                       <tr key={student.id} className={selectedStudent?.id === student.id ? 'selected-table-row' : ''}>
                         <td>
                           <div className="tesserati-person-cell">

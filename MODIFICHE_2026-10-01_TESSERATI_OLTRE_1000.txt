@@ -1,0 +1,9 @@
+MODIFICHE 2026-10-01 - TESSERATI OLTRE 1000
+
+- Rimosso il limite fisso di 1000 tesserati dalla lettura dell'archivio.
+- Nova legge ora tutti i tesseramenti a blocchi da 1000 record.
+- Aggiornato anche l'endpoint server /api/orchidea-students per leggere l'intero archivio a pagine.
+- I KPI Totale tesserati, Tessere attive, Corsisti e Senza numero progressivo sono calcolati sull'intero archivio.
+- La ricerca e i filtri lavorano su tutti i tesserati, non soltanto sui primi 1000.
+- Aggiunta paginazione client della tabella con 50 / 100 / 200 righe per mantenere Nova fluido su tablet e PC.
+- La generazione dei numeri tessera usa ora l'archivio completo, evitando collisioni dovute al vecchio limite.

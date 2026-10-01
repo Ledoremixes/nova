@@ -153,14 +153,23 @@ export default async function handler(req, res) {
     // Supabase Orchidea o quando il client dedicato non è autenticato.
     // L'accesso resta protetto: accettiamo solo un token Nova valido di admin/user.
     if (req.method === 'GET') {
-      const { data, error } = await orchidea
-        .from('tesseramenti')
-        .select(TESSERAMENTI_LIST_SELECT)
-        .order('created_at', { ascending: false })
-        .limit(5000)
+      const pageSize = 1000
+      const students = []
 
-      if (error) throw error
-      return json(res, 200, { ok: true, students: data || [] })
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await orchidea
+          .from('tesseramenti')
+          .select(TESSERAMENTI_LIST_SELECT)
+          .order('created_at', { ascending: false })
+          .range(from, from + pageSize - 1)
+
+        if (error) throw error
+        const chunk = data || []
+        students.push(...chunk)
+        if (chunk.length < pageSize) break
+      }
+
+      return json(res, 200, { ok: true, students, total: students.length })
     }
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
