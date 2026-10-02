@@ -1,0 +1,11 @@
+MODIFICHE 2026-10-02 - PERCENTUALE INSEGNANTE PER SINGOLO CORSO
+
+- Aggiunta percentuale compenso specifica sulla relazione insegnante-corso.
+- Dalla scheda insegnante, per ogni corso assegnato, l'admin può inserire una percentuale dedicata.
+- Se la percentuale specifica resta vuota, Nova continua a usare la percentuale generale dell'insegnante.
+- Il calcolo compensi mensili usa la percentuale specifica del corso quando presente.
+- Nel dettaglio compensi viene mostrata la percentuale effettivamente utilizzata.
+- Esempio: Laura 20% generale, Lady Style 40% specifico.
+
+PRIMA DELL'USO:
+Eseguire su Supabase lo script update/teacher_course_percentage.sql.

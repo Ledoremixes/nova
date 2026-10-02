@@ -28,6 +28,7 @@ import {
   fetchOrchideaCourses,
   fetchOrchideaTeachers,
   removeCourseTeacher,
+  updateCourseTeacherPercentage,
   updateOrchideaTeacher,
 } from '../api/orchideaEntities'
 import { generateTeacherContractPdf } from '../utils/teacherContractPdf'
@@ -347,6 +348,15 @@ export default function InsegnantiPage() {
     },
   })
 
+
+  const updateCourseTeacherPercentageMutation = useMutation({
+    mutationFn: updateCourseTeacherPercentage,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orchidea-courses-for-teachers'] })
+      queryClient.invalidateQueries({ queryKey: ['orchidea-allievi-payments'] })
+    },
+  })
+
   const teachers = teachersQuery.data || []
   const courses = useMemo(() => coursesQuery.data || [], [coursesQuery.data])
   const payoutPaymentRows = useMemo(() => payoutPaymentsQuery.data || [], [payoutPaymentsQuery.data])
@@ -368,6 +378,24 @@ export default function InsegnantiPage() {
   function availableCoursesFor(row) {
     const key = norm(row?.full_name)
     return courses.filter((course) => !(course.teachers || []).some((teacher) => norm(teacher.full_name) === key || String(teacher.id) === String(row.id)))
+  }
+
+
+  function teacherLinkForCourse(course, row) {
+    const key = norm(row?.full_name)
+    return (course?.teachers || []).find((teacher) => norm(teacher.full_name) === key || String(teacher.id) === String(row?.id)) || null
+  }
+
+  function saveCoursePercentage(event, course) {
+    event.preventDefault()
+    if (!selectedTeacher?.id || !course?.id) return
+    const formData = new FormData(event.currentTarget)
+    const percentage = String(formData.get('percentage') ?? '').trim()
+    updateCourseTeacherPercentageMutation.mutate({
+      courseId: course.id,
+      teacherId: selectedTeacher.id,
+      percentage,
+    })
   }
 
   function openCreate() {
@@ -547,10 +575,22 @@ export default function InsegnantiPage() {
         <div className="modalOverlay" onClick={() => setSelectedTeacher(null)}>
           <div className="modalCard teacher-detail-modal" onClick={(e) => e.stopPropagation()}>
             <div className="teacher-detail-hero">
-              <div>
-                <div className="dashboard-hero__eyebrow">Scheda insegnante</div>
-                <h3>{selectedTeacher.full_name}</h3>
-                <p>Consulta dati, compensi e corsi collegati. Le informazioni fiscali sono visibili solo agli amministratori.</p>
+              <div className="teacher-detail-hero__main">
+                {selectedTeacher.photo_url ? (
+                  <img className="teacherAvatar teacherAvatar--xl" src={selectedTeacher.photo_url} alt={selectedTeacher.full_name} />
+                ) : (
+                  <div className="teacherAvatar teacherAvatar--xl teacherAvatar--placeholder">{initials(selectedTeacher.full_name)}</div>
+                )}
+                <div className="teacher-detail-hero__content">
+                  <div className="dashboard-hero__eyebrow">Scheda insegnante</div>
+                  <h3>{selectedTeacher.full_name}</h3>
+                  <p>Consulta dati, compensi e corsi collegati. Le informazioni fiscali sono visibili solo agli amministratori.</p>
+                  <div className="teacher-detail-badges">
+                    <span className="teacher-detail-badge">{teacherCourses(selectedTeacher).length} corsi assegnati</span>
+                    <span className="teacher-detail-badge">{teacherPaymentSummary(selectedTeacher)}</span>
+                    <span className={`teacher-detail-badge ${selectedTeacher.active === false ? 'is-off' : 'is-on'}`}>{selectedTeacher.active === false ? 'Non attivo' : 'Attivo'}</span>
+                  </div>
+                </div>
               </div>
               <div className="teacher-detail-actions">
                 {isAdmin ? <button className="topbar__button teacher-contract-button" onClick={() => openContract(selectedTeacher)}><FileText size={16} /> Genera contratto</button> : null}
@@ -560,29 +600,78 @@ export default function InsegnantiPage() {
             </div>
 
             <div className="teacher-detail-grid">
-              <div className="teacher-panel">
-                <h3>Dati e regola compenso</h3>
-                <p><strong>Email:</strong> {selectedTeacher.email || '—'}</p>
-                <p><strong>Telefono:</strong> {selectedTeacher.phone || '—'}</p>
-                <p><strong>Metodo compenso:</strong> {teacherPaymentSummary(selectedTeacher)}</p>
-                <p><strong>Nota:</strong> {selectedTeacher.bio || '—'}</p>
+              <div className="teacher-panel teacher-overview-panel">
+                <div className="teacher-panel-title teacher-panel-title--compact"><IdCard size={22} /><div><h3>Dati e regola compenso</h3><p>Contatti rapidi e regola base usata per il compenso.</p></div></div>
+                <div className="teacher-info-cards">
+                  <div className="teacher-info-card"><span>Email</span><strong>{selectedTeacher.email || '—'}</strong></div>
+                  <div className="teacher-info-card"><span>Telefono</span><strong>{selectedTeacher.phone || '—'}</strong></div>
+                  <div className="teacher-info-card teacher-info-card--highlight"><span>Metodo compenso</span><strong>{teacherPaymentSummary(selectedTeacher)}</strong></div>
+                  <div className="teacher-info-card teacher-info-card--wide"><span>Nota</span><strong>{selectedTeacher.bio || '—'}</strong></div>
+                </div>
               </div>
 
               <div className="teacher-panel teacher-payout-panel">
-                <Clock3 size={32} />
-                <h3>Compensi mese</h3>
+                <div className="teacher-panel-title teacher-panel-title--compact"><Clock3 size={22} /><div><h3>Compensi mese</h3><p>Riepilogo mensile pulito, senza lista allievi, basato sui pagamenti effettivamente registrati.</p></div></div>
                 {(() => {
                   const payout = payoutsByName.get(norm(selectedTeacher.full_name)) || { total: 0, rows: [] }
+                  const rows = payout.rows || []
+                  const studentsCount = new Set(rows.map((item) => item.student_name).filter(Boolean)).size
+                  const groupedByCourse = Object.values(rows.reduce((acc, item) => {
+                    const key = item.course_name || 'Corso non specificato'
+                    if (!acc[key]) {
+                      acc[key] = {
+                        course_name: key,
+                        total: 0,
+                        rows: 0,
+                        percents: new Set(),
+                      }
+                    }
+                    acc[key].total += Number(item.teacher_quota || 0)
+                    acc[key].rows += 1
+                    if (item.percentuale_insegnante !== null && item.percentuale_insegnante !== undefined && item.percentuale_insegnante !== '') {
+                      acc[key].percents.add(String(item.percentuale_insegnante))
+                    }
+                    return acc
+                  }, {})).map((item) => ({
+                    ...item,
+                    percentLabel: item.percents.size ? `${Array.from(item.percents).join(' / ')}%` : 'percentuale generale',
+                  })).sort((a, b) => b.total - a.total)
                   return (
                     <div className="teacher-payout-detail">
-                      <strong>{payoutPaymentsQuery.isLoading ? 'Calcolo…' : payoutPaymentsQuery.error ? 'Non disponibile' : money(payout.total)}</strong>
-                      <p>Calcolato sugli stessi pagamenti mostrati nella sezione Pagamenti, ripartiti sui corsi assegnati e senza includere la tessera corsista.</p>
-                      <div className="teacher-payout-list">
-                        {(payout.rows || []).slice(0, 8).map((item) => (
-                          <span key={item.enrollment_id}><em>{item.student_name}</em><b>{item.course_name}</b><strong>{money(item.teacher_quota)}</strong></span>
-                        ))}
-                        {payoutPaymentsQuery.error ? <small>Impossibile calcolare i compensi finché i pagamenti non sono leggibili.</small> : (!payout.rows || payout.rows.length === 0) ? <small>Nessun compenso da mostrare nel mese selezionato.</small> : null}
+                      <div className="teacher-payout-total-card">
+                        <span>Totale del mese</span>
+                        <strong>{payoutPaymentsQuery.isLoading ? 'Calcolo…' : payoutPaymentsQuery.error ? 'Non disponibile' : money(payout.total)}</strong>
+                        <small>Calcolato sugli stessi pagamenti mostrati nella sezione Pagamenti, ripartiti sui corsi assegnati e senza includere la tessera corsista.</small>
                       </div>
+
+                      {!payoutPaymentsQuery.error && rows.length > 0 ? (
+                        <>
+                          <div className="teacher-payout-stats">
+                            <div className="teacher-payout-stat"><span>Quote conteggiate</span><strong>{rows.length}</strong></div>
+                            <div className="teacher-payout-stat"><span>Corsi retribuiti</span><strong>{groupedByCourse.length}</strong></div>
+                            <div className="teacher-payout-stat"><span>Allievi coinvolti</span><strong>{studentsCount}</strong></div>
+                          </div>
+                          <div className="teacher-payout-breakdown">
+                            <div className="teacher-payout-breakdown__head">
+                              <span>Ripartizione per corso</span>
+                              <strong>{groupedByCourse.length} corsi</strong>
+                            </div>
+                            <div className="teacher-payout-breakdown__list">
+                              {groupedByCourse.map((item) => (
+                                <div className="teacher-payout-breakdown__row" key={item.course_name}>
+                                  <div>
+                                    <em>{item.course_name}</em>
+                                    <small>{item.rows} quote · {item.percentLabel}</small>
+                                  </div>
+                                  <strong>{money(item.total)}</strong>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      ) : null}
+
+                      {payoutPaymentsQuery.error ? <small>Impossibile calcolare i compensi finché i pagamenti non sono leggibili.</small> : rows.length === 0 ? <small>Nessun compenso da mostrare nel mese selezionato.</small> : null}
                     </div>
                   )
                 })()}
@@ -633,20 +722,57 @@ export default function InsegnantiPage() {
 
               {assignCourseMutation.error ? <p className="form-error">{assignCourseMutation.error.message}</p> : null}
               {removeCourseTeacherMutation.error ? <p className="form-error">{removeCourseTeacherMutation.error.message}</p> : null}
+              {updateCourseTeacherPercentageMutation.error ? <p className="form-error">{updateCourseTeacherPercentageMutation.error.message}</p> : null}
 
               <div className="teacher-course-list">
                 {teacherCourses(selectedTeacher).length === 0 ? (
                   <div className="teacher-empty-courses"><BookOpenCheck size={26} /><strong>Nessun corso assegnato</strong><p>Assegna almeno un corso per calcolare correttamente i compensi.</p></div>
-                ) : teacherCourses(selectedTeacher).map((course) => (
-                  <div className="teacher-course-row" key={`${selectedTeacher.id}-${course.id}`}>
-                    <div>
-                      <strong>{course.nome}</strong>
-                      <small>{course.livello || 'Livello non impostato'} · {money(course.prezzo_mensile)} prezzo originale · {course.participants_count || 0} partecipanti</small>
-                      <small>Altri insegnanti collegati: {(course.teacher_names || []).filter((name) => norm(name) !== norm(selectedTeacher.full_name)).join(', ') || 'nessuno'}</small>
+                ) : teacherCourses(selectedTeacher).map((course) => {
+                  const teacherLink = teacherLinkForCourse(course, selectedTeacher)
+                  const coursePercent = teacherLink?.course_percentage_compensation
+                  const defaultPercent = selectedTeacher.percentage_compensation ?? ''
+                  return (
+                    <div className="teacher-course-row teacher-course-row--compensation" key={`${selectedTeacher.id}-${course.id}`}>
+                      <div className="teacher-course-row__info">
+                        <strong>{course.nome}</strong>
+                        <small>{course.livello || 'Livello non impostato'} · {money(course.prezzo_mensile)} prezzo originale · {course.participants_count || 0} partecipanti</small>
+                        <small>Altri insegnanti collegati: {(course.teacher_names || []).filter((name) => norm(name) !== norm(selectedTeacher.full_name)).join(', ') || 'nessuno'}</small>
+                      </div>
+
+                      <div className="teacher-course-compensation">
+                        <span>Percentuale su questo corso</span>
+                        {isAdmin ? (
+                          <form onSubmit={(event) => saveCoursePercentage(event, course)}>
+                            <div className="teacher-course-percentage-input">
+                              <input
+                                key={`${course.id}-${coursePercent ?? 'default'}`}
+                                name="percentage"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                defaultValue={coursePercent ?? ''}
+                                placeholder={defaultPercent !== '' ? String(defaultPercent) : '0'}
+                                aria-label={`Percentuale compenso per ${course.nome}`}
+                              />
+                              <b>%</b>
+                            </div>
+                            <button className="topbar__button teacher-course-percentage-save" disabled={updateCourseTeacherPercentageMutation.isPending}>
+                              <Save size={14} /> Salva
+                            </button>
+                          </form>
+                        ) : null}
+                        <small>
+                          {coursePercent !== null && coursePercent !== undefined && coursePercent !== ''
+                            ? `Percentuale specifica: ${coursePercent}%`
+                            : `Usa la percentuale generale: ${defaultPercent || 0}%`}
+                        </small>
+                      </div>
+
+                      {isAdmin ? <button className="payments-icon-btn danger" onClick={() => removeCourseTeacherMutation.mutate({ courseId: course.id, teacherId: selectedTeacher.id, teacherName: selectedTeacher.full_name })} disabled={removeCourseTeacherMutation.isPending}><Trash2 size={15} /></button> : null}
                     </div>
-                    {isAdmin ? <button className="payments-icon-btn danger" onClick={() => removeCourseTeacherMutation.mutate({ courseId: course.id, teacherId: selectedTeacher.id, teacherName: selectedTeacher.full_name })} disabled={removeCourseTeacherMutation.isPending}><Trash2 size={15} /></button> : null}
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           </div>

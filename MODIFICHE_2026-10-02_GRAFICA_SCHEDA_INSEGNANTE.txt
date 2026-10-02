@@ -1,0 +1,12 @@
+MODIFICHE 2026-10-02 - GRAFICA SCHEDA INSEGNANTE
+
+- Restyling della scheda insegnante nel modale dettaglio.
+- Hero superiore migliorata con header sticky durante lo scroll.
+- Sezione "Dati e regola compenso" trasformata in card informative più leggibili.
+- Sezione "Compensi mese" ridisegnata con card totale del mese e lista quote più ordinata.
+- Migliorata la sezione corsi assegnati con card più pulite per ogni corso.
+- Ottimizzato il layout per tablet e mobile:
+  - pulsanti azione full width su schermi piccoli;
+  - griglie che collassano correttamente a una colonna;
+  - spaziature e padding ottimizzati;
+  - righe compensi più leggibili anche su smartphone.

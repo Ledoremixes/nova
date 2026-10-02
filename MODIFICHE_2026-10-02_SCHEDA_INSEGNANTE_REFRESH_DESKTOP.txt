@@ -1,0 +1,15 @@
+MODIFICHE 2026-10-02 - REFRESH SCHEDA INSEGNANTE DESKTOP + MOBILE
+
+- Rimossa la lista dettagliata degli allievi paganti nella scheda insegnante.
+- Sezione "Compensi mese" trasformata in riepilogo pulito con:
+  - totale del mese,
+  - numero quote conteggiate,
+  - numero corsi retribuiti,
+  - numero allievi coinvolti,
+  - ripartizione totale per corso.
+- Hero della scheda insegnante ridisegnata con avatar, badge informativi e azioni più ordinate.
+- Migliorato in modo più evidente il layout desktop:
+  - griglia più equilibrata,
+  - pannelli con maggiore gerarchia visiva,
+  - card corsi e riepiloghi più puliti.
+- Ottimizzato anche il responsive per tablet/mobile.

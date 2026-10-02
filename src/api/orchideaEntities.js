@@ -170,9 +170,7 @@ async function enrichCoursesWithTeacherAssignments(courses = []) {
   const { data, error } = await orchideaSupabase
     .from('insegnanti_corsi')
     .select(`
-      id,
-      corso_id,
-      insegnante_id,
+      *,
       insegnanti (*)
     `)
     .limit(10000)
@@ -181,6 +179,8 @@ async function enrichCoursesWithTeacherAssignments(courses = []) {
     ;(data || []).forEach((row) => {
       const teacher = row.insegnanti ? normalizeTeacher(row.insegnanti, 'insegnanti') : null
       if (!teacher) return
+      teacher.course_assignment_id = row.id || null
+      teacher.course_percentage_compensation = row.percentuale_compenso ?? null
       const key = String(row.corso_id)
       byCourse.set(key, [...(byCourse.get(key) || []), teacher])
     })
@@ -471,6 +471,36 @@ export async function assignCourseToTeacher({ courseId, teacherId, teacherName }
 
   if (error) throw new Error(error.message || 'Errore assegnazione corso insegnante')
   return normalizeCourse(data)
+}
+
+export async function updateCourseTeacherPercentage({ courseId, teacherId, percentage }) {
+  if (!courseId || !teacherId) throw new Error('Corso o insegnante non valido.')
+
+  const raw = percentage === '' || percentage === null || percentage === undefined ? null : Number(percentage)
+  if (raw !== null && (!Number.isFinite(raw) || raw < 0 || raw > 100)) {
+    throw new Error('La percentuale deve essere compresa tra 0 e 100.')
+  }
+
+  const { data, error } = await orchideaSupabase
+    .from('insegnanti_corsi')
+    .update({
+      percentuale_compenso: raw,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('corso_id', courseId)
+    .eq('insegnante_id', teacherId)
+    .select('*')
+    .single()
+
+  if (error) {
+    const message = `${error.code || ''} ${error.message || ''}`.toLowerCase()
+    if (message.includes('percentuale_compenso') || message.includes('schema cache') || message.includes('column')) {
+      throw new Error('Prima di impostare la percentuale per corso esegui lo script update/teacher_course_percentage.sql su Supabase.')
+    }
+    throw new Error(error.message || 'Errore salvataggio percentuale del corso')
+  }
+
+  return data
 }
 
 export async function removeCourseTeacher({ courseId, teacherId, teacherName }) {
@@ -912,6 +942,20 @@ function teacherPaymentConfig(row = {}) {
   return { paymentType, fixed, percent, hourly }
 }
 
+function teacherCoursePercentage(course, teacher, fallbackPercent) {
+  const linked = (course?.teachers || []).find((item) => (
+    (teacher?.id && item?.id && String(teacher.id) === String(item.id)) ||
+    (lower(teacher?.full_name) && lower(teacher?.full_name) === lower(item?.full_name))
+  ))
+  const override = linked?.course_percentage_compensation
+  if (override !== null && override !== undefined && override !== '') {
+    const parsed = Number(override)
+    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0
+  }
+  const parsedFallback = Number(fallbackPercent || 0)
+  return Number.isFinite(parsedFallback) ? Math.max(0, parsedFallback) : 0
+}
+
 function parseWeekday(value) {
   const key = lower(value)
   const map = {
@@ -1093,8 +1137,9 @@ export async function fetchTeacherMonthlyPayouts({ month = '' } = {}) {
         method: 'quota fissa mensile',
       }] : []
     } else {
-      const percent = Number(config.percent || 0)
+      const fallbackPercent = Number(config.percent || 0)
       detailRows = rows.map((row) => {
+        const percent = teacherCoursePercentage(row.course, teacher, fallbackPercent)
         const teacherQuota = row.paid_student_quota * percent / 100
         total += teacherQuota
         return {

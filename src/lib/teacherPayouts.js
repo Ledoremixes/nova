@@ -69,6 +69,13 @@ function sameTeacher(teacher, linkedTeacher) {
   return lower(teacher?.full_name) && lower(teacher?.full_name) === lower(linkedTeacher?.full_name)
 }
 
+function percentageForCourse(course, teacher, fallbackPercent) {
+  const linked = (course?.teachers || []).find((item) => sameTeacher(teacher, item))
+  const override = linked?.course_percentage_compensation
+  if (override !== null && override !== undefined && override !== '') return amount(override)
+  return amount(fallbackPercent)
+}
+
 function tuitionPaidForRow(row = {}) {
   // La pagina Pagamenti include nell'importo visualizzato anche l'eventuale tessera
   // corsista addebitata nel mese. Il compenso insegnante deve invece considerare
@@ -161,8 +168,11 @@ export function buildTeacherMonthlyPayouts({ teachers = [], courses = [], paymen
         method: 'quota fissa mensile',
       }] : []
     } else {
-      const percent = amount(config.percent)
+      const fallbackPercent = amount(config.percent)
+      const assignedCourseById = new Map(assignedCourses.map((course) => [String(course.id), course]))
       detailRows = rows.map((row) => {
+        const course = assignedCourseById.get(String(row.course_id))
+        const percent = percentageForCourse(course, teacher, fallbackPercent)
         const teacherQuota = row.paid_student_quota * percent / 100
         total += teacherQuota
         return {
