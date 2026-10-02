@@ -107,6 +107,14 @@ export function summarizeMonthlyTuitionPayments({ payments = [], selectedMonth, 
     .filter((row) => isPaidState(row) && !isPausedState(row))
     .sort((a, b) => paymentTimestamp(b) - paymentTimestamp(a))
   const tokenPaid = tokenRows.reduce((sum, item) => sum + asAmount(item.importo ?? item.amount), 0)
+  const tokenBreakdown = tokenRows.map((item) => ({
+    id: item.id || null,
+    amount: asAmount(item.importo ?? item.amount),
+    packageId: item.nova_package_id || null,
+    packageName: item.nova_package_name || '',
+    packageType: item.nova_package_type || 'gettone',
+    paidAt: item.data_pagamento || item.pagato_il || null,
+  }))
 
   const nonTokenRelevant = relevant.filter((row) => !isTokenPayment(row))
   const canonicalRows = nonTokenRelevant
@@ -130,6 +138,9 @@ export function summarizeMonthlyTuitionPayments({ payments = [], selectedMonth, 
     return {
       paid: tokenPaid,
       rawPaid: tokenPaid,
+      monthlyPaid: 0,
+      rawMonthlyPaid: 0,
+      tokenBreakdown,
       residue: 0,
       status: 'gettone',
       source: 'gettone',
@@ -194,6 +205,9 @@ export function summarizeMonthlyTuitionPayments({ payments = [], selectedMonth, 
   return {
     paid: paid + tokenPaid,
     rawPaid: rawPaid + tokenPaid,
+    monthlyPaid: paid,
+    rawMonthlyPaid: rawPaid,
+    tokenBreakdown,
     residue,
     status,
     source,

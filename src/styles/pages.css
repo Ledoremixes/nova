@@ -3639,3 +3639,24 @@
     justify-content: center;
   }
 }
+
+.teacher-payout-audit-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px 15px;
+  border-radius: 16px;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  background: rgba(255, 251, 235, 0.94);
+}
+
+.teacher-payout-audit-warning strong {
+  color: #92400e;
+  font-size: 0.82rem;
+}
+
+.teacher-payout-audit-warning span {
+  color: #a15c07;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}

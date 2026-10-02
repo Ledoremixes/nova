@@ -76,27 +76,45 @@ function percentageForCourse(course, teacher, fallbackPercent) {
   return amount(fallbackPercent)
 }
 
-function tuitionPaidForRow(row = {}) {
-  // La pagina Pagamenti include nell'importo visualizzato anche l'eventuale tessera
-  // corsista addebitata nel mese. Il compenso insegnante deve invece considerare
-  // esclusivamente le quote corsi.
-  return Math.max(0, amount(row.pagato) - amount(row.membership_fee_charged))
+function uniqueCourses(courses = []) {
+  const byId = new Map()
+  for (const course of Array.isArray(courses) ? courses : []) {
+    const id = String(course?.id || '')
+    if (!id || byId.has(id)) continue
+    byId.set(id, course)
+  }
+  return [...byId.values()]
 }
 
-function distributeStudentPayment(row = {}) {
-  const courses = Array.isArray(row.corsi) ? row.corsi : []
-  const tuitionPaid = tuitionPaidForRow(row)
-  if (!courses.length || tuitionPaid <= 0) return []
+function courseSubset(courses = [], allowedIds = []) {
+  const rows = uniqueCourses(courses)
+  const ids = Array.isArray(allowedIds) ? allowedIds.map(String).filter(Boolean) : []
+  if (!ids.length) return rows
+  const allowed = new Set(ids)
+  return rows.filter((course) => allowed.has(String(course.id)))
+}
 
-  const weights = courses.map((course) => amount(course.prezzo_mensile ?? course.quota_allievo_mensile ?? course.tariffa_mensile))
-  const weightsTotal = weights.reduce((sum, value) => sum + value, 0)
-  const divisor = weightsTotal > 0 ? weightsTotal : courses.length
+function monthlyTuitionPaidForRow(row = {}) {
+  if (row.monthly_tuition_paid !== undefined && row.monthly_tuition_paid !== null) return amount(row.monthly_tuition_paid)
+  // Compatibilità con snapshot precedenti: pagato includeva anche eventuali gettoni.
+  const tuition = Math.max(0, amount(row.pagato) - amount(row.membership_fee_charged))
+  return Math.max(0, tuition - amount(row.token_paid))
+}
+
+function allocateAmount({ row = {}, courses = [], value = 0, source = 'mensile', packageName = '', warning = '' } = {}) {
+  const tuitionPaid = amount(value)
+  const selectedCourses = uniqueCourses(courses)
+  if (!selectedCourses.length || tuitionPaid <= 0) return []
+
+  const weights = selectedCourses.map((course) => amount(course.prezzo_mensile ?? course.quota_allievo_mensile ?? course.tariffa_mensile))
+  const weightsTotal = weights.reduce((sum, item) => sum + item, 0)
+  const divisor = weightsTotal > 0 ? weightsTotal : selectedCourses.length
 
   let allocated = 0
-  return courses.map((course, index) => {
+  return selectedCourses.map((course, index) => {
     let coursePaid
-    if (index === courses.length - 1) {
-      coursePaid = Math.max(0, tuitionPaid - allocated)
+    if (index === selectedCourses.length - 1) {
+      coursePaid = Math.max(0, Math.round((tuitionPaid - allocated) * 100) / 100)
     } else {
       const weight = weightsTotal > 0 ? weights[index] : 1
       coursePaid = Math.round((tuitionPaid * weight / divisor) * 100) / 100
@@ -104,21 +122,98 @@ function distributeStudentPayment(row = {}) {
     }
 
     return {
-      payment_row_id: row.pagamento_id || row.id || `${row.tesseramento_id || 'student'}-${course.id || index}`,
+      payment_row_id: `${row.pagamento_id || row.id || `${row.tesseramento_id || 'student'}`}-${source}-${index}`,
       student_id: String(row.tesseramento_id || row.allievo_id || row.student_id || ''),
       student_name: row.nomeCompleto || row.nome_completo || [row.nome, row.cognome].filter(Boolean).join(' ') || 'Allievo',
       course_id: String(course.id || ''),
       course_name: course.nome || course.name || course.titolo || 'Corso',
       course_level: course.livello || '',
       paid_student_quota: coursePaid,
+      source,
+      package_name: packageName || '',
+      allocation_warning: warning || '',
     }
   }).filter((item) => item.course_id && item.paid_student_quota > 0)
 }
 
+function distributeStudentPayment(row = {}) {
+  const allCourses = uniqueCourses(row.corsi)
+  if (!allCourses.length) return []
+
+  const rows = []
+  const monthlyPaid = monthlyTuitionPaidForRow(row)
+  if (monthlyPaid > 0) {
+    const monthlyCourses = courseSubset(allCourses, row.teacher_allocation_course_ids)
+    const warning = Array.isArray(row.teacher_allocation_course_ids)
+      && row.teacher_allocation_course_ids.length > 0
+      && monthlyCourses.length === 0
+      ? `Pacchetto ${row.teacher_allocation_package_name || 'mensile'} associato a corsi non presenti tra le iscrizioni attive.`
+      : ''
+    rows.push(...allocateAmount({
+      row,
+      courses: monthlyCourses.length ? monthlyCourses : allCourses,
+      value: monthlyPaid,
+      source: 'mensile',
+      packageName: row.teacher_allocation_package_name || row.nova_package_name || row.tipo_pacchetto || '',
+      warning,
+    }))
+  }
+
+  const tokenRows = Array.isArray(row.token_breakdown) ? row.token_breakdown : []
+  for (let index = 0; index < tokenRows.length; index += 1) {
+    const token = tokenRows[index] || {}
+    const allowedCourses = courseSubset(allCourses, token.course_ids)
+    let warning = ''
+    let targetCourses = allowedCourses
+
+    if (!targetCourses.length) {
+      if (allCourses.length === 1) {
+        targetCourses = allCourses
+      } else {
+        targetCourses = allCourses
+        warning = `Gettone ${token.packageName || ''} non associato a un singolo corso: ripartizione proporzionale su ${allCourses.length} corsi attivi.`
+      }
+    } else if (targetCourses.length > 1) {
+      warning = `Gettone ${token.packageName || ''} valido per più corsi: ripartizione proporzionale su ${targetCourses.length} corsi.`
+    }
+
+    rows.push(...allocateAmount({
+      row: { ...row, pagamento_id: token.id || row.pagamento_id },
+      courses: targetCourses,
+      value: token.amount,
+      source: `gettone-${index + 1}`,
+      packageName: token.packageName || 'A gettone',
+      warning,
+    }))
+  }
+
+  // Compatibilità con vecchi snapshot che esponevano solo token_paid.
+  if (!tokenRows.length && amount(row.token_paid) > 0) {
+    const warning = allCourses.length > 1
+      ? `Gettoni legacy senza corso specifico: ripartizione proporzionale su ${allCourses.length} corsi attivi.`
+      : ''
+    rows.push(...allocateAmount({
+      row,
+      courses: allCourses,
+      value: row.token_paid,
+      source: 'gettone-legacy',
+      packageName: 'Gettone legacy',
+      warning,
+    }))
+  }
+
+  return rows
+}
+
 /**
- * Calcola i compensi insegnanti usando ESATTAMENTE le righe già normalizzate dalla
- * sezione Pagamenti. In questo modo le due sezioni non possono più divergere su
- * mensilità, pacchetti, parziali, omaggi e tessera corsista.
+ * Calcola i compensi insegnanti usando le stesse righe normalizzate dalla
+ * sezione Pagamenti. La percentuale specifica del corso ha sempre precedenza
+ * sulla percentuale generale dell'insegnante.
+ *
+ * Per i pacchetti multicorso il compenso viene calcolato sulla parte di incasso
+ * effettivamente attribuita a ciascun corso. Tessera associativa e omaggi non
+ * generano compenso; sconti e pagamenti parziali riducono proporzionalmente la
+ * base di calcolo perché rappresentano l'incasso reale.
  */
 export function buildTeacherMonthlyPayouts({ teachers = [], courses = [], paymentRows = [], month = '' } = {}) {
   const selectedMonth = month || new Date().toISOString().slice(0, 7)
@@ -132,6 +227,7 @@ export function buildTeacherMonthlyPayouts({ teachers = [], courses = [], paymen
     const paidTotal = rows.reduce((sum, row) => sum + row.paid_student_quota, 0)
     const studentsCount = new Set(rows.map((row) => row.student_id).filter(Boolean)).size
     const paidCourseIds = new Set(rows.map((row) => String(row.course_id)))
+    const warnings = [...new Set(rows.map((row) => row.allocation_warning).filter(Boolean))]
 
     let total = 0
     let detailRows = []
@@ -153,6 +249,7 @@ export function buildTeacherMonthlyPayouts({ teachers = [], courses = [], paymen
             teacher_quota: teacherQuota,
             percentuale_insegnante: null,
             method: `${rate.toFixed(2)} €/h`,
+            source: 'orario',
           }
         })
     } else if (lower(config.paymentType).includes('fiss')) {
@@ -166,6 +263,7 @@ export function buildTeacherMonthlyPayouts({ teachers = [], courses = [], paymen
         teacher_quota: total,
         percentuale_insegnante: null,
         method: 'quota fissa mensile',
+        source: 'fisso',
       }] : []
     } else {
       const fallbackPercent = amount(config.percent)
@@ -184,6 +282,9 @@ export function buildTeacherMonthlyPayouts({ teachers = [], courses = [], paymen
           teacher_quota: teacherQuota,
           percentuale_insegnante: percent,
           method: `${percent}% su quota pagata`,
+          source: row.source || 'mensile',
+          package_name: row.package_name || '',
+          allocation_warning: row.allocation_warning || '',
         }
       })
     }
@@ -193,9 +294,11 @@ export function buildTeacherMonthlyPayouts({ teachers = [], courses = [], paymen
       teacher_name: teacher.full_name,
       month: selectedMonth,
       total: Math.round(total * 100) / 100,
+      attributed_tuition: Math.round(paidTotal * 100) / 100,
       students_count: studentsCount,
       courses_count: assignedCourses.length,
       rows: detailRows,
+      warnings,
     }
   })
 

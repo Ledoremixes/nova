@@ -119,6 +119,25 @@ function safeCourses(value) {
   return []
 }
 
+function normalizePackageName(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function packageForPayment(packages = [], { packageId = null, packageName = '' } = {}) {
+  const id = String(packageId || '').trim()
+  const name = normalizePackageName(packageName)
+  if (id) {
+    const byId = (packages || []).find((item) => String(item.id || '') === id)
+    if (byId) return byId
+  }
+  if (name) return (packages || []).find((item) => normalizePackageName(item.nome) === name) || null
+  return null
+}
+
+function packageCourseIds(packages = [], paymentMeta = {}) {
+  const item = packageForPayment(packages, paymentMeta)
+  return Array.isArray(item?.course_ids) ? [...new Set(item.course_ids.map(String).filter(Boolean))] : []
+}
 
 function normalizePaymentRow(row = {}) {
   const courses = safeCourses(row.corsi || row.courses || row.corsi_collegati)
@@ -163,6 +182,10 @@ function normalizePaymentRow(row = {}) {
     nova_cash_amount: Number(row.nova_cash_amount || 0),
     token_payments_count: Number(row.token_payments_count || 0),
     token_paid: Number(row.token_paid || 0),
+    monthly_tuition_paid: Number(row.monthly_tuition_paid || 0),
+    token_breakdown: Array.isArray(row.token_breakdown) ? row.token_breakdown : [],
+    teacher_allocation_course_ids: Array.isArray(row.teacher_allocation_course_ids) ? row.teacher_allocation_course_ids.map(String).filter(Boolean) : [],
+    teacher_allocation_package_name: row.teacher_allocation_package_name || '',
     recommended_package_id: row.recommended_package_id || null,
     recommended_package_name: row.recommended_package_name || '',
     pricing_group: row.pricing_group || null,
@@ -246,6 +269,14 @@ function normalizeDirectRows({ enrollments = [], students = [], courses = [], pa
     const automaticPricing = resolveCoursePricing(row.corsi, packages, 'mensile')
     const monthlyListPrice = Number(automaticPricing?.prezzo ?? row.quota_mese ?? 0)
     const ledger = summarizeMonthlyTuitionPayments({ payments: relatedPayments, selectedMonth, totalDue: monthlyListPrice })
+    const teacherAllocationCourseIds = packageCourseIds(packages, {
+      packageId: ledger.packageId,
+      packageName: ledger.packageName,
+    })
+    const teacherTokenBreakdown = (ledger.tokenBreakdown || []).map((item) => ({
+      ...item,
+      course_ids: packageCourseIds(packages, { packageId: item.packageId, packageName: item.packageName }),
+    }))
 
     // Se il corsista ha scelto un pacchetto multi-mese, la card deve mostrare il
     // prezzo reale del pacchetto scelto (es. trimestrale 3 corsi = 245 €), non il
@@ -320,6 +351,10 @@ function normalizeDirectRows({ enrollments = [], students = [], courses = [], pa
       nova_coverage_to: ledger.coverageTo,
       token_payments_count: ledger.tokenPaymentsCount,
       token_paid: ledger.tokenPaid,
+      monthly_tuition_paid: ledger.monthlyPaid,
+      token_breakdown: teacherTokenBreakdown,
+      teacher_allocation_course_ids: teacherAllocationCourseIds,
+      teacher_allocation_package_name: ledger.packageName || automaticPricing?.nome || '',
     })
   }).sort((a, b) => a.nomeCompleto.localeCompare(b.nomeCompleto))
 }

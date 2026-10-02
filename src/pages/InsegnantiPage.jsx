@@ -623,10 +623,12 @@ export default function InsegnantiPage() {
                         course_name: key,
                         total: 0,
                         rows: 0,
+                        attributed: 0,
                         percents: new Set(),
                       }
                     }
                     acc[key].total += Number(item.teacher_quota || 0)
+                    acc[key].attributed += Number(item.student_quota || 0)
                     acc[key].rows += 1
                     if (item.percentuale_insegnante !== null && item.percentuale_insegnante !== undefined && item.percentuale_insegnante !== '') {
                       acc[key].percents.add(String(item.percentuale_insegnante))
@@ -647,10 +649,16 @@ export default function InsegnantiPage() {
                       {!payoutPaymentsQuery.error && rows.length > 0 ? (
                         <>
                           <div className="teacher-payout-stats">
-                            <div className="teacher-payout-stat"><span>Quote conteggiate</span><strong>{rows.length}</strong></div>
+                            <div className="teacher-payout-stat"><span>Incasso attribuito</span><strong>{money(payout.attributed_tuition || 0)}</strong></div>
                             <div className="teacher-payout-stat"><span>Corsi retribuiti</span><strong>{groupedByCourse.length}</strong></div>
                             <div className="teacher-payout-stat"><span>Allievi coinvolti</span><strong>{studentsCount}</strong></div>
                           </div>
+                          {Array.isArray(payout.warnings) && payout.warnings.length ? (
+                            <div className="teacher-payout-audit-warning">
+                              <strong>Controllo richiesto</strong>
+                              {payout.warnings.map((warning) => <span key={warning}>{warning}</span>)}
+                            </div>
+                          ) : null}
                           <div className="teacher-payout-breakdown">
                             <div className="teacher-payout-breakdown__head">
                               <span>Ripartizione per corso</span>
@@ -661,7 +669,7 @@ export default function InsegnantiPage() {
                                 <div className="teacher-payout-breakdown__row" key={item.course_name}>
                                   <div>
                                     <em>{item.course_name}</em>
-                                    <small>{item.rows} quote · {item.percentLabel}</small>
+                                    <small>Incasso attribuito {money(item.attributed)} · {item.percentLabel}</small>
                                   </div>
                                   <strong>{money(item.total)}</strong>
                                 </div>

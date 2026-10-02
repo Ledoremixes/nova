@@ -1,0 +1,29 @@
+MODIFICHE 2026-10-02 - AUDIT COMPLETO COMPENSI INSEGNANTI
+
+Regola autorevole
+- Il compenso percentuale è calcolato sulla quota realmente incassata e attribuita al singolo corso.
+- La percentuale specifica corso/insegnante prevale sempre sulla percentuale generale.
+- La tessera corsista non entra mai nella base compensi.
+- Omaggi: base compenso 0 €.
+- Pagamenti parziali: percentuale sull'importo realmente incassato.
+- Sconti/importi personalizzati: percentuale sull'importo realmente incassato.
+- Trimestrali/annuali: l'incasso viene attribuito ai mesi coperti; il compenso segue la quota di competenza del mese.
+- Pacchetti multicorso: il pagamento viene ripartito sui corsi in proporzione alle rispettive quote/prezzi mensili.
+
+Correzioni introdotte
+1. Separati i gettoni dai pagamenti mensili per evitare doppio conteggio o ripartizione errata.
+2. I pacchetti personalizzati associati a corsi specifici attribuiscono il pagamento soltanto ai corsi validi per quel pacchetto.
+3. I gettoni con associazione corso usano solo i corsi previsti dal pacchetto.
+4. I vecchi gettoni senza associazione certa continuano a essere gestiti, ma Nova mostra un avviso di controllo se la ripartizione è ambigua.
+5. Rimosse duplicazioni di corsi durante la ripartizione: ogni corso viene considerato una sola volta per allievo/mese.
+6. Aggiunta trasparenza nella scheda insegnante: per ogni corso vengono mostrati incasso attribuito, percentuale applicata e compenso risultante.
+
+Test automatici eseguiti
+- 9 Lady Style singolo corso, 40 € ciascuno, Laura 40%: 144,00 €.
+- Pacchetto 2 corsi 60 € (quote equivalenti): Lady Style riceve base 30 €, Laura 12 € al 40%.
+- Tessera 25 € esclusa correttamente.
+- Parziale 20 € Lady Style: Laura 8 € al 40%.
+- Mensile + gettone specifico: contabilizzati separatamente senza doppio conteggio.
+- Pacchetto personalizzato associato solo a Lady Style: non viene ripartito su altri corsi dell'allievo.
+- Percentuale corso 40% su Lady Style e generale 20% sugli altri corsi: applicate correttamente nello stesso pagamento.
+- Trimestrale: il compenso segue la quota mensile allocata senza conteggiare tre volte il totale del pacchetto.
