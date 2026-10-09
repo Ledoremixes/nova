@@ -226,50 +226,77 @@ async function fetchOrchideaTesseramenti() {
     }
   }
 
-  const rows = []
-  let from = 0
+  // Primo blocco: usa la stessa query storicamente stabile che Nova usava prima.
+  // In questo modo, anche se una pagina successiva fallisse, i primi 1000 tesserati
+  // restano comunque visibili invece di far apparire il gestionale completamente vuoto.
+  const firstResult = await orchideaSupabase
+    .from('tesseramenti')
+    .select(TESSERAMENTI_SELECT)
+    .order('created_at', { ascending: false })
+    .limit(TESSERATI_PAGE_SIZE)
 
+  if (firstResult.error) {
+    const error = firstResult.error
+    if (isMissingTableError(error) || isPermissionError(error)) {
+      try {
+        return await fetchOrchideaTesseramentiViaBridge(config)
+      } catch (bridgeError) {
+        error._handledTesseramentiError = true
+        error._bridgeError = bridgeError
+      }
+    }
+    throw error
+  }
+
+  const rows = [...(firstResult.data || [])]
+  if (rows.length < TESSERATI_PAGE_SIZE) {
+    return withSource(rows, 'tesseramenti', 'Orchidea Allievi', config.mode)
+  }
+
+  // Recupera le pagine oltre il limite Supabase di 1000 righe.
+  // Se una pagina aggiuntiva non è disponibile, manteniamo i dati già caricati:
+  // mai più archivio a zero per un errore della paginazione secondaria.
+  let from = rows.length
   while (true) {
     const { data, error } = await orchideaSupabase
       .from('tesseramenti')
       .select(TESSERAMENTI_SELECT)
       .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
       .range(from, from + TESSERATI_PAGE_SIZE - 1)
 
     if (error) {
-      if (isMissingTableError(error) || isPermissionError(error)) {
-        try {
-          return await fetchOrchideaTesseramentiViaBridge(config)
-        } catch (bridgeError) {
-          error._handledTesseramentiError = true
-          error._bridgeError = bridgeError
-        }
-      }
-      throw error
+      console.warn(`Impossibile caricare i tesserati oltre la riga ${from}. Mantengo ${rows.length} record già caricati.`, error)
+      break
     }
 
     const page = data || []
-    rows.push(...page)
+    if (page.length === 0) break
+
+    // Evita duplicati nel raro caso in cui il dataset cambi mentre scorriamo le pagine.
+    const knownIds = new Set(rows.map((row) => String(row?.id ?? '')))
+    for (const row of page) {
+      const id = String(row?.id ?? '')
+      if (!id || !knownIds.has(id)) {
+        rows.push(row)
+        if (id) knownIds.add(id)
+      }
+    }
 
     if (page.length < TESSERATI_PAGE_SIZE) break
-    from += TESSERATI_PAGE_SIZE
+    from += page.length
   }
 
   return withSource(rows, 'tesseramenti', 'Orchidea Allievi', config.mode)
 }
 
 async function fetchLegacyTesserati({ search = '', anno = '', tipo = '' } = {}) {
-  const rows = []
   const cleanSearch = search.trim()
-  let from = 0
 
-  while (true) {
+  const makeQuery = () => {
     let query = supabase
       .from('tesserati')
       .select('*')
       .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
 
     if (anno) query = query.eq('anno', anno)
     if (tipo) query = query.eq('tipo', tipo)
@@ -280,14 +307,36 @@ async function fetchLegacyTesserati({ search = '', anno = '', tipo = '' } = {}) 
       )
     }
 
-    const { data, error } = await query.range(from, from + TESSERATI_PAGE_SIZE - 1)
-    if (error) throw new Error(error.message || 'Errore caricamento tesserati Nova')
+    return query
+  }
+
+  const firstResult = await makeQuery().limit(TESSERATI_PAGE_SIZE)
+  if (firstResult.error) throw new Error(firstResult.error.message || 'Errore caricamento tesserati Nova')
+
+  const rows = [...(firstResult.data || [])]
+  let from = rows.length
+
+  while (rows.length >= TESSERATI_PAGE_SIZE) {
+    const { data, error } = await makeQuery().range(from, from + TESSERATI_PAGE_SIZE - 1)
+    if (error) {
+      console.warn(`Impossibile caricare l'archivio legacy oltre la riga ${from}. Mantengo ${rows.length} record.`, error)
+      break
+    }
 
     const page = data || []
-    rows.push(...page)
+    if (page.length === 0) break
+
+    const knownIds = new Set(rows.map((row) => String(row?.id ?? '')))
+    for (const row of page) {
+      const id = String(row?.id ?? '')
+      if (!id || !knownIds.has(id)) {
+        rows.push(row)
+        if (id) knownIds.add(id)
+      }
+    }
 
     if (page.length < TESSERATI_PAGE_SIZE) break
-    from += TESSERATI_PAGE_SIZE
+    from += page.length
   }
 
   return withSource(rows.map(normalizeLegacyTesserato), 'tesserati', 'Nova legacy', 'nova')

@@ -1,0 +1,9 @@
+HOTFIX URGENTE 09/10/2026 - DATI A ZERO
+
+- Ripristinata come prima chiamata la query stabile usata da Nova prima della paginazione.
+- Il primo blocco di 1000 tesserati viene sempre mantenuto se caricato correttamente.
+- Le pagine successive vengono caricate con range per superare il limite di 1000 record.
+- Se una pagina successiva fallisce, Nova NON azzera più tesserati/corsisti: mantiene i record già caricati.
+- Rimossa la seconda order by id introdotta nel precedente aggiornamento.
+- Applicata la stessa protezione anche all'archivio legacy.
+- Conservata l'esportazione CSV OPES sia in Tesserati sia in Corsisti.
