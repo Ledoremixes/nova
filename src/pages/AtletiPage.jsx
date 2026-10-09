@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BadgeCheck, BookOpenCheck, CheckCircle2, IdCard, Mail, Phone, Plus, Search, ShieldCheck, Sparkles, Trash2, UserCheck } from 'lucide-react'
+import { BadgeCheck, BookOpenCheck, CheckCircle2, Download, IdCard, Mail, Phone, Plus, Search, ShieldCheck, Sparkles, Trash2, UserCheck } from 'lucide-react'
 import { useAuth } from '../context/authContext'
 import { addCourseParticipant, fetchOrchideaCourses, fetchOrchideaStudents, removeCourseParticipant, updateTesserato } from '../api/orchideaEntities'
 import { fetchTesseratoDetails } from '../api/tesserati'
@@ -8,6 +8,7 @@ import { fetchPackagesCatalog } from '../api/packagesCatalog'
 import { COURSE_MEMBERSHIP_FEE, EVENT_MEMBERSHIP_FEE, fetchMembershipFeeRecords, markConvertedCorsistaMembership, resolveMembershipFeeState, setMembershipFeePaidAmount } from '../api/membershipFees'
 import { resolveCoursePricing } from '../lib/coursePriceList'
 import { enrollmentIsActiveForMonth } from '../lib/packagePricing'
+import { buildOpesCsv } from '../lib/opesCsv'
 import '../styles/AtletiPage.css'
 
 function fullName(row) {
@@ -37,6 +38,7 @@ export default function AtletiPage() {
   const { role } = useAuth()
   const currentRole = String(role || '').trim().toLowerCase()
   const canEdit = currentRole === 'admin' || currentRole === 'user'
+  const isAdmin = currentRole === 'admin'
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [onlyCorsisti, setOnlyCorsisti] = useState(true)
@@ -129,6 +131,16 @@ export default function AtletiPage() {
     })
   }, [rows, search, onlyCorsisti])
 
+  const opesCorsisti = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    return rows.filter((row) => {
+      if (!row.is_corsista) return false
+      if (!term) return true
+      return [fullName(row), row.email, row.telefono, row.cf, row.numero_tessera]
+        .some((value) => String(value || '').toLowerCase().includes(term))
+    })
+  }, [rows, search])
+
   const assignedCourseIds = new Set(activeEnrollments.map((item) => String(item.corso_id)))
   const availableCourses = courses.filter((course) => !assignedCourseIds.has(String(course.id)))
   const assignedCourses = activeEnrollments.map((item) => ({
@@ -173,6 +185,36 @@ export default function AtletiPage() {
     })
   }
 
+  function handleExportOpesCorsisti() {
+    const { csv, exportedCount, skipped } = buildOpesCsv(opesCorsisti)
+
+    if (exportedCount === 0) {
+      alert('Nessun corsista esportabile: controlla che i codici fiscali siano validi.')
+      return
+    }
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'TESSERAMENTI_CORSISTI_ORCHIDEA_OPES_2026_2027.csv'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+
+    if (skipped.length > 0) {
+      const preview = skipped
+        .slice(0, 8)
+        .map(({ student }) => fullName(student))
+        .join(', ')
+      const more = skipped.length > 8 ? ` e altri ${skipped.length - 8}` : ''
+      alert(
+        `CSV OPES creato con ${exportedCount} corsisti. Esclusi ${skipped.length} record perché il codice fiscale non permette di ricavare la data di nascita: ${preview}${more}.`
+      )
+    }
+  }
+
   return (
     <section className="page">
       <div className="dashboard-hero">
@@ -195,6 +237,18 @@ export default function AtletiPage() {
             <h2>Corsisti</h2>
             <p>Cerca per nome, cognome, email, telefono, codice fiscale o tessera.</p>
           </div>
+          {isAdmin ? (
+            <button
+              className="topbar__button atleti-opes-export"
+              type="button"
+              onClick={handleExportOpesCorsisti}
+              disabled={opesCorsisti.length === 0}
+              title="Esporta nel formato OPES i corsisti filtrati"
+            >
+              <Download size={17} />
+              Scarica CSV OPES
+            </button>
+          ) : null}
         </div>
 
         <div className="toolbar toolbar--wrap">

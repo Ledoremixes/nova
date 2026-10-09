@@ -1,0 +1,13 @@
+NOVA - 09/10/2026
+
+1. Rimossa la soglia di 1000 tesserati.
+   - I tesseramenti vengono ora caricati a pagine da 1000 record fino a esaurimento.
+   - La stessa correzione è applicata anche al fallback legacy.
+   - I contatori di Tesserati e Corsisti usano quindi l'intero archivio.
+
+2. Esportazione CSV OPES disponibile anche in Corsisti.
+   - Pulsante "Scarica CSV OPES" nella sezione Corsisti (admin).
+   - Esporta i corsisti compatibili con la ricerca corrente.
+   - L'esportazione resta limitata ai record con ruolo corsista anche se viene disattivato il filtro "Solo corsisti".
+   - Struttura OPES e valori fissi invariati: classe A, tipo APR, disciplina BC006,
+     inizio 09/10/2026, fine 31/08/2027; data di nascita e sesso ricavati dal CF.

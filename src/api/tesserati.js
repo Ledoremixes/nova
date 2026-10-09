@@ -205,6 +205,8 @@ async function fetchTesseratoDetailsViaBridge(id) {
   }
 }
 
+const TESSERATI_PAGE_SIZE = 1000
+
 async function fetchOrchideaTesseramenti() {
   const config = getOrchideaConfigStatus()
 
@@ -224,48 +226,71 @@ async function fetchOrchideaTesseramenti() {
     }
   }
 
-  const { data, error } = await orchideaSupabase
-    .from('tesseramenti')
-    .select(TESSERAMENTI_SELECT)
-    .order('created_at', { ascending: false })
-    .limit(1000)
+  const rows = []
+  let from = 0
 
-  if (error) {
-    if (isMissingTableError(error) || isPermissionError(error)) {
-      try {
-        return await fetchOrchideaTesseramentiViaBridge(config)
-      } catch (bridgeError) {
-        error._handledTesseramentiError = true
-        error._bridgeError = bridgeError
+  while (true) {
+    const { data, error } = await orchideaSupabase
+      .from('tesseramenti')
+      .select(TESSERAMENTI_SELECT)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, from + TESSERATI_PAGE_SIZE - 1)
+
+    if (error) {
+      if (isMissingTableError(error) || isPermissionError(error)) {
+        try {
+          return await fetchOrchideaTesseramentiViaBridge(config)
+        } catch (bridgeError) {
+          error._handledTesseramentiError = true
+          error._bridgeError = bridgeError
+        }
       }
+      throw error
     }
-    throw error
+
+    const page = data || []
+    rows.push(...page)
+
+    if (page.length < TESSERATI_PAGE_SIZE) break
+    from += TESSERATI_PAGE_SIZE
   }
 
-  return withSource(data || [], 'tesseramenti', 'Orchidea Allievi', config.mode)
+  return withSource(rows, 'tesseramenti', 'Orchidea Allievi', config.mode)
 }
 
 async function fetchLegacyTesserati({ search = '', anno = '', tipo = '' } = {}) {
-  let query = supabase
-    .from('tesserati')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(1000)
+  const rows = []
+  const cleanSearch = search.trim()
+  let from = 0
 
-  if (anno) query = query.eq('anno', anno)
-  if (tipo) query = query.eq('tipo', tipo)
+  while (true) {
+    let query = supabase
+      .from('tesserati')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
 
-  if (search.trim()) {
-    const q = search.trim()
-    query = query.or(
-      `nome.ilike.%${q}%,cognome.ilike.%${q}%,email.ilike.%${q}%,cod_fiscale.ilike.%${q}%,cellulare.ilike.%${q}%`
-    )
+    if (anno) query = query.eq('anno', anno)
+    if (tipo) query = query.eq('tipo', tipo)
+
+    if (cleanSearch) {
+      query = query.or(
+        `nome.ilike.%${cleanSearch}%,cognome.ilike.%${cleanSearch}%,email.ilike.%${cleanSearch}%,cod_fiscale.ilike.%${cleanSearch}%,cellulare.ilike.%${cleanSearch}%`
+      )
+    }
+
+    const { data, error } = await query.range(from, from + TESSERATI_PAGE_SIZE - 1)
+    if (error) throw new Error(error.message || 'Errore caricamento tesserati Nova')
+
+    const page = data || []
+    rows.push(...page)
+
+    if (page.length < TESSERATI_PAGE_SIZE) break
+    from += TESSERATI_PAGE_SIZE
   }
 
-  const { data, error } = await query
-  if (error) throw new Error(error.message || 'Errore caricamento tesserati Nova')
-
-  return withSource((data || []).map(normalizeLegacyTesserato), 'tesserati', 'Nova legacy', 'nova')
+  return withSource(rows.map(normalizeLegacyTesserato), 'tesserati', 'Nova legacy', 'nova')
 }
 
 export async function fetchTesserati(filters = {}) {

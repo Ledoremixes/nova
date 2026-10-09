@@ -1547,3 +1547,27 @@
 @media (max-width: 640px) {
   .atleti-membership-card { margin-left: 16px; margin-right: 16px; padding: 17px; }
 }
+
+/* Export OPES dalla sezione Corsisti */
+.atleti-opes-export {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+  border-color: rgba(16, 185, 129, 0.28);
+  background: linear-gradient(135deg, #ecfdf5, #f0fdfa);
+  color: #047857;
+  font-weight: 900;
+}
+
+.atleti-opes-export:hover:not(:disabled) {
+  border-color: rgba(5, 150, 105, 0.42);
+  background: linear-gradient(135deg, #d1fae5, #ccfbf1);
+}
+
+@media (max-width: 760px) {
+  .atleti-opes-export {
+    width: 100%;
+  }
+}
