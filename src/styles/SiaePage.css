@@ -9,3 +9,8 @@
 .siae-confirm-copy h2{margin:7px 0 10px;font-size:26px;letter-spacing:-.02em}.siae-confirm-copy p{margin:0;color:#667187;line-height:1.6}.siae-confirm-warning{margin:18px 0 0;padding:13px 14px;border:1px solid #f2d8df;border-radius:13px;background:rgba(255,246,248,.9);color:#8f3145;font-size:13px;font-weight:700;line-height:1.5}
 .siae-confirm-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}.siae-danger-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:14px;padding:13px 17px;background:linear-gradient(135deg,#da3552,#b91f3c);color:#fff;font:inherit;font-weight:850;cursor:pointer;box-shadow:0 10px 24px rgba(185,31,60,.22)}.siae-danger-button:disabled{opacity:.55;cursor:not-allowed}
 @media(max-width:560px){.siae-confirm-overlay{padding:14px}.siae-confirm-panel{padding:22px;border-radius:22px}.siae-confirm-actions{flex-direction:column-reverse}.siae-confirm-actions button{width:100%}}
+
+@media(max-width:560px){
+  .siae-modal{align-items:flex-start;overflow-y:auto;padding-top:max(8px,env(safe-area-inset-top));padding-bottom:max(8px,env(safe-area-inset-bottom))}
+  .siae-modal__panel{max-height:calc(100dvh - max(16px,env(safe-area-inset-top)) - max(16px,env(safe-area-inset-bottom)));margin:auto 0;border-radius:18px}
+}

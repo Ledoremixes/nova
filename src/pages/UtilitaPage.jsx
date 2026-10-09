@@ -15,7 +15,7 @@ function downloadCsv(filename, rows) {
 }
 
 export default function UtilitaPage() {
-  const studentsQuery = useQuery({ queryKey: ['utilities-students'], queryFn: () => fetchOrchideaStudents({ onlyCorsisti: false }) })
+  const studentsQuery = useQuery({ queryKey: ['utilities-students'], queryFn: () => fetchOrchideaStudents({ onlyCorsisti: false }), staleTime: 3 * 60_000, gcTime: 15 * 60_000 })
   const statsQuery = useQuery({ queryKey: ['utilities-stats'], queryFn: fetchDashboardStats })
 
   function exportTesserati() {

@@ -1548,7 +1548,22 @@
   .atleti-membership-card { margin-left: 16px; margin-right: 16px; padding: 17px; }
 }
 
-/* Export OPES dalla sezione Corsisti */
+/* 2026-09-23 · dettaglio componenti quota */
+.atleti-package-breakdown {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(100, 116, 139, .25);
+}
+.atleti-package-breakdown small {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.atleti-package-breakdown b { white-space: nowrap; color: #4f46e5; }
+
 .atleti-opes-export {
   display: inline-flex;
   align-items: center;
@@ -1560,12 +1575,10 @@
   color: #047857;
   font-weight: 900;
 }
-
 .atleti-opes-export:hover:not(:disabled) {
   border-color: rgba(5, 150, 105, 0.42);
   background: linear-gradient(135deg, #d1fae5, #ccfbf1);
 }
-
 @media (max-width: 760px) {
   .atleti-opes-export {
     width: 100%;

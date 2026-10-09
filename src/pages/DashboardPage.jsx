@@ -3,10 +3,6 @@ import { useAuth } from '../context/authContext'
 import { fetchDashboardRegistry } from '../api/dashboard'
 import StatCard from '../components/ui/StatCard'
 
-function formatDate(value) {
-  if (!value) return '-'
-  return new Date(value).toLocaleDateString('it-IT')
-}
 
 function maxValue(rows, key = 'count') {
   return Math.max(1, ...rows.map((row) => Number(row[key] || 0)))
@@ -111,7 +107,7 @@ function WaveAreaChart({ rows = [] }) {
   )
 }
 
-function DonutChart({ rows = [] }) {
+function DonutChart({ rows = [], centerLabel = 'persone', ariaLabel = 'Grafico a torta della distribuzione' }) {
   const items = rows
     .map((row, index) => ({
       ...row,
@@ -132,7 +128,7 @@ function DonutChart({ rows = [] }) {
   return (
     <div className="nova-donut-layout">
       <div className="nova-donut-chart">
-        <svg viewBox="0 0 220 220" role="img" aria-label="Grafico a torta dello stato dei corsisti">
+        <svg viewBox="0 0 220 220" role="img" aria-label={ariaLabel}>
           <circle className="nova-donut-chart__track" cx="110" cy="110" r="78" pathLength="100" />
           {segments.map((segment) => {
             const visiblePercentage = Math.max(segment.percentage - 1.2, 0.8)
@@ -153,7 +149,7 @@ function DonutChart({ rows = [] }) {
             )
           })}
         </svg>
-        <div className="nova-donut-chart__center"><strong>{total}</strong><span>corsisti</span></div>
+        <div className="nova-donut-chart__center"><strong>{total}</strong><span>{centerLabel}</span></div>
       </div>
 
       <div className="nova-donut-legend">
@@ -233,9 +229,15 @@ export default function DashboardPage() {
     totalCorsi: 0,
     totalInAttesaPagamento: 0,
     registrationsByMonth: [],
-    statusDistribution: [],
+    genderDistribution: [],
+    genderKnown: 0,
+    genderUnknown: 0,
+    ageDistribution: [],
+    ageKnown: 0,
+    ageFromFiscalCode: 0,
+    ageFromBirthDate: 0,
+    ageUnknown: 0,
     topCourses: [],
-    ultimiTesserati: [],
   }
 
   return (
@@ -275,12 +277,14 @@ export default function DashboardPage() {
         <div className="page-card nova-chart-card nova-chart-card--donut">
           <div className="section-head">
             <div>
-              <h3>Stato corsisti</h3>
-              <p>Distribuzione tra corsisti, tesserati e situazioni da controllare.</p>
+              <h3>Uomini e donne</h3>
+              <p>Percentuale dei tesserati con genere determinabile dai dati anagrafici.</p>
             </div>
-            <span className="nova-chart-badge nova-chart-badge--pink">Composizione</span>
+            {registry.genderUnknown > 0
+              ? <span className="nova-chart-badge nova-chart-badge--pink">{registry.genderUnknown} non determinati</span>
+              : <span className="nova-chart-badge nova-chart-badge--pink">Genere</span>}
           </div>
-          <DonutChart rows={registry.statusDistribution} />
+          <DonutChart rows={registry.genderDistribution} centerLabel="tesserati" ariaLabel="Grafico a torta della distribuzione percentuale tra uomini e donne" />
         </div>
       </div>
 
@@ -298,28 +302,19 @@ export default function DashboardPage() {
         <div className="page-card">
           <div className="section-head">
             <div>
-              <h3>Ultimi tesserati</h3>
-              <p>Ultimi inserimenti anagrafici.</p>
+              <h3>Fasce di età</h3>
+              <p>Distribuzione calcolata dalla data di nascita e, quando manca, automaticamente dal codice fiscale.</p>
             </div>
+            {registry.ageFromFiscalCode > 0 || registry.ageUnknown > 0 ? (
+              <span className="nova-chart-badge">
+                {[
+                  registry.ageFromFiscalCode > 0 ? `${registry.ageFromFiscalCode} da CF` : '',
+                  registry.ageUnknown > 0 ? `${registry.ageUnknown} non determinabili` : '',
+                ].filter(Boolean).join(' · ')}
+              </span>
+            ) : null}
           </div>
-
-          {registry.ultimiTesserati.length === 0 ? (
-            <div className="empty-box">Nessun tesserato presente.</div>
-          ) : (
-            <div className="simple-list">
-              {registry.ultimiTesserati.map((item) => (
-                <div className="simple-list__row" key={item.id}>
-                  <div>
-                    <div className="simple-list__title">{item.nomeCompleto || 'Senza nome'}</div>
-                    <div className="simple-list__meta">
-                      {formatDate(item.createdAt)} · {item.numeroTessera || 'Senza tessera'} · Anno {item.anno}
-                    </div>
-                  </div>
-                  <div className="status-badge">{item.tipo}</div>
-                </div>
-              ))}
-            </div>
-          )}
+          <MiniBarList rows={registry.ageDistribution} valueKey="count" empty="Nessuna data di nascita disponibile." />
         </div>
       </div>
     </section>

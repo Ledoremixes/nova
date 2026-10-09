@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../api/supabase'
 import { orchideaSupabase, hasDedicatedOrchideaConfig } from '../api/orchideaSupabase'
 import { AuthContext } from './authContext'
 
 export function AuthProvider({ children }) {
+  const queryClient = useQueryClient()
+  const authTransitionRef = useRef(false)
   const [session, setSession] = useState(null)
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
@@ -98,6 +101,14 @@ export function AuthProvider({ children }) {
           data: { session },
         } = await supabase.auth.getSession()
 
+        // Il client Orchidea usa uno storage/sessione separati. Aspettiamo che
+        // Supabase abbia reidratato anche quella sessione prima di montare le
+        // pagine operative, altrimenti la prima query può partire troppo presto
+        // e mostrare ORCHIDEA_AUTH_REQUIRED fino al refresh.
+        if (hasDedicatedOrchideaConfig) {
+          await orchideaSupabase.auth.getSession().catch(() => null)
+        }
+
         if (!isMounted) return
 
         setSession(session)
@@ -126,7 +137,7 @@ export function AuthProvider({ children }) {
 
       if (!session?.user) {
         setProfile(null)
-        setLoading(false)
+        if (!authTransitionRef.current) setLoading(false)
         return
       }
 
@@ -136,7 +147,10 @@ export function AuthProvider({ children }) {
           setProfile(null)
         })
         .finally(() => {
-          setLoading(false)
+          // Durante signIn() dobbiamo aspettare anche l'autenticazione sul
+          // database Orchidea. Senza questa guardia React poteva entrare in
+          // Tesserati mentre il secondo login era ancora in corso.
+          if (!authTransitionRef.current) setLoading(false)
         })
     })
 
@@ -147,29 +161,61 @@ export function AuthProvider({ children }) {
   }, [])
 
   async function signIn(email, password) {
+    authTransitionRef.current = true
     setLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      setLoading(false)
-      throw error
-    }
 
-    // Se il database Orchidea Allievi è separato, apro anche lì una sessione con le stesse credenziali.
-    // Così Tesserati/Corsi/Insegnanti leggono le tabelle del portale senza errori RLS.
-    if (hasDedicatedOrchideaConfig) {
-      const { error: orchideaError } = await orchideaSupabase.auth.signInWithPassword({ email, password })
-      if (orchideaError) {
-        console.warn('Login Orchidea Allievi non riuscito:', orchideaError.message)
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) throw error
+
+      // Se il database Orchidea Allievi è separato, completiamo PRIMA anche
+      // questo login. Solo dopo rendiamo disponibile il gestionale: così le
+      // prime query non partono con una sessione Orchidea ancora assente.
+      if (hasDedicatedOrchideaConfig) {
+        const { error: orchideaError } = await orchideaSupabase.auth.signInWithPassword({ email, password })
+        if (orchideaError) {
+          console.warn('Login Orchidea Allievi non riuscito:', orchideaError.message)
+        } else {
+          // Forza la lettura della sessione appena creata prima di sbloccare UI/query.
+          await orchideaSupabase.auth.getSession().catch(() => null)
+        }
       }
+
+      const currentUser = data?.user || data?.session?.user || null
+      if (currentUser) {
+        setSession(data?.session || null)
+        setUser(currentUser)
+        await loadProfile(currentUser)
+      }
+
+      // Evita che passando da un account all'altro rimangano in cache errori
+      // o dati provenienti dalla sessione precedente.
+      queryClient.clear()
+    } finally {
+      authTransitionRef.current = false
+      setLoading(false)
     }
   }
 
   async function signOut() {
-    const { error } = await supabase.auth.signOut()
-    if (hasDedicatedOrchideaConfig) {
-      await orchideaSupabase.auth.signOut().catch(() => null)
+    authTransitionRef.current = true
+    setLoading(true)
+
+    try {
+      // Chiudiamo entrambe le sessioni prima di riportare l'utente al login.
+      // In questo modo il successivo account non eredita per pochi istanti la
+      // vecchia sessione Orchidea.
+      if (hasDedicatedOrchideaConfig) {
+        await orchideaSupabase.auth.signOut().catch(() => null)
+      }
+
+      const { error } = await supabase.auth.signOut()
+      queryClient.clear()
+      if (error) throw error
+    } finally {
+      authTransitionRef.current = false
+      setLoading(false)
     }
-    if (error) throw error
   }
 
   const value = useMemo(

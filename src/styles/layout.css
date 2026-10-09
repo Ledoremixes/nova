@@ -34,7 +34,7 @@
   padding: 24px;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1180px) {
   .shell {
     flex-direction: column;
   }
@@ -90,7 +90,7 @@
   }
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1180px) {
   .shell {
     display: block;
   }

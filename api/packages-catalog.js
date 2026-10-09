@@ -42,7 +42,7 @@ async function requireNovaOperator(req, nova) {
 function metadata(payload) {
   const tipo = payload.tipo || 'mensile'
   return JSON.stringify({
-    schema: 1,
+    schema: 3,
     tipo,
     durata_mesi: tipo === 'gettone' ? 1 : Math.max(1, Number(payload.durata_mesi || 1)),
     prezzo: Math.max(0, Number(payload.prezzo || 0)),
@@ -50,6 +50,13 @@ function metadata(payload) {
     pricing_key: payload.pricing_key || null,
     pricing_group: payload.pricing_group || null,
     pricing_period: payload.pricing_period || null,
+    course_ids: payload.pricing_key
+      ? []
+      : (Array.isArray(payload.course_ids) ? [...new Set(payload.course_ids.map(String).filter(Boolean))] : []),
+    stackable: payload.pricing_key ? false : payload.stackable === true,
+    covered_course_count: payload.pricing_key || payload.stackable !== true
+      ? null
+      : (Number(payload.covered_course_count || 0) > 0 ? Math.max(1, Math.floor(Number(payload.covered_course_count))) : null),
   })
 }
 
@@ -63,9 +70,17 @@ function parse(row = {}) {
     durata_mesi: value.tipo === 'gettone' ? 1 : Math.max(1, Number(value.durata_mesi || 1)),
     prezzo: Math.max(0, Number(value.prezzo || 0)),
     descrizione: value.descrizione || '',
-    pricing_key: value.pricing_key || null,
+    pricing_key: value.pricing_key ?? null,
+    pricing_key_explicit: Object.prototype.hasOwnProperty.call(value, 'pricing_key'),
     pricing_group: value.pricing_group || null,
     pricing_period: value.pricing_period || null,
+    course_ids: value.pricing_key
+      ? []
+      : (Array.isArray(value.course_ids) ? value.course_ids.map(String).filter(Boolean) : []),
+    stackable: value.pricing_key ? false : value.stackable === true,
+    covered_course_count: value.pricing_key
+      ? null
+      : (Number(value.covered_course_count || 0) > 0 ? Math.max(1, Math.floor(Number(value.covered_course_count))) : null),
     attivo: row.is_active !== false,
     ordine: Number(row.sort_order || 0),
     created_at: row.created_at || null,

@@ -56,6 +56,8 @@ function normalizeStudent(row = {}) {
     nome: row.nome || '',
     cognome: row.cognome || '',
     nomeCompleto: `${row.nome || ''} ${row.cognome || ''}`.trim(),
+    nascita: row.nascita || row.data_nascita || null,
+    sesso: row.sesso || row.genere || '',
     email: row.email || '',
     telefono: row.telefono || row.cellulare || '',
     cf: row.cf || row.cod_fiscale || '',
@@ -75,6 +77,52 @@ export async function fetchOrchideaStudents({ onlyCorsisti = false } = {}) {
   const rows = await fetchTesserati()
   const normalized = (rows || []).map(normalizeStudent)
   return onlyCorsisti ? normalized.filter((row) => row.is_corsista) : normalized
+}
+
+const COURSE_CATALOG_CACHE_TTL = 10 * 60_000
+let courseCatalogCache = null
+let courseCatalogExpiresAt = 0
+let courseCatalogInFlight = null
+
+export function invalidateOrchideaCourseCatalogCache() {
+  courseCatalogCache = null
+  courseCatalogExpiresAt = 0
+  courseCatalogInFlight = null
+}
+
+export async function fetchOrchideaCourseCatalog() {
+  const now = Date.now()
+  if (courseCatalogCache && now < courseCatalogExpiresAt) return courseCatalogCache
+  if (courseCatalogInFlight) return courseCatalogInFlight
+
+  courseCatalogInFlight = (async () => {
+    const select = 'id,nome,disciplina,livello,giorno_settimana,ora_inizio,ora_fine,prezzo_mensile,sala,attivo,colore,descrizione'
+    const direct = await orchideaSupabase
+      .from('corsi')
+      .select(select)
+      .order('attivo', { ascending: false })
+      .order('nome', { ascending: true })
+
+    let rows
+    if (!direct.error) {
+      rows = (direct.data || []).map(normalizeCourse)
+    } else if (isPermissionError(direct.error) || isMissingTableError(direct.error)) {
+      const rpcRows = await rpcJsonArray('nova_corsi_list')
+      rows = rpcRows.map(normalizeCourse)
+    } else {
+      throw new Error(direct.error.message || 'Errore caricamento catalogo corsi')
+    }
+
+    courseCatalogCache = rows
+    courseCatalogExpiresAt = Date.now() + COURSE_CATALOG_CACHE_TTL
+    return rows
+  })()
+
+  try {
+    return await courseCatalogInFlight
+  } finally {
+    courseCatalogInFlight = null
+  }
 }
 
 function normalizeCourse(row = {}) {
@@ -122,9 +170,7 @@ async function enrichCoursesWithTeacherAssignments(courses = []) {
   const { data, error } = await orchideaSupabase
     .from('insegnanti_corsi')
     .select(`
-      id,
-      corso_id,
-      insegnante_id,
+      *,
       insegnanti (*)
     `)
     .limit(10000)
@@ -133,6 +179,8 @@ async function enrichCoursesWithTeacherAssignments(courses = []) {
     ;(data || []).forEach((row) => {
       const teacher = row.insegnanti ? normalizeTeacher(row.insegnanti, 'insegnanti') : null
       if (!teacher) return
+      teacher.course_assignment_id = row.id || null
+      teacher.course_percentage_compensation = row.percentuale_compenso ?? null
       const key = String(row.corso_id)
       byCourse.set(key, [...(byCourse.get(key) || []), teacher])
     })
@@ -277,6 +325,7 @@ function normalizeRpcCourse(data) {
 }
 
 export async function createOrchideaCourse(payload) {
+  invalidateOrchideaCourseCatalogCache()
   const clean = cleanCoursePayload(payload)
   if (!clean.nome) throw new Error('Il nome del corso è obbligatorio.')
 
@@ -307,6 +356,7 @@ export async function createOrchideaCourse(payload) {
 }
 
 export async function updateOrchideaCourse(id, payload) {
+  invalidateOrchideaCourseCatalogCache()
   const clean = cleanCoursePayload(payload, { includeUpdatedAt: true })
 
   const { data, error } = await orchideaSupabase
@@ -342,6 +392,7 @@ function isCourseDependencyError(error) {
 }
 
 export async function deleteOrchideaCourse(id) {
+  invalidateOrchideaCourseCatalogCache()
   if (!id) throw new Error('Corso non selezionato.')
 
   const { data: deletedRows, error } = await orchideaSupabase
@@ -422,6 +473,36 @@ export async function assignCourseToTeacher({ courseId, teacherId, teacherName }
   return normalizeCourse(data)
 }
 
+export async function updateCourseTeacherPercentage({ courseId, teacherId, percentage }) {
+  if (!courseId || !teacherId) throw new Error('Corso o insegnante non valido.')
+
+  const raw = percentage === '' || percentage === null || percentage === undefined ? null : Number(percentage)
+  if (raw !== null && (!Number.isFinite(raw) || raw < 0 || raw > 100)) {
+    throw new Error('La percentuale deve essere compresa tra 0 e 100.')
+  }
+
+  const { data, error } = await orchideaSupabase
+    .from('insegnanti_corsi')
+    .update({
+      percentuale_compenso: raw,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('corso_id', courseId)
+    .eq('insegnante_id', teacherId)
+    .select('*')
+    .single()
+
+  if (error) {
+    const message = `${error.code || ''} ${error.message || ''}`.toLowerCase()
+    if (message.includes('percentuale_compenso') || message.includes('schema cache') || message.includes('column')) {
+      throw new Error('Prima di impostare la percentuale per corso esegui lo script update/teacher_course_percentage.sql su Supabase.')
+    }
+    throw new Error(error.message || 'Errore salvataggio percentuale del corso')
+  }
+
+  return data
+}
+
 export async function removeCourseTeacher({ courseId, teacherId, teacherName }) {
   if (!courseId) throw new Error('Seleziona un corso.')
 
@@ -475,7 +556,33 @@ async function fetchPackagePricingHistoryForStudent(studentId) {
   return data || []
 }
 
-async function upsertPackagePricingVersion({ enrollmentId, studentId, courseId, effectiveFrom, studentQuota, packageName, packageTotal, note }) {
+async function upsertPackagePricingVersionViaBridge(payload) {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  if (sessionError || !sessionData?.session?.access_token) {
+    throw new Error('Sessione Nova non disponibile. Accedi di nuovo e riprova.')
+  }
+
+  const response = await fetch('/api/orchidea-pricing-history', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${sessionData.session.access_token}`,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  let body = {}
+  try {
+    body = await response.json()
+  } catch {
+    body = {}
+  }
+
+  if (!response.ok) throw new Error(body.error || 'Errore salvataggio storico prezzo pacchetto.')
+  return body.item || null
+}
+
+async function upsertPackagePricingVersion({ enrollmentId, studentId, courseId, effectiveFrom, studentQuota, packageName, packageTotal, note, required = true }) {
   const payload = {
     enrollment_id: String(enrollmentId),
     tesseramento_id: String(studentId),
@@ -496,14 +603,30 @@ async function upsertPackagePricingVersion({ enrollmentId, studentId, courseId, 
     .select('*')
     .single()
 
-  if (error) {
-    if (isMissingTableError(error)) {
-      throw new Error('Manca lo storico prezzi mensile. Esegui package_pricing_history.sql nel database Orchidea Allievi prima di salvare il pacchetto.')
+  if (!error) return data
+
+  if (isPermissionError(error)) {
+    try {
+      return await upsertPackagePricingVersionViaBridge(payload)
+    } catch (bridgeError) {
+      if (!required) {
+        console.warn('Storico prezzo non salvato durante assegnazione corso:', bridgeError)
+        return null
+      }
+      throw bridgeError
     }
-    throw new Error(error.message || 'Errore salvataggio storico prezzo pacchetto.')
   }
 
-  return data
+  if (isMissingTableError(error)) {
+    if (!required) return null
+    throw new Error('Manca lo storico prezzi mensile. Esegui package_pricing_history.sql nel database Orchidea Allievi prima di salvare il pacchetto.')
+  }
+
+  if (!required) {
+    console.warn('Storico prezzo non salvato durante assegnazione corso:', error)
+    return null
+  }
+  throw new Error(error.message || 'Errore salvataggio storico prezzo pacchetto.')
 }
 
 export async function addCourseParticipant({ courseId, studentId, tariffaMensile = null, effectiveMonth = null }) {
@@ -511,6 +634,22 @@ export async function addCourseParticipant({ courseId, studentId, tariffaMensile
 
   const effectiveFrom = effectiveMonth ? monthStartDate(effectiveMonth) : new Date().toISOString().slice(0, 10)
   const cleanQuota = tariffaMensile === '' || tariffaMensile === null ? null : Number(tariffaMensile || 0)
+
+  // Idempotenza: un doppio tap, un retry del browser o una rete lenta non devono
+  // creare una seconda iscrizione allo stesso corso per lo stesso periodo.
+  const existing = await orchideaSupabase
+    .from('iscrizioni_corsi')
+    .select('*')
+    .eq('corso_id', courseId)
+    .eq('tesseramento_id', studentId)
+    .order('created_at', { ascending: false, nullsFirst: false })
+    .limit(20)
+
+  if (!existing.error) {
+    const alreadyActive = (existing.data || []).find((row) => enrollmentIsActiveForMonth(row, effectiveMonth || effectiveFrom.slice(0, 7)))
+    if (alreadyActive) return { ...alreadyActive, _nova_reused: true }
+  }
+
   const payload = {
     corso_id: courseId,
     tesseramento_id: studentId,
@@ -558,6 +697,7 @@ export async function addCourseParticipant({ courseId, studentId, tariffaMensile
       packageName: null,
       packageTotal: null,
       note: '',
+      required: cleanQuota !== null,
     })
   }
 
@@ -802,6 +942,20 @@ function teacherPaymentConfig(row = {}) {
   return { paymentType, fixed, percent, hourly }
 }
 
+function teacherCoursePercentage(course, teacher, fallbackPercent) {
+  const linked = (course?.teachers || []).find((item) => (
+    (teacher?.id && item?.id && String(teacher.id) === String(item.id)) ||
+    (lower(teacher?.full_name) && lower(teacher?.full_name) === lower(item?.full_name))
+  ))
+  const override = linked?.course_percentage_compensation
+  if (override !== null && override !== undefined && override !== '') {
+    const parsed = Number(override)
+    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0
+  }
+  const parsedFallback = Number(fallbackPercent || 0)
+  return Number.isFinite(parsedFallback) ? Math.max(0, parsedFallback) : 0
+}
+
 function parseWeekday(value) {
   const key = lower(value)
   const map = {
@@ -983,8 +1137,9 @@ export async function fetchTeacherMonthlyPayouts({ month = '' } = {}) {
         method: 'quota fissa mensile',
       }] : []
     } else {
-      const percent = Number(config.percent || 0)
+      const fallbackPercent = Number(config.percent || 0)
       detailRows = rows.map((row) => {
+        const percent = teacherCoursePercentage(row.course, teacher, fallbackPercent)
         const teacherQuota = row.paid_student_quota * percent / 100
         total += teacherQuota
         return {

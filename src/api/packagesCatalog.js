@@ -5,6 +5,17 @@ const SECTION_KEY = 'pagamenti'
 const LIST_KEY = 'pacchetti_corsi'
 const DEFAULT_PACKAGES = COURSE_PRICE_LIST.map((item) => ({ ...item, attivo: true }))
 
+const PACKAGES_CACHE_TTL = 10 * 60_000
+let packagesCache = null
+let packagesCacheExpiresAt = 0
+let packagesInFlight = null
+
+export function invalidatePackagesCatalogCache() {
+  packagesCache = null
+  packagesCacheExpiresAt = 0
+  packagesInFlight = null
+}
+
 function parseMetadata(value) {
   if (!value) return {}
   try {
@@ -26,8 +37,14 @@ function normalizePackage(row = {}) {
     prezzo: Math.max(0, Number(metadata.prezzo ?? row.prezzo ?? 0)),
     descrizione: metadata.descrizione ?? row.descrizione ?? '',
     pricing_key: metadata.pricing_key ?? row.pricing_key ?? null,
+    pricing_key_explicit: Object.prototype.hasOwnProperty.call(metadata, 'pricing_key'),
     pricing_group: metadata.pricing_group ?? row.pricing_group ?? null,
     pricing_period: metadata.pricing_period ?? row.pricing_period ?? null,
+    // Le formule del listino automatico non devono mai essere legate manualmente ai corsi:
+    // vengono rilevate da Nova in base alla combinazione di corsi dell'allievo.
+    course_ids: metadata.pricing_key
+      ? []
+      : (Array.isArray(metadata.course_ids) ? metadata.course_ids.map(String).filter(Boolean) : []),
     attivo: row.attivo !== undefined ? row.attivo !== false : row.is_active !== false,
     ordine: Number(row.ordine ?? row.sort_order ?? 0),
     created_at: row.created_at || null,
@@ -38,7 +55,7 @@ function normalizePackage(row = {}) {
 function metadataForPackage(payload) {
   const tipo = payload.tipo || 'mensile'
   return JSON.stringify({
-    schema: 1,
+    schema: 2,
     tipo,
     durata_mesi: tipo === 'gettone' ? 1 : Math.max(1, Number(payload.durata_mesi || 1)),
     prezzo: Math.max(0, Number(payload.prezzo || 0)),
@@ -46,6 +63,9 @@ function metadataForPackage(payload) {
     pricing_key: payload.pricing_key || null,
     pricing_group: payload.pricing_group || null,
     pricing_period: payload.pricing_period || null,
+    course_ids: payload.pricing_key
+      ? []
+      : (Array.isArray(payload.course_ids) ? [...new Set(payload.course_ids.map(String).filter(Boolean))] : []),
   })
 }
 
@@ -73,8 +93,53 @@ async function fetchRows({ includeInactive = true } = {}) {
   return data || []
 }
 
+async function clearAutomaticPackageCourseAssignments(rows = []) {
+  const repairs = rows.map((row) => {
+    const metadata = parseMetadata(row.value)
+    const normalized = normalizePackage({ ...row, _metadata: metadata })
+    const currentCourseIds = Array.isArray(metadata.course_ids) ? metadata.course_ids.map(String).filter(Boolean) : []
+    const automaticKey = normalized.pricing_key || null
+
+    // Oltre a svuotare course_ids, autoripariamo i vecchi record standard che
+    // erano stati salvati come pricing_key=null dopo una modifica manuale.
+    if (!automaticKey) return null
+    const needsRepair = metadata.pricing_key !== automaticKey
+      || metadata.pricing_group !== normalized.pricing_group
+      || metadata.pricing_period !== normalized.pricing_period
+      || currentCourseIds.length > 0
+    if (!needsRepair) return null
+
+    return {
+      row,
+      metadata: {
+        ...metadata,
+        schema: 2,
+        pricing_key: automaticKey,
+        pricing_group: normalized.pricing_group || null,
+        pricing_period: normalized.pricing_period || null,
+        course_ids: [],
+      },
+    }
+  }).filter(Boolean)
+
+  if (!repairs.length) return rows
+
+  await Promise.all(repairs.map(async ({ row, metadata }) => {
+    const { error } = await supabase
+      .from('lookup_options')
+      .update({ value: JSON.stringify(metadata) })
+      .eq('id', row.id)
+      .eq('section_key', SECTION_KEY)
+      .eq('list_key', LIST_KEY)
+    if (error) console.warn('Ripristino metadata pacchetto automatico non riuscito:', row.id, error.message)
+  }))
+
+  return fetchRows({ includeInactive: true })
+}
+
 async function ensureDefaultPackages() {
-  const rows = await fetchRows({ includeInactive: true })
+  let rows = await fetchRows({ includeInactive: true })
+  rows = await clearAutomaticPackageCourseAssignments(rows)
   const normalized = rows.map(normalizePackage)
   const existingKeys = new Set(normalized.map((item) => item.pricing_key).filter(Boolean))
   const existingNames = new Set(normalized.map((item) => String(item.nome || '').trim().toLowerCase()))
@@ -108,14 +173,25 @@ async function ensureDefaultPackages() {
 }
 
 export async function fetchPackagesCatalog({ includeInactive = true } = {}) {
-  // Il pacchetto base deve esistere sempre, anche se il catalogo contiene già
-  // altre formule create in precedenza. Lo creiamo solo se manca, senza
-  // sovrascrivere eventuali modifiche successive fatte dalla segreteria.
-  const rows = await ensureDefaultPackages()
+  const now = Date.now()
+  if (!packagesCache || now >= packagesCacheExpiresAt) {
+    if (!packagesInFlight) {
+      packagesInFlight = ensureDefaultPackages()
+        .then((rows) => {
+          packagesCache = rows
+          packagesCacheExpiresAt = Date.now() + PACKAGES_CACHE_TTL
+          return rows
+        })
+        .finally(() => { packagesInFlight = null })
+    }
+    await packagesInFlight
+  }
+  const rows = packagesCache || []
   return rows.filter((item) => includeInactive || item.attivo)
 }
 
 export async function createPackageCatalog(payload) {
+  invalidatePackagesCatalogCache()
   const nome = validatePackage(payload)
   const { data, error } = await supabase
     .from('lookup_options')
@@ -136,6 +212,7 @@ export async function createPackageCatalog(payload) {
 }
 
 export async function updatePackageCatalog(id, payload) {
+  invalidatePackagesCatalogCache()
   if (!id) throw new Error('Pacchetto non indicato.')
   const nome = validatePackage(payload)
   const { data, error } = await supabase
@@ -157,6 +234,7 @@ export async function updatePackageCatalog(id, payload) {
 }
 
 export async function deletePackageCatalog(id) {
+  invalidatePackagesCatalogCache()
   if (!id) throw new Error('Pacchetto non indicato.')
   const { error } = await supabase
     .from('lookup_options')

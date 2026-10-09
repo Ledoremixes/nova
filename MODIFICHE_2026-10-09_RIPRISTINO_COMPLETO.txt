@@ -1,0 +1,8 @@
+Ripristino regressione introdotta dall'aggiornamento CSV OPES.
+
+Base ripristinata: e3dbaa0cf0ee6202455cdbdc432fd0dbb23b7a15 (ultima versione precedente all'aggiornamento CSV).
+Ripristinati i 37 file modificati involontariamente, comprese lettura server autenticata dei tesserati, paginazione oltre 1000 righe, gestione sessioni, menu e percorsi Iscrizione corsista / Registra pagamento / Tesseramento corsista, correzioni dei pagamenti e interfaccia.
+Riapplicata esclusivamente l'esportazione OPES alle due pagine Tesserati e Corsisti, mantenendo filtri e formato richiesti.
+Nessuna migrazione o modifica dei dati del database.
+
+Verifiche: compilazione produzione; test regressione su 1501 record con e senza sessione Orchidea, recupero da permessi negati tramite endpoint autenticato, CSV OPES; test preesistenti su importazione storica e compensi insegnanti.
