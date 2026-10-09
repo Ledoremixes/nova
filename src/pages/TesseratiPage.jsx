@@ -12,8 +12,7 @@ import {
 import { hasCustomMembershipNumber, membershipCode } from '../lib/membership'
 import { changeTesseratoPassword } from '../api/orchideaEntities'
 import { markConvertedCorsistaMembership } from '../api/membershipFees'
-import { importHistoricalMembershipBatch } from '../api/historicalMembershipImport'
-import { splitHistoricalRecords } from '../lib/historicalFiscalCode'
+import { buildOpesCsv } from '../lib/opesCsv'
 import '../styles/TesseratiPage.css'
 
 const emptyStudentForm = {
@@ -149,29 +148,13 @@ export default function TesseratiPage() {
   const [stagione, setStagione] = useState('')
   const [status, setStatus] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(100)
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [studentForm, setStudentForm] = useState(emptyStudentForm)
   const [passwordForm, setPasswordForm] = useState({ password: '', password2: '' })
-  const historicalFileInputRef = useRef(null)
-  const [historicalPackage, setHistoricalPackage] = useState(null)
-  const [historicalFileName, setHistoricalFileName] = useState('')
-  const [historicalImportError, setHistoricalImportError] = useState('')
-  const [historicalImportRunning, setHistoricalImportRunning] = useState(false)
-  const [historicalImportProgress, setHistoricalImportProgress] = useState(0)
-  const [historicalImportResult, setHistoricalImportResult] = useState(null)
 
   const { data: students = [], isLoading, error } = useQuery({
     queryKey: ['tesseramenti-orchidea'],
     queryFn: fetchTesserati,
-    // fetchTesserati ha già fallback server/bridge: ripetere 3-4 volte la
-    // stessa catena rendeva il caricamento molto lento quando la seconda
-    // sessione Orchidea era in ritardo.
-    retry: (failureCount) => failureCount < 1,
-    retryDelay: 300,
-    staleTime: 3 * 60_000,
-    gcTime: 15 * 60_000,
   })
 
   const detailsQuery = useQuery({
@@ -202,13 +185,6 @@ export default function TesseratiPage() {
       return matchesSearch && matchesSeason && matchesStatus && matchesRole
     })
   }, [students, search, stagione, status, roleFilter])
-
-  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize))
-  const currentPage = Math.min(page, totalPages)
-  const pagedStudents = useMemo(() => {
-    const start = (currentPage - 1) * pageSize
-    return filteredStudents.slice(start, start + pageSize)
-  }, [filteredStudents, currentPage, pageSize])
 
   const stats = useMemo(() => {
     return {
@@ -318,108 +294,33 @@ export default function TesseratiPage() {
     passwordMutation.mutate({ student: selectedStudent, newPassword: passwordForm.password })
   }
 
-  async function handleHistoricalPackage(event) {
-    const file = event.target.files?.[0]
-    if (!file) return
+  function handleExportOpes() {
+    const { csv, exportedCount, skipped } = buildOpesCsv(filteredStudents)
 
-    setHistoricalImportError('')
-    setHistoricalImportResult(null)
-    setHistoricalImportProgress(0)
-
-    try {
-      const payload = JSON.parse(await file.text())
-      if (
-        payload?.format !== 'nova_historical_membership_import' ||
-        Number(payload?.version) !== 1 ||
-        !Array.isArray(payload?.records)
-      ) {
-        throw new Error('Il file selezionato non è il pacchetto dei tesseramenti storici Nova.')
-      }
-      if (!payload.records.length) throw new Error('Il pacchetto non contiene tesseramenti da importare.')
-
-      const { eligible, excluded } = splitHistoricalRecords(payload.records)
-      if (!eligible.length) throw new Error('Nessuna anagrafica importabile: tutti i codici fiscali sono mancanti o non validi.')
-      const signatures = eligible.filter((record) => Boolean(record.signature_data_url)).length
-      setHistoricalPackage({
-        ...payload,
-        records: eligible,
-        excluded_records: excluded.map((record) => ({
-          source_message_id: record?.source_message_id,
-          nome: record?.nome,
-          cognome: record?.cognome,
-          cf: record?.cf,
-        })),
-        summary: {
-          ...payload.summary,
-          people: eligible.length,
-          signatures,
-          missing_signatures: eligible.length - signatures,
-          formally_invalid_fiscal_codes: 0,
-          excluded_invalid_fiscal_codes: excluded.length + Number(payload.summary?.excluded_invalid_fiscal_codes || 0),
-        },
-      })
-      setHistoricalFileName(file.name)
-    } catch (error) {
-      setHistoricalPackage(null)
-      setHistoricalFileName('')
-      setHistoricalImportError(error.message || 'Impossibile leggere il file di importazione.')
-    } finally {
-      event.target.value = ''
-    }
-  }
-
-  async function runHistoricalImport() {
-    if (!historicalPackage?.records?.length || historicalImportRunning) return
-
-    const aggregate = {
-      processed: 0,
-      inserted: 0,
-      skipped_existing: 0,
-      skipped_invalid_cf: 0,
-      signatures_uploaded: 0,
-      signatures_already_present: 0,
-      signatures_missing: 0,
-      errors: [],
+    if (exportedCount === 0) {
+      alert('Nessun tesserato esportabile: controlla che i codici fiscali siano validi.')
+      return
     }
 
-    setHistoricalImportError('')
-    setHistoricalImportResult(null)
-    setHistoricalImportProgress(0)
-    setHistoricalImportRunning(true)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'TESSERAMENTI_ORCHIDEA_OPES_2026_2027.csv'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
 
-    try {
-      const records = historicalPackage.records
-      const batchSize = 4
-
-      for (let index = 0; index < records.length; index += batchSize) {
-        const batch = records.slice(index, index + batchSize)
-        const summary = await importHistoricalMembershipBatch({
-          format: historicalPackage.format,
-          version: historicalPackage.version,
-          defaults: historicalPackage.import_defaults || {},
-          records: batch,
-        })
-
-        aggregate.processed += Number(summary.processed || 0)
-        aggregate.inserted += Number(summary.inserted || 0)
-        aggregate.skipped_existing += Number(summary.skipped_existing || 0)
-        aggregate.skipped_invalid_cf += Number(summary.skipped_invalid_cf || 0)
-        aggregate.signatures_uploaded += Number(summary.signatures_uploaded || 0)
-        aggregate.signatures_already_present += Number(summary.signatures_already_present || 0)
-        aggregate.signatures_missing += Number(summary.signatures_missing || 0)
-        aggregate.errors.push(...(summary.errors || []))
-        setHistoricalImportProgress(Math.min(records.length, index + batch.length))
-      }
-
-      setHistoricalImportResult(aggregate)
-      queryClient.invalidateQueries({ queryKey: ['tesseramenti-orchidea'] })
-      queryClient.invalidateQueries({ queryKey: ['dashboard-registry'] })
-    } catch (error) {
-      setHistoricalImportError(
-        `${error.message || 'Importazione interrotta.'} Puoi riavviarla: le persone già inserite non verranno duplicate.`
+    if (skipped.length > 0) {
+      const preview = skipped
+        .slice(0, 8)
+        .map(({ student }) => fullName(student))
+        .join(', ')
+      const more = skipped.length > 8 ? ` e altri ${skipped.length - 8}` : ''
+      alert(
+        `CSV OPES creato con ${exportedCount} tesserati. Esclusi ${skipped.length} record perché il codice fiscale non permette di ricavare la data di nascita: ${preview}${more}.`
       )
-    } finally {
-      setHistoricalImportRunning(false)
     }
   }
 
@@ -458,109 +359,6 @@ export default function TesseratiPage() {
         </div>
       </div>
 
-      {isAdmin ? (
-        <div className="page-card historical-import-card">
-          <div className="historical-import-card__copy">
-            <div className="dashboard-hero__eyebrow">Migrazione una tantum</div>
-            <h2>Importa tesseramenti storici Gmail</h2>
-            <p>
-              Nova inserisce soltanto le anagrafiche mancanti. Chi è già presente non viene modificato;
-              la firma originale viene archiviata separatamente e non vengono creati account o password.
-              Le anagrafiche con codice fiscale non valido vengono escluse dall’importazione.
-            </p>
-          </div>
-
-          <input
-            ref={historicalFileInputRef}
-            className="historical-import-card__file"
-            type="file"
-            accept=".json,application/json"
-            onChange={handleHistoricalPackage}
-          />
-
-          <div className="historical-import-card__actions">
-            <button
-              className="topbar__button"
-              type="button"
-              onClick={() => historicalFileInputRef.current?.click()}
-              disabled={historicalImportRunning}
-            >
-              {historicalPackage ? 'Cambia file' : 'Seleziona file importazione'}
-            </button>
-
-            {historicalPackage ? (
-              <button
-                className="topbar__button topbar__button--primary"
-                type="button"
-                onClick={runHistoricalImport}
-                disabled={historicalImportRunning}
-              >
-                {historicalImportRunning
-                  ? `Importazione ${historicalImportProgress}/${historicalPackage.records.length}…`
-                  : `Importa ${historicalPackage.records.length} anagrafiche`}
-              </button>
-            ) : null}
-          </div>
-
-          {historicalPackage ? (
-            <div className="historical-import-preview">
-              <strong>{historicalFileName}</strong>
-              <span>{historicalPackage.summary?.people ?? historicalPackage.records.length} persone</span>
-              <span>{historicalPackage.summary?.signatures ?? '—'} firme</span>
-              <span>{historicalPackage.summary?.excluded_invalid_fiscal_codes ?? 0} anagrafiche escluse per codice fiscale non valido</span>
-              <small>
-                Stagione {historicalPackage.import_defaults?.season || '2026/2027'} · tesseramento attivo · pagamento non registrato
-              </small>
-              {historicalPackage.excluded_records.length ? (
-                <details>
-                  <summary>Mostra le anagrafiche escluse (non verranno importate)</summary>
-                  <ul>
-                    {historicalPackage.excluded_records.map((record, index) => (
-                        <li key={record.source_message_id || index}>
-                          <strong>{record.nome} {record.cognome}</strong>: {record.cf}
-                        </li>
-                      ))}
-                  </ul>
-                </details>
-              ) : null}
-            </div>
-          ) : null}
-
-          {historicalImportRunning ? (
-            <div className="historical-import-progress" aria-label="Avanzamento importazione">
-              <span style={{ width: `${Math.round((historicalImportProgress / historicalPackage.records.length) * 100)}%` }} />
-            </div>
-          ) : null}
-
-          {historicalImportError ? <p className="form-error">{historicalImportError}</p> : null}
-
-          {historicalImportResult ? (
-            <div className={historicalImportResult.errors.length ? 'historical-import-result has-warnings' : 'historical-import-result'}>
-              <strong>Importazione completata</strong>
-              <span>{historicalImportResult.inserted} nuove anagrafiche inserite</span>
-              <span>{historicalImportResult.skipped_existing} già presenti e lasciate invariate</span>
-              <span>{Number(historicalPackage.summary?.excluded_invalid_fiscal_codes || 0) + historicalImportResult.skipped_invalid_cf} escluse per codice fiscale non valido</span>
-              <span>
-                {historicalImportResult.signatures_uploaded} firme archiviate · {historicalImportResult.signatures_already_present} già presenti
-              </span>
-              {historicalImportResult.signatures_missing ? <span>{historicalImportResult.signatures_missing} firma mancante nella mail originale</span> : null}
-              {historicalImportResult.errors.length ? (
-                <details>
-                  <summary>{historicalImportResult.errors.length} elementi da controllare</summary>
-                  <ul>
-                    {historicalImportResult.errors.map((item, index) => (
-                      <li key={`${item.source_message_id || 'errore'}-${index}`}>
-                        <strong>{item.name}</strong>: {item.error}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
       <div className="page-card">
         <div className="section-head">
           <div>
@@ -569,14 +367,25 @@ export default function TesseratiPage() {
           </div>
 
           {isAdmin ? (
-            <button
-              className="topbar__button topbar__button--primary"
-              type="button"
-              onClick={() => generateMissingMutation.mutate()}
-              disabled={generateMissingMutation.isPending || stats.missingNumbers === 0}
-            >
-              {generateMissingMutation.isPending ? 'Genero numeri…' : 'Genera numeri mancanti'}
-            </button>
+            <div className="tesserati-header-actions">
+              <button
+                className="topbar__button tesserati-opes-export"
+                type="button"
+                onClick={handleExportOpes}
+                disabled={filteredStudents.length === 0}
+                title="Esporta nel formato OPES i tesserati attualmente filtrati"
+              >
+                Scarica CSV OPES
+              </button>
+              <button
+                className="topbar__button topbar__button--primary"
+                type="button"
+                onClick={() => generateMissingMutation.mutate()}
+                disabled={generateMissingMutation.isPending || stats.missingNumbers === 0}
+              >
+                {generateMissingMutation.isPending ? 'Genero numeri…' : 'Genera numeri mancanti'}
+              </button>
+            </div>
           ) : null}
         </div>
 
@@ -594,21 +403,18 @@ export default function TesseratiPage() {
             data-lpignore="true"
             data-1p-ignore="true"
             onChange={(e) => {
-              if (!selectedStudent) {
-                setSearch(e.target.value)
-                setPage(1)
-              }
+              if (!selectedStudent) setSearch(e.target.value)
             }}
           />
 
-          <select className="filterSelect" value={stagione} onChange={(e) => { setStagione(e.target.value); setPage(1) }}>
+          <select className="filterSelect" value={stagione} onChange={(e) => setStagione(e.target.value)}>
             <option value="">Tutte le stagioni</option>
             {stagioniDisponibili.map((item) => (
               <option key={item} value={item}>{item}</option>
             ))}
           </select>
 
-          <select className="filterSelect" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }}>
+          <select className="filterSelect" value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">Tutti gli stati</option>
             <option value="pending_payment">In attesa pagamento</option>
             <option value="active">Attiva</option>
@@ -616,7 +422,7 @@ export default function TesseratiPage() {
             <option value="blocked">Bloccata</option>
           </select>
 
-          <select className="filterSelect" value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1) }}>
+          <select className="filterSelect" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
             <option value="">Tutti i ruoli</option>
             <option value="corsista">Solo corsisti</option>
             <option value="tesserato">Solo tesserati</option>
@@ -637,20 +443,7 @@ export default function TesseratiPage() {
             <div className="student-list-toolbar">
               <div>
                 <strong>{filteredStudents.length} tesserati trovati</strong>
-                <small>{stats.total} anagrafiche totali nell’archivio · pagina {currentPage} di {totalPages}</small>
-              </div>
-              <div className="tesserati-pagination-controls">
-                <label>
-                  <span>Righe</span>
-                  <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1) }}>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                    <option value={200}>200</option>
-                  </select>
-                </label>
-                <button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={currentPage <= 1}>Precedente</button>
-                <span>{currentPage} / {totalPages}</span>
-                <button type="button" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={currentPage >= totalPages}>Successiva</button>
+                <small>Archivio operativo stagione corrente</small>
               </div>
             </div>
 
@@ -674,7 +467,7 @@ export default function TesseratiPage() {
                       <td colSpan="8">Nessun tesserato trovato.</td>
                     </tr>
                   ) : (
-                    pagedStudents.map((student) => (
+                    filteredStudents.map((student) => (
                       <tr key={student.id} className={selectedStudent?.id === student.id ? 'selected-table-row' : ''}>
                         <td>
                           <div className="tesserati-person-cell">

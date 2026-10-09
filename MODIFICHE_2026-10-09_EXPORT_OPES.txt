@@ -1,0 +1,20 @@
+NOVA - EXPORT TESSERAMENTI OPES (09/10/2026)
+
+Aggiunto nella sezione Tesserati il pulsante "Scarica CSV OPES".
+
+Il file esportato replica intestazioni e separatore del modello OPES fornito:
+- Classe tesseramento: A
+- Tipo tesseramento: APR
+- Data Inizio: 09/10/2026
+- Data Fine: 31/08/2027
+- Discipline: BC006
+- Codice Fiscale: anagrafica Nova
+- Cognome / Nome: anagrafica Nova
+- Data di nascita: ricavata dal Codice Fiscale
+- Sesso: ricavato dal Codice Fiscale
+- Gli altri campi del modello restano vuoti.
+
+L'esportazione usa i tesserati attualmente visibili dopo i filtri della pagina.
+I codici fiscali non validi/non decodificabili vengono esclusi e segnalati.
+Gli eventuali duplicati con lo stesso codice fiscale vengono esportati una sola volta.
+Il CSV usa separatore ;, CRLF e BOM UTF-8 per compatibilità con Excel/portale OPES.

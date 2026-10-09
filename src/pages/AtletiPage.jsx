@@ -46,8 +46,6 @@ export default function AtletiPage() {
   const studentsQuery = useQuery({
     queryKey: ['orchidea-atleti-corsisti'],
     queryFn: () => fetchOrchideaStudents({ onlyCorsisti: false }),
-    staleTime: 3 * 60_000,
-    gcTime: 15 * 60_000,
   })
 
   const coursesQuery = useQuery({
@@ -279,7 +277,6 @@ export default function AtletiPage() {
                 <strong>{recommendedMonthly ? money(recommendedMonthly.prezzo) : money(0)}</strong>
                 <p>{recommendedMonthly ? recommendedMonthly.pricing_group_label : 'Assegna almeno un corso per calcolare il pacchetto.'}</p>
                 {recommendedMonthly ? <small>{recommendedMonthly.nome}</small> : null}
-                {recommendedMonthly?.components?.length ? <div className="atleti-package-breakdown">{recommendedMonthly.components.map((component) => <small key={`atleta-price-${component.id}`}><span>{component.nome}</span><b>{money(component.prezzo)}</b></small>)}</div> : null}
               </div>
             </div>
 

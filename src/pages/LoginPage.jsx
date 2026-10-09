@@ -10,7 +10,7 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  if (!loading && isAuthenticated && !submitting) {
+  if (!loading && isAuthenticated) {
     return <Navigate to="/dashboard" replace />
   }
 

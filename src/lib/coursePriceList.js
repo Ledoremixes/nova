@@ -1,20 +1,5 @@
 export const COURSE_PRICE_LIST_VERSION = '2026/2027'
 
-
-export const GIFT_PACKAGE = {
-  id: 'builtin:omaggio',
-  pricing_key: 'gift',
-  pricing_group: 'gift',
-  period: 'omaggio',
-  nome: 'Omaggio · 1 mese',
-  tipo: 'omaggio',
-  durata_mesi: 1,
-  prezzo: 0,
-  descrizione: 'Copertura gratuita di un mese corso. La tessera corsista resta sempre dovuta.',
-  ordine: -10,
-  attivo: true,
-}
-
 export const COURSE_PRICE_LIST = [
   {
     pricing_key: 'token',
@@ -129,16 +114,8 @@ export function pricingGroupLabel(group) {
 }
 
 function derivePricingKey(item = {}) {
-  const name = normalize(item.nome || item.label)
-
-  // I nomi ufficiali del listino sono riservati alle formule automatiche.
-  // Questo permette a Nova di autoriparare vecchi record che, dopo una modifica
-  // manuale, sono rimasti con pricing_key=null ma conservano il nome standard.
-  const exactStandard = COURSE_PRICE_LIST.find((row) => normalize(row.nome) === name)
-  if (exactStandard?.pricing_key) return exactStandard.pricing_key
-
-  if (item.pricing_key_explicit) return item.pricing_key ? String(item.pricing_key) : null
   if (item.pricing_key) return String(item.pricing_key)
+  const name = normalize(item.nome || item.label)
   const type = String(item.tipo || '').toLowerCase()
 
   if (type === 'gettone' || name.includes('a gettone')) return 'token'
@@ -168,87 +145,32 @@ export function enrichPackagePricingMetadata(item = {}) {
     pricing_key: pricingKey,
     pricing_group: item.pricing_group || pricingGroup || null,
     pricing_period: item.pricing_period || periodFromKey || (pricingKey === 'token' ? 'gettone' : null),
-    // Solo i pacchetti personalizzati possono essere associati manualmente ai corsi.
-    // Il listino standard deve continuare a funzionare tramite rilevamento automatico.
-    course_ids: pricingKey
-      ? []
-      : (Array.isArray(item.course_ids) ? [...new Set(item.course_ids.map(String).filter(Boolean))] : []),
   }
 }
 
-function courseIds(courses = []) {
-  return [...new Set((Array.isArray(courses) ? courses : [])
-    .map((course) => String(course?.id || course?.corso_id || course?.course_id || ''))
-    .filter(Boolean))]
-}
-
-export function packageAppliesToCourses(item = {}, courses = []) {
-  const allowed = Array.isArray(item.course_ids) ? item.course_ids.map(String).filter(Boolean) : []
-  if (!allowed.length) return true
-  const selected = courseIds(courses)
-  if (!selected.length) return false
-  const allowedSet = new Set(allowed)
-  // I corsi associati al pacchetto sono la sua area di validità: un pacchetto
-  // Country associato ai due Country base resta disponibile per martedì,
-  // venerdì o entrambi, ma non viene proposto se nella selezione compare un
-  // corso esterno (es. Salsa/Bachata).
-  return selected.every((id) => allowedSet.has(id))
-}
-
-export function findPricingPackage(packages = [], group, period = 'mensile', courses = []) {
+export function findPricingPackage(packages = [], group, period = 'mensile') {
   if (!group) return null
   const key = group === 'token' ? 'token' : `${group}.${period}`
-  const keyed = (packages || [])
+  return (packages || [])
     .map(enrichPackagePricingMetadata)
-    .filter((item) => item.attivo !== false && item.pricing_key === key)
-  return keyed.find((item) => packageAppliesToCourses(item, courses)) || null
+    .find((item) => item.attivo !== false && item.pricing_key === key) || null
 }
 
 export function fallbackPricingPackage(group, period = 'mensile') {
   const key = group === 'token' ? 'token' : `${group}.${period}`
   const item = COURSE_PRICE_LIST.find((row) => row.pricing_key === key)
-  return item ? { ...item, id: `builtin:${item.pricing_key}`, attivo: true, course_ids: [] } : null
-}
-
-function specificPackageForPeriod(courses = [], packages = [], period = 'mensile') {
-  return (packages || [])
-    .map(enrichPackagePricingMetadata)
-    .filter((item) => item.attivo !== false
-      && !item.pricing_key
-      && item.course_ids?.length
-      && (item.pricing_period || item.tipo) === period
-      && item.tipo !== 'gettone'
-      && packageAppliesToCourses(item, courses))
-    .sort((a, b) => Number(a.ordine || 0) - Number(b.ordine || 0))[0] || null
-}
-
-function customPackageForPeriod(courses = [], packages = [], period = 'mensile') {
-  return (packages || [])
-    .map(enrichPackagePricingMetadata)
-    .filter((item) => item.attivo !== false && !item.pricing_key && item.tipo === period && packageAppliesToCourses(item, courses))
-    .sort((a, b) => {
-      const aSpecific = Array.isArray(a.course_ids) && a.course_ids.length ? 0 : 1
-      const bSpecific = Array.isArray(b.course_ids) && b.course_ids.length ? 0 : 1
-      return aSpecific - bSpecific || Number(a.ordine || 0) - Number(b.ordine || 0)
-    })[0] || null
+  return item ? { ...item, id: `builtin:${item.pricing_key}`, attivo: true } : null
 }
 
 export function resolveCoursePricing(courses = [], packages = [], period = 'mensile') {
   const group = pricingGroupForCourses(courses)
   if (!group) return null
-  const catalogItem = findPricingPackage(packages, group, period, courses)
-  const specificItem = specificPackageForPeriod(courses, packages, period)
-  const customItem = customPackageForPeriod(courses, packages, period)
-
-  // LOGICA STABILE: il listino automatico ha sempre la precedenza e, se il
-  // relativo record non esiste/è stato modificato/disattivato nel DB, Nova usa
-  // comunque il listino 2026/2027 incorporato. I personalizzati restano solo
-  // alternative e non possono più far sparire Mensile/Trimestrale/Annuale.
-  const item = catalogItem || fallbackPricingPackage(group, period) || specificItem || customItem
+  const catalogItem = findPricingPackage(packages, group, period)
+  const item = catalogItem || fallbackPricingPackage(group, period)
   if (!item) return null
   return {
     ...item,
-    pricing_group: item.pricing_group || group,
+    pricing_group: group,
     pricing_group_label: pricingGroupLabel(group),
   }
 }
@@ -256,37 +178,23 @@ export function resolveCoursePricing(courses = [], packages = [], period = 'mens
 export function packagesForCourseSelection(courses = [], packages = []) {
   const group = pricingGroupForCourses(courses)
   const enriched = (packages || []).map(enrichPackagePricingMetadata).filter((item) => item.attivo !== false)
-  const applicable = enriched.filter((item) => packageAppliesToCourses(item, courses))
-  const gift = [{ ...GIFT_PACKAGE, course_ids: [] }]
-
-  const applicableTokens = applicable.filter((item) => item.pricing_key === 'token' || item.tipo === 'gettone')
-  const specificTokens = applicableTokens.filter((item) => item.course_ids?.length)
-  const token = specificTokens.length ? specificTokens : applicableTokens
+  const token = enriched.filter((item) => item.pricing_key === 'token' || item.tipo === 'gettone')
   if (!token.length) {
     const fallbackToken = fallbackPricingPackage('token')
     if (fallbackToken) token.push(fallbackToken)
   }
-
   const matched = group
     ? ['mensile', 'trimestrale', 'annuale']
-      .map((period) => findPricingPackage(enriched, group, period, courses) || fallbackPricingPackage(group, period))
+      .map((period) => findPricingPackage(enriched, group, period) || fallbackPricingPackage(group, period))
       .filter(Boolean)
     : []
-
-  const custom = applicable.filter((item) => {
-    if (item.pricing_key || item.tipo === 'gettone') return false
-    // Tutte le formule personalizzate applicabili restano selezionabili.
-    // Se hanno course_ids, packageAppliesToCourses le limita ai corsi scelti.
-    return true
-  })
+  const custom = enriched.filter((item) => !item.pricing_key && item.tipo !== 'gettone')
 
   const seen = new Set()
-  return [...gift, ...token, ...matched, ...custom]
-    .sort((a, b) => Number(a.ordine || 0) - Number(b.ordine || 0))
-    .filter((item) => {
-      const key = String(item.id || item.pricing_key || item.nome)
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
+  return [...token, ...matched, ...custom].filter((item) => {
+    const key = String(item.id || item.pricing_key || item.nome)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }

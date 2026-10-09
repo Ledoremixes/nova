@@ -25,28 +25,6 @@ const TESSERAMENTI_SELECT = `
   updated_at
 `
 
-// Cache condivisa a livello API: Tesserati, Corsisti, Dashboard, Iscrizione e
-// Tesseramento chiedono spesso la stessa anagrafica con queryKey React Query
-// diverse. Senza questo livello Nova scaricava nuovamente centinaia di righe a
-// ogni cambio sezione. Manteniamo una cache breve e deduplichiamo anche le
-// richieste contemporanee.
-const TESSERATI_CACHE_TTL = 3 * 60_000
-let tesseratiCacheRows = null
-let tesseratiCacheExpiresAt = 0
-let tesseratiInFlight = null
-let tesseratiCacheGeneration = 0
-
-function filtersAreEmpty(filters = {}) {
-  return Object.values(filters || {}).every((value) => !String(value ?? '').trim())
-}
-
-export function invalidateTesseratiCache() {
-  tesseratiCacheGeneration += 1
-  tesseratiCacheRows = null
-  tesseratiCacheExpiresAt = 0
-  tesseratiInFlight = null
-}
-
 function isMissingTableError(error) {
   const text = `${error?.code || ''} ${error?.message || ''} ${error?.details || ''}`.toLowerCase()
   return (
@@ -208,41 +186,6 @@ async function fetchOrchideaTesseramentiViaBridge(config) {
   return withSource(parseRpcJsonArray(data), 'tesseramenti', 'Orchidea Allievi', config.mode)
 }
 
-async function fetchOrchideaTesseramentiViaServer(config) {
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-  if (sessionError) throw sessionError
-
-  const token = sessionData?.session?.access_token
-  if (!token) {
-    const error = new Error('Sessione Nova mancante.')
-    error.code = 'NOVA_AUTH_REQUIRED'
-    throw error
-  }
-
-  const response = await fetch('/api/orchidea-students', {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-    },
-  })
-
-  let payload = null
-  try {
-    payload = await response.json()
-  } catch {
-    payload = null
-  }
-
-  if (!response.ok) {
-    const error = new Error(payload?.error || `Errore collegamento archivio tesserati (${response.status})`)
-    error.status = response.status
-    throw error
-  }
-
-  return withSource(Array.isArray(payload?.students) ? payload.students : [], 'tesseramenti', 'Orchidea Allievi', config.mode)
-}
-
 async function updateOrchideaTesseramentoViaBridge(id, payload) {
   const { data, error } = await orchideaSupabase.rpc('nova_update_tesseramento', {
     p_id: id,
@@ -268,95 +211,64 @@ async function fetchOrchideaTesseramenti() {
   if (hasDedicatedOrchideaConfig) {
     const authStatus = await getOrchideaAuthStatus()
     if (!authStatus.authenticated) {
-      // Prima scelta: endpoint server protetto dal login Nova. Non richiede che
-      // la segreteria abbia già una seconda sessione browser sul progetto Orchidea.
       try {
-        return await fetchOrchideaTesseramentiViaServer(config)
-      } catch (serverError) {
-        // Compatibilità con installazioni precedenti: proviamo anche il bridge RPC.
-        try {
-          return await fetchOrchideaTesseramentiViaBridge(config)
-        } catch (bridgeError) {
-          const authError = new Error(
-            'Non riesco a collegarmi all’archivio tesserati in questo momento. Nova ha già tentato il ripristino automatico: riprova tra qualche secondo.'
-          )
-          authError.code = 'ORCHIDEA_AUTH_REQUIRED'
-          authError.cause = serverError
-          authError.bridgeCause = bridgeError
-          throw authError
-        }
+        return await fetchOrchideaTesseramentiViaBridge(config)
+      } catch (bridgeError) {
+        const authError = new Error(
+          'Il database Orchidea Allievi è configurato, ma non hai una sessione attiva sul portale allievi e la funzione bridge Nova non è disponibile. Esegui SQL_ORCHIDEA_ALLIEVI_ACCESSO_OPERATORI_NOVA.sql oppure crea lo stesso utente anche su Orchidea Allievi con la stessa password.'
+        )
+        authError.code = 'ORCHIDEA_AUTH_REQUIRED'
+        authError.cause = bridgeError
+        throw authError
       }
     }
   }
 
-  const pageSize = 1000
-  const rows = []
+  const { data, error } = await orchideaSupabase
+    .from('tesseramenti')
+    .select(TESSERAMENTI_SELECT)
+    .order('created_at', { ascending: false })
+    .limit(1000)
 
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await orchideaSupabase
-      .from('tesseramenti')
-      .select(TESSERAMENTI_SELECT)
-      .order('created_at', { ascending: false })
-      .range(from, from + pageSize - 1)
-
-    if (error) {
-      if (isMissingTableError(error) || isPermissionError(error)) {
-        try {
-          return await fetchOrchideaTesseramentiViaServer(config)
-        } catch (serverError) {
-          try {
-            return await fetchOrchideaTesseramentiViaBridge(config)
-          } catch (bridgeError) {
-            error._handledTesseramentiError = true
-            error._serverError = serverError
-            error._bridgeError = bridgeError
-          }
-        }
+  if (error) {
+    if (isMissingTableError(error) || isPermissionError(error)) {
+      try {
+        return await fetchOrchideaTesseramentiViaBridge(config)
+      } catch (bridgeError) {
+        error._handledTesseramentiError = true
+        error._bridgeError = bridgeError
       }
-      throw error
     }
-
-    const chunk = data || []
-    rows.push(...chunk)
-    if (chunk.length < pageSize) break
+    throw error
   }
 
-  return withSource(rows, 'tesseramenti', 'Orchidea Allievi', config.mode)
+  return withSource(data || [], 'tesseramenti', 'Orchidea Allievi', config.mode)
 }
 
 async function fetchLegacyTesserati({ search = '', anno = '', tipo = '' } = {}) {
-  const pageSize = 1000
-  const rows = []
+  let query = supabase
+    .from('tesserati')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(1000)
 
-  for (let from = 0; ; from += pageSize) {
-    let query = supabase
-      .from('tesserati')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .range(from, from + pageSize - 1)
+  if (anno) query = query.eq('anno', anno)
+  if (tipo) query = query.eq('tipo', tipo)
 
-    if (anno) query = query.eq('anno', anno)
-    if (tipo) query = query.eq('tipo', tipo)
-
-    if (search.trim()) {
-      const q = search.trim()
-      query = query.or(
-        `nome.ilike.%${q}%,cognome.ilike.%${q}%,email.ilike.%${q}%,cod_fiscale.ilike.%${q}%,cellulare.ilike.%${q}%`
-      )
-    }
-
-    const { data, error } = await query
-    if (error) throw new Error(error.message || 'Errore caricamento tesserati Nova')
-
-    const chunk = data || []
-    rows.push(...chunk)
-    if (chunk.length < pageSize) break
+  if (search.trim()) {
+    const q = search.trim()
+    query = query.or(
+      `nome.ilike.%${q}%,cognome.ilike.%${q}%,email.ilike.%${q}%,cod_fiscale.ilike.%${q}%,cellulare.ilike.%${q}%`
+    )
   }
 
-  return withSource(rows.map(normalizeLegacyTesserato), 'tesserati', 'Nova legacy', 'nova')
+  const { data, error } = await query
+  if (error) throw new Error(error.message || 'Errore caricamento tesserati Nova')
+
+  return withSource((data || []).map(normalizeLegacyTesserato), 'tesserati', 'Nova legacy', 'nova')
 }
 
-async function fetchTesseratiUncached(filters = {}) {
+export async function fetchTesserati(filters = {}) {
   try {
     return await fetchOrchideaTesseramenti()
   } catch (error) {
@@ -375,38 +287,6 @@ async function fetchTesseratiUncached(filters = {}) {
     }
 
     return fetchLegacyTesserati(filters)
-  }
-}
-
-export async function fetchTesserati(filters = {}) {
-  // Le viste principali caricano sempre l'archivio completo e filtrano in
-  // memoria. In quel caso possiamo riusare la stessa risposta fra sezioni.
-  // Le chiamate con filtri espliciti restano uncached per non alterarne il
-  // comportamento.
-  if (!filtersAreEmpty(filters)) return fetchTesseratiUncached(filters)
-
-  const now = Date.now()
-  if (tesseratiCacheRows && now < tesseratiCacheExpiresAt) {
-    return tesseratiCacheRows
-  }
-
-  if (tesseratiInFlight) return tesseratiInFlight.promise
-
-  const generation = tesseratiCacheGeneration
-  const promise = fetchTesseratiUncached(filters)
-  tesseratiInFlight = { generation, promise }
-
-  try {
-    const rows = await promise
-    // Se nel frattempo una mutazione ha invalidato la cache, non rimettiamo in
-    // cache una fotografia precedente alla modifica.
-    if (generation === tesseratiCacheGeneration) {
-      tesseratiCacheRows = rows
-      tesseratiCacheExpiresAt = Date.now() + TESSERATI_CACHE_TTL
-    }
-    return rows
-  } finally {
-    if (tesseratiInFlight?.promise === promise) tesseratiInFlight = null
   }
 }
 
@@ -480,7 +360,6 @@ export async function updateTesserato(id, payload) {
       .single()
 
     if (error) throw error
-    invalidateTesseratiCache()
     return { ...data, _sourceTable: 'tesseramenti', _sourceLabel: 'Orchidea Allievi' }
   } catch (error) {
     if (isOrchideaAuthRequired(error)) {
@@ -489,9 +368,7 @@ export async function updateTesserato(id, payload) {
 
     if (hasDedicatedOrchideaConfig && isPermissionError(error)) {
       try {
-        const updated = await updateOrchideaTesseramentoViaBridge(id, payload)
-        invalidateTesseratiCache()
-        return updated
+        return await updateOrchideaTesseramentoViaBridge(id, payload)
       } catch (bridgeError) {
         throw new Error(bridgeError.message || 'Non hai i permessi per modificare i tesserati sul database Orchidea Allievi.')
       }
@@ -509,7 +386,6 @@ export async function updateTesserato(id, payload) {
       .single()
 
     if (legacyError) throw new Error(legacyError.message || 'Errore modifica tesserato Nova')
-    invalidateTesseratiCache()
     return { ...normalizeLegacyTesserato(data), _sourceTable: 'tesserati', _sourceLabel: 'Nova legacy' }
   }
 }
@@ -530,7 +406,6 @@ export async function toggleCorsista(student) {
     .single()
 
   if (error) throw new Error(error.message || 'Errore aggiornamento ruolo corsista')
-  invalidateTesseratiCache()
   return { ...data, _sourceTable: 'tesseramenti', _sourceLabel: 'Orchidea Allievi' }
 }
 
@@ -550,7 +425,6 @@ export async function generateMembershipNumber(student) {
     .single()
 
   if (error) throw new Error(error.message || 'Errore generazione numero tessera')
-  invalidateTesseratiCache()
   return { ...data, _sourceTable: 'tesseramenti', _sourceLabel: 'Orchidea Allievi' }
 }
 
@@ -583,6 +457,5 @@ export async function generateMissingMembershipNumbers() {
     generated += 1
   }
 
-  if (generated > 0) invalidateTesseratiCache()
   return { generated }
 }
