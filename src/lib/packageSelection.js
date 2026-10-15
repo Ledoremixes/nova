@@ -20,9 +20,16 @@ export function selectableCoursePackages(courses = [], catalog = []) {
     if (item.pricing_key || item.tipo === 'omaggio' || item.tipo === 'gettone') add(item, allIds)
   }
   const normalized = catalog.map(enrichPackagePricingMetadata).filter(p => p.attivo !== false)
+  const countryIds = ids(courses.filter(c => /\bcountry\b/.test(text(`${c.nome} ${c.disciplina || ''}`))))
   for (const item of normalized.filter(p => !p.pricing_key && !['omaggio', 'gettone'].includes(p.tipo))) {
     let covered
-    if (item.course_ids?.length) {
+    const name = text(item.nome)
+    const hours = name.match(/\b(\d+)\s*ore?\b/)
+    // Hour bundles cover the enrolled Country levels as one discipline, even
+    // when a legacy catalog row still lists only some of those levels.
+    if (/\bcountry\b/.test(name) && hours) {
+      covered = countryIds
+    } else if (item.course_ids?.length) {
       covered = allIds.filter(id => item.course_ids.map(String).includes(id))
     } else {
       // Compatibility for existing named offers saved before course assignment.
@@ -30,15 +37,26 @@ export function selectableCoursePackages(courses = [], catalog = []) {
       const disciplines = ['country', 'kizomba', 'bachata', 'salsa', 'lady style', 'primi passi'].filter(d => name.includes(d))
       covered = disciplines.length ? ids(courses.filter(c => disciplines.some(d => text(`${c.nome} ${c.disciplina || ''}`).includes(d)))) : allIds
     }
-    const hours = text(item.nome).match(/\b(\d+)\s*ore?\b/)
     const required = Number(item.covered_course_count || hours?.[1] || 0)
     if (required && covered.length !== required) continue
+    // A one-course Country tariff must not be presented as a three-hour bundle.
+    if (countryIds.length === 3 && /\bcountry\b/.test(name) && !hours) continue
     add(item, covered)
   }
+  // Agreed three-hour Country quarterly tariff. Keep it available even when
+  // the legacy catalog has only the monthly bundle or stale course mappings.
+  if (countryIds.length === 3 && ![...result.values()].some(p =>
+    /\bcountry\b/.test(text(p.nome)) && /\b3\s*ore?\b/.test(text(p.nome)) && Number(p.durata_mesi) === 3)) {
+    add({ id: 'builtin:country-3-hours-quarterly', nome: 'Country 3 ore Trimestrale', tipo: 'trimestrale', durata_mesi: 3, prezzo: 135, ordine: 1 }, countryIds)
+  }
+  const bundledIds = new Set([...result.values()]
+    .filter(p => !p.pricing_key && p.coverage_course_ids.length > 1 && /\b(country|kizomba|bachata|salsa)\b/.test(text(p.nome)) && !['omaggio', 'gettone'].includes(p.tipo))
+    .flatMap(p => p.coverage_course_ids))
   // Also offer the ordinary rate for each enrolled course; a dedicated catalog
   // offer for the same course/period takes precedence over a generic fallback.
   for (const course of courses) {
     const covered = ids([course])
+    if (covered.some(id => bundledIds.has(id))) continue
     for (const item of packagesForCourseSelection([course], catalog)) {
       if (!item.pricing_key || ['gift', 'token'].includes(item.pricing_key)) continue
       if ([...result.values()].some(p => !p.pricing_key && p.tipo === item.tipo && p.coverage_course_ids.length === 1 && p.coverage_course_ids[0] === covered[0])) continue

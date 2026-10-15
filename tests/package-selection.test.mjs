@@ -66,3 +66,40 @@ test('switching duration replaces incompatible packages; toggling removes a sele
   assert.deepEqual(toggleCoursePackage([country.id], monthly, options), [monthly.id])
   assert.deepEqual(toggleCoursePackage([country.id], country, options), [])
 })
+
+test('screenshot catalog: monthly Country bundle gets the agreed quarterly option without per-level cards', () => {
+  const screenshotCatalog = [
+    { id: 'country-monthly', nome: 'Country 3 ore', tipo: 'mensile', durata_mesi: 1, prezzo: 45, course_ids: ['c1', 'c2', 'c3'] },
+    { id: 'country-old', nome: 'Country 3 Mesi', tipo: 'trimestrale', durata_mesi: 3, prezzo: 81, pricing_key_explicit: true, pricing_key: null },
+    { id: 'country-standard', nome: 'Trimestrale Country', tipo: 'trimestrale', durata_mesi: 3, prezzo: 81 },
+    { id: 'half', nome: 'Metà mese', tipo: 'mensile', durata_mesi: 1, prezzo: 20 },
+    catalog[1],
+  ]
+  const options = selectableCoursePackages(courses, screenshotCatalog)
+  const country = options.filter(p => /country/i.test(p.nome))
+  assert.deepEqual(country.map(p => [p.nome, p.prezzo]).sort(), [
+    ['Country 3 ore', 45], ['Country 3 ore Trimestrale', 135],
+  ].sort())
+  assert.ok(country.every(p => p.coverage_course_ids.length === 3))
+  const quarter = country.find(p => p.durata_mesi === 3)
+  const kizomba = options.find(p => p.catalog_id === 'kizomba')
+  const selected = toggleCoursePackage(toggleCoursePackage([], quarter, options), kizomba, options)
+  assert.equal(composeCoursePackages(selected, options, courses).packageItem.prezzo, 225)
+  assert.ok(options.some(p => p.tipo === 'mensile' && p.coverage_course_ids.length === 1 && p.coverage_course_ids[0] === 'k'))
+})
+
+test('Country hour bundle covers all three levels despite stale catalog course associations', () => {
+  const options = selectableCoursePackages(courses, [{ ...catalog[0], course_ids: ['old-level', 'c1'] }, catalog[1]])
+  const country = options.filter(p => /country/i.test(p.nome) && p.durata_mesi === 3)
+  assert.equal(country.length, 1)
+  assert.equal(country[0].catalog_id, 'country3')
+  assert.deepEqual(country[0].coverage_course_ids, ['c1', 'c2', 'c3'])
+  assert.equal(options.some(p => /Country (Avanzato|Intermedio)/.test(p.nome)), false)
+})
+
+test('three-hour tariff is not offered to one or two Country students', () => {
+  for (const subset of [courses.slice(0, 1), courses.slice(0, 2)]) {
+    const options = selectableCoursePackages(subset, catalog)
+    assert.equal(options.some(p => /3 ore/.test(p.nome)), false)
+  }
+})
