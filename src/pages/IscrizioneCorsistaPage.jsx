@@ -39,7 +39,8 @@ import {
 } from '../api/membershipFees'
 import { invalidatePaymentsReadCache, rollbackAllievoPackagePaymentResult, setAllievoPackagePayment } from '../api/orchideaPayments'
 import { createQuickCorsista } from '../api/studentEnrollment'
-import { packagesForCourseSelection, resolveCoursePricing } from '../lib/coursePriceList'
+import { resolveCoursePricing } from '../lib/coursePriceList'
+import { selectableCoursePackages, toggleCoursePackage, composeCoursePackages } from '../lib/packageSelection'
 import { enrollmentIsActiveForMonth } from '../lib/packagePricing'
 import { courseDisplayName } from '../lib/courseLabels'
 import '../styles/IscrizioneCorsistaPage.css'
@@ -150,7 +151,7 @@ export default function IscrizioneCorsistaPage() {
   const [newForm, setNewForm] = useState(emptyForm)
   const [showExtraData, setShowExtraData] = useState(false)
   const [courseIds, setCourseIds] = useState([])
-  const [selectedPackageId, setSelectedPackageId] = useState('')
+  const [selectedPackageIds, setSelectedPackageIds] = useState([])
   const [payMembershipNow, setPayMembershipNow] = useState(false)
   const [payPackageNow, setPayPackageNow] = useState(false)
   const [customPackageAmount, setCustomPackageAmount] = useState(false)
@@ -239,7 +240,7 @@ export default function IscrizioneCorsistaPage() {
   }, [combinedCourseIds, courses])
 
   const paymentPackages = useMemo(
-    () => packagesForCourseSelection(chosenCourses, packages),
+    () => selectableCoursePackages(chosenCourses, packages),
     [chosenCourses, packages],
   )
   const recommendedMonthly = useMemo(
@@ -256,10 +257,13 @@ export default function IscrizioneCorsistaPage() {
     && chosenCourses.length > 0
     && chosenCourses.every(isSeptemberPromoCourse)
   )
-  const effectivePackageId = selectedPackageId || (septemberGiftPromoEligible ? giftPackage?.id : recommendedMonthly?.id) || ''
-  const selectedPackage = paymentPackages.find((item) => String(item.id) === String(effectivePackageId)) || recommendedMonthly || null
+  const effectivePackageIds = selectedPackageIds.length ? selectedPackageIds : (septemberGiftPromoEligible && giftPackage ? [String(giftPackage.id)] : [])
+  const selection = composeCoursePackages(effectivePackageIds, paymentPackages, chosenCourses)
+  const selectedPackage = selection.packageItem
+  const packageSelectionError = selection.error
+
   const isGiftPackage = selectedPackage?.tipo === 'omaggio'
-  const followUpPackages = paymentPackages.filter((item) => item.tipo !== 'omaggio' && item.tipo !== 'gettone')
+  const followUpPackages = paymentPackages.filter((item) => item.tipo !== 'omaggio' && item.tipo !== 'gettone' && !item.combinable)
   const effectiveFollowUpPackageId = giftFollowUpPackageId || recommendedMonthly?.id || followUpPackages[0]?.id || ''
   const followUpPackage = followUpPackages.find((item) => String(item.id) === String(effectiveFollowUpPackageId)) || recommendedMonthly || followUpPackages[0] || null
 
@@ -518,7 +522,7 @@ export default function IscrizioneCorsistaPage() {
       if (error?.existingStudent?.id) {
         setSelectedStudent(error.existingStudent)
         setMode('existing')
-        setSelectedPackageId('')
+        setSelectedPackageIds([])
         setPayMembershipNow(false)
         setPayPackageNow(false)
         setCustomPackageAmount(false)
@@ -533,7 +537,7 @@ export default function IscrizioneCorsistaPage() {
     setMode('existing')
     setSelectedStudent(student)
     setCourseIds([])
-    setSelectedPackageId('')
+    setSelectedPackageIds([])
     setPayMembershipNow(false)
     setPayPackageNow(false)
     setCustomPackageAmount(false)
@@ -548,7 +552,7 @@ export default function IscrizioneCorsistaPage() {
     setSelectedStudent(null)
     setNewForm(emptyForm())
     setCourseIds([])
-    setSelectedPackageId('')
+    setSelectedPackageIds([])
     setPayMembershipNow(false)
     setPayPackageNow(false)
     setCustomPackageAmount(false)
@@ -563,7 +567,7 @@ export default function IscrizioneCorsistaPage() {
     setMode('search')
     setSelectedStudent(null)
     setCourseIds([])
-    setSelectedPackageId('')
+    setSelectedPackageIds([])
     setPayMembershipNow(false)
     setPayPackageNow(false)
     setCustomPackageAmount(false)
@@ -579,7 +583,7 @@ export default function IscrizioneCorsistaPage() {
     setSelectedStudent(null)
     setNewForm(emptyForm())
     setCourseIds([])
-    setSelectedPackageId('')
+    setSelectedPackageIds([])
     setPayMembershipNow(false)
     setPayPackageNow(false)
     setCustomPackageAmount(false)
@@ -595,7 +599,7 @@ export default function IscrizioneCorsistaPage() {
     const id = String(courseId)
     if (existingEnrollmentIds.includes(id)) return
     setCourseIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
-    setSelectedPackageId('')
+    setSelectedPackageIds([])
     setPayPackageNow(false)
     setCustomPackageAmount(false)
     setPackageAmount('')
@@ -775,12 +779,12 @@ export default function IscrizioneCorsistaPage() {
             <article className="enrollment-card">
               <div className="enrollment-card-head">
                 <span className="enrollment-step-icon"><PackageCheck size={22} /></span>
-                <div><span>Passaggio 3</span><h2>Scegli il pacchetto</h2><p>Nova propone automaticamente il listino corretto in base ai corsi selezionati.</p></div>
+                <div><span>Passaggio 3</span><h2>Scegli i pacchetti</h2><p>Somma i pacchetti della stessa durata per i corsi frequentati. Le formule complete, come All You Can Dance, sono alternative facoltative.</p></div>
               </div>
 
               <div className="enrollment-recommendation">
                 <Sparkles size={19} />
-                <div><span>Listino rilevato</span><strong>{recommendedMonthly?.pricing_group_label || 'Pacchetto corsi'}</strong></div>
+                <div><span>Pacchetti dei corsi frequentati</span><strong>{selectedPackage ? `${selectedPackage.nome} · ${money(selectedPackage.prezzo)}` : 'Seleziona le formule concordate con l’allievo'}</strong></div>
               </div>
 
               {septemberGiftPromoEligible ? (
@@ -790,14 +794,14 @@ export default function IscrizioneCorsistaPage() {
                 </div>
               ) : null}
 
+              {packageSelectionError ? <p role="alert" className="form-error">{packageSelectionError}</p> : null}
               <div className="enrollment-package-grid">
                 {paymentPackages.map((item) => {
-                  const selected = String(item.id) === String(effectivePackageId)
-                  const recommended = String(item.id) === String(recommendedMonthly?.id)
+                  const selected = effectivePackageIds.includes(String(item.id))
                   const gift = item.tipo === 'omaggio'
                   return (
-                    <button type="button" className={`enrollment-package-choice ${selected ? 'is-selected' : ''} ${gift ? 'is-gift' : ''}`} key={item.id || item.nome} onClick={() => { setSelectedPackageId(item.id); setPayPackageNow(false); setCustomPackageAmount(false); setPackageAmount(''); setPayNextPeriodAfterGift(false); setGiftFollowUpPackageId(''); setCustomFollowUpAmount(false); setFollowUpAmount('') }}>
-                      <span className="enrollment-package-top"><em>{gift ? 'Omaggio' : item.tipo === 'gettone' ? 'Lezione singola' : item.tipo}</em>{gift && septemberGiftPromoEligible ? <b>Promo settembre</b> : recommended && !septemberGiftPromoEligible ? <b>Consigliato</b> : null}</span>
+                    <button type="button" aria-pressed={selected} className={`enrollment-package-choice ${selected ? 'is-selected' : ''} ${gift ? 'is-gift' : ''}`} key={item.id || item.nome} onClick={() => { setSelectedPackageIds(toggleCoursePackage(effectivePackageIds, item, paymentPackages)); setPayPackageNow(false); setCustomPackageAmount(false); setPackageAmount(''); setPayNextPeriodAfterGift(false); setGiftFollowUpPackageId(''); setCustomFollowUpAmount(false); setFollowUpAmount('') }}>
+                      <span className="enrollment-package-top"><em>{gift ? 'Omaggio' : item.tipo === 'gettone' ? 'Lezione singola' : item.tipo}</em>{gift && septemberGiftPromoEligible ? <b>Promo settembre</b> : item.combinable ? <b>Cumulabile</b> : null}</span>
                       <strong>{item.nome}</strong>
                       <span className="enrollment-package-price">{gift ? 'GRATIS' : money(item.prezzo)}</span>
                       <small>{gift ? 'Copre 1 mese di corsi a 0 € · la tessera da 25 € è sempre esclusa' : item.tipo === 'gettone' ? 'Non chiude il mese' : item.is_half_month ? `50% della quota mensile completa (${money(item.full_month_price)})` : `${Math.max(1, Number(item.durata_mesi || 1))} ${Number(item.durata_mesi || 1) === 1 ? 'mese' : 'mesi'} di copertura`}</small>

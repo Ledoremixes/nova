@@ -33,7 +33,8 @@ import {
 import { fetchPackagesCatalog } from '../api/packagesCatalog'
 import { fetchTesseratoDetails } from '../api/tesserati'
 import { COURSE_MEMBERSHIP_FEE, setMembershipFeePaidAmount } from '../api/membershipFees'
-import { packagesForCourseSelection, resolveCoursePricing } from '../lib/coursePriceList'
+import { resolveCoursePricing } from '../lib/coursePriceList'
+import { selectableCoursePackages, toggleCoursePackage, composeCoursePackages } from '../lib/packageSelection'
 import { enrollmentIsActiveForMonth } from '../lib/packagePricing'
 import { courseDisplayName } from '../lib/courseLabels'
 import '../styles/RegistraPagamentoPage.css'
@@ -90,7 +91,7 @@ export default function RegistraPagamentoPage() {
   const [search, setSearch] = useState('')
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [month, setMonth] = useState(currentMonth)
-  const [selectedPackageId, setSelectedPackageId] = useState('')
+  const [selectedPackageIds, setSelectedPackageIds] = useState([])
   const [payMembership, setPayMembership] = useState(false)
   const [payCourses, setPayCourses] = useState(null)
   const [partialMode, setPartialMode] = useState(false)
@@ -168,7 +169,7 @@ export default function RegistraPagamentoPage() {
   const payment = paymentQuery.data || null
   const packages = useMemo(() => packagesQuery.data || [], [packagesQuery.data])
   const paymentPackages = useMemo(
-    () => packagesForCourseSelection(payment?.corsi || [], packages),
+    () => selectableCoursePackages(payment?.corsi || [], packages),
     [payment?.corsi, packages],
   )
   const recommendedMonthly = useMemo(
@@ -208,13 +209,9 @@ export default function RegistraPagamentoPage() {
       }
     : null
 
-  const defaultPackageId = residueOption
-    ? '__residue__'
-    : String(recommendedMonthly?.id || paymentPackages.find((item) => item.tipo === 'mensile')?.id || '')
-  const effectivePackageId = selectedPackageId || defaultPackageId
-  const selectedPackage = effectivePackageId === '__residue__'
-    ? residueOption
-    : paymentPackages.find((item) => String(item.id) === String(effectivePackageId)) || recommendedMonthly || null
+  const selection = composeCoursePackages(selectedPackageIds, paymentPackages, payment?.corsi || [])
+  const selectedPackage = residueOption || selection.packageItem
+  const packageSelectionError = residueOption ? '' : selection.error
 
   const isGift = selectedPackage?.tipo === 'omaggio'
   const isToken = selectedPackage?.tipo === 'gettone'
@@ -253,14 +250,13 @@ export default function RegistraPagamentoPage() {
   const hasCustomAmount = Boolean(customAmountMode && !isGift && Math.abs(courseAmount - listPrice) > 0.001)
 
   function choosePackage(packageId) {
-    const item = packageId === '__residue__'
-      ? residueOption
-      : paymentPackages.find((pkg) => String(pkg.id) === String(packageId))
-    setSelectedPackageId(String(packageId))
+    const item = paymentPackages.find(pkg => String(pkg.id) === String(packageId))
+    if (!item) return
+    setSelectedPackageIds(toggleCoursePackage(selectedPackageIds, item, paymentPackages))
     setPayCourses(true)
     setPartialMode(false)
     setCustomAmountMode(false)
-    setAmount(item?.tipo === 'omaggio' ? '0.00' : Number(item?.prezzo || 0).toFixed(2))
+    setAmount('')
   }
 
   const courseManagerMutation = useMutation({
@@ -323,7 +319,7 @@ export default function RegistraPagamentoPage() {
       }
     },
     onSuccess: async () => {
-      setSelectedPackageId('')
+      setSelectedPackageIds([])
       setPayCourses(null)
       setPartialMode(false)
       setCustomAmountMode(false)
@@ -345,7 +341,7 @@ export default function RegistraPagamentoPage() {
     mutationFn: async () => {
       if (!selectedStudent?.id) throw new Error('Seleziona un corsista.')
       if (!effectivePayCourses && !effectivePayMembership) throw new Error('Seleziona almeno una voce da incassare.')
-      if (effectivePayCourses && !selectedPackage) throw new Error('Seleziona il tipo di pagamento.')
+      if (effectivePayCourses && !selectedPackage) throw new Error(packageSelectionError || 'Seleziona i pacchetti dei corsi.')
       if (amountInvalid) throw new Error('Controlla l’importo inserito.')
 
       let courseResult = null
@@ -470,7 +466,7 @@ export default function RegistraPagamentoPage() {
     setSelectedStudent(student)
     setSearch(fullName(student))
     setMonth(currentMonth)
-    setSelectedPackageId('')
+    setSelectedPackageIds([])
     setPayMembership(false)
     setPayCourses(null)
     setPartialMode(false)
@@ -487,7 +483,7 @@ export default function RegistraPagamentoPage() {
   function clearStudent() {
     setSelectedStudent(null)
     setSearch('')
-    setSelectedPackageId('')
+    setSelectedPackageIds([])
     setPayMembership(false)
     setPayCourses(null)
     setPartialMode(false)
@@ -507,7 +503,7 @@ export default function RegistraPagamentoPage() {
 
   function setPaymentMonth(nextMonth) {
     setMonth(nextMonth || currentMonth)
-    setSelectedPackageId('')
+    setSelectedPackageIds([])
     setPayCourses(null)
     setPartialMode(false)
     setCustomAmountMode(false)
@@ -652,11 +648,11 @@ export default function RegistraPagamentoPage() {
                   </div>
                   {recommendedMonthly ? (
                     <div className="guided-payment-pricing-breakdown">
-                      <div><span>Quota mensile prevista</span><strong>{recommendedMonthly.nome}</strong></div>
-                      <b>{euro(recommendedMonthly.prezzo)}</b>
-                      {Array.isArray(recommendedMonthly.components) && recommendedMonthly.components.length ? (
+                      <div><span>{selectedPackage ? 'Pacchetti scelti' : 'Riferimento mensile · scegli sotto la formula concordata'}</span><strong>{selectedPackage?.nome || recommendedMonthly.nome}</strong></div>
+                      <b>{euro(selectedPackage?.prezzo ?? recommendedMonthly.prezzo)}</b>
+                      {Array.isArray((selectedPackage || recommendedMonthly).components) && (selectedPackage || recommendedMonthly).components.length ? (
                         <div className="guided-payment-pricing-components">
-                          {recommendedMonthly.components.map((component) => <span key={`pricing-${component.id}`}><em>{component.nome}</em><strong>{euro(component.prezzo)}</strong></span>)}
+                          {(selectedPackage || recommendedMonthly).components.map((component) => <span key={`pricing-${component.id}`}><em>{component.nome}</em><strong>{euro(component.prezzo)}</strong></span>)}
                         </div>
                       ) : null}
                     </div>
@@ -705,15 +701,18 @@ export default function RegistraPagamentoPage() {
 
               {effectivePayCourses && !courseAlreadyCovered ? (
                 <>
-                  <div className="guided-payment-package-title">Scegli il tipo di pagamento</div>
+                  <div className="guided-payment-package-title">Scegli i pacchetti</div>
+                  <p>Puoi sommare pacchetti della stessa durata per corsi diversi. Una formula che copre tutti i corsi sostituisce le altre scelte.</p>
+                  {packageSelectionError ? <p role="alert" className="form-error">{packageSelectionError}</p> : null}
+                  {selectedPackage ? <p><strong>{selectedPackage.nome} · {euro(selectedPackage.prezzo)}</strong></p> : null}
                   <div className="guided-payment-packages">
                     {residueOption ? (
-                      <button type="button" className={effectivePackageId === '__residue__' ? 'is-selected' : ''} onClick={() => choosePackage('__residue__')}>
+                      <button type="button" className="is-selected" onClick={() => choosePackage('__residue__')}>
                         <small>RESIDUO</small><strong>{residueOption.nome}</strong><b>{euro(residueOption.prezzo)}</b><span>{residueOption.descrizione}</span>
                       </button>
                     ) : null}
                     {!residueOption ? paymentPackages.map((item) => (
-                      <button type="button" key={item.id || item.nome} className={String(effectivePackageId) === String(item.id) ? 'is-selected' : ''} onClick={() => choosePackage(String(item.id))}>
+                      <button type="button" key={item.id || item.nome} aria-pressed={selectedPackageIds.includes(String(item.id))} className={selectedPackageIds.includes(String(item.id)) ? 'is-selected' : ''} onClick={() => choosePackage(String(item.id))}>
                         <small>{item.tipo === 'omaggio' ? 'OMAGGIO' : String(item.tipo || 'PACCHETTO').toUpperCase()}</small>
                         <strong>{item.nome}</strong>
                         <b>{item.tipo === 'omaggio' ? 'GRATIS' : euro(item.prezzo)}</b>
@@ -780,6 +779,7 @@ export default function RegistraPagamentoPage() {
           <div className="guided-payment-summary-row"><span>Mese</span><b>{personReady ? monthLabel(month) : '—'}</b></div>
           <div className="guided-payment-summary-row"><span>Tessera</span><b>{effectivePayMembership ? euro(membershipCash) : euro(0)}</b></div>
           <div className="guided-payment-summary-row"><span>Corsi</span><b>{effectivePayCourses ? euro(courseAmount) : euro(0)}</b></div>
+          {effectivePayCourses && selectedPackage?.components?.map(component => <div className="guided-payment-summary-row" key={component.id}><span>{component.nome}</span><b>{euro(component.prezzo)}</b></div>)}
           <div className="guided-payment-summary-total"><span>Totale da registrare ora</span><strong>{euro(totalCash)}</strong><small>{totalCash <= 0 && isGift ? 'Omaggio corsi a 0 €' : method}</small></div>
 
           {saveMutation.isError ? <div className="guided-payment-error guided-payment-error--summary">{saveMutation.error?.message}</div> : null}

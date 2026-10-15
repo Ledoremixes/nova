@@ -137,6 +137,9 @@ function derivePricingKey(item = {}) {
   const exactStandard = COURSE_PRICE_LIST.find((row) => normalize(row.nome) === name)
   if (exactStandard?.pricing_key) return exactStandard.pricing_key
 
+  // A course-specific offer is not the generic Country/single-course price list.
+  if (item.course_ids?.length || /\b\d+\s*ore?\b/.test(name)) return null
+
   if (item.pricing_key_explicit) return item.pricing_key ? String(item.pricing_key) : null
   if (item.pricing_key) return String(item.pricing_key)
   const type = String(item.tipo || '').toLowerCase()
