@@ -290,6 +290,7 @@ export function buildTeacherMonthlyPayouts({ teachers = [], courses = [], paymen
     }
 
     return {
+      teacher_id: teacher.id,
       key: lower(teacher.full_name) || String(teacher.id),
       teacher_name: teacher.full_name,
       month: selectedMonth,
