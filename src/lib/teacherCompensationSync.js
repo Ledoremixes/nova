@@ -12,12 +12,13 @@ export function buildNovaTeacherPayoutSync(payouts = []) {
       const key = JSON.stringify([name, level])
       if (!grouped.has(key)) {
         grouped.set(key, { corso_nome: name, corso_livello: level, rawCompenso: 0,
-          rawIncasso: 0, students: new Set(), aliquota: null, method: null, mixed: false })
+          rawIncasso: 0, students: new Set(), countKnown: true, aliquota: null, method: null, mixed: false })
       }
       const target = grouped.get(key)
       target.rawCompenso += Number(row.teacher_quota || 0)
       target.rawIncasso += Math.max(0, Number(row.student_quota || 0))
-      if (!['fisso', 'orario'].includes(row.source) && row.student_name) target.students.add(row.student_name)
+      if (['fisso', 'orario'].includes(row.source)) target.countKnown = false
+      else if (row.student_name) target.students.add(row.student_name)
       const rate = Number.isFinite(Number(row.percentuale_insegnante))
         && row.percentuale_insegnante !== null && row.percentuale_insegnante !== undefined
         ? Number(row.percentuale_insegnante) : null
@@ -51,8 +52,7 @@ export function buildNovaTeacherPayoutSync(payouts = []) {
       incasso_attribuito: moneyCents(row.rawIncasso) / 100,
       aliquota: row.mixed ? null : row.aliquota,
       metodo_compenso: row.mixed ? 'misto' : row.method,
-      corsisti_paganti: row.method?.toLowerCase().includes('fiss') ||
-                        row.method?.toLowerCase().includes('orar') ? null : row.students.size,
+      corsisti_paganti: row.countKnown ? row.students.size : null,
     }))
     if (breakdown.some(row => row.compenso < 0)) {
       throw new Error('Errore arrotondamento compensi Nova.')
