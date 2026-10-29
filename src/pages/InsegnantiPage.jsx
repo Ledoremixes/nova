@@ -284,6 +284,8 @@ export default function InsegnantiPage() {
   const [search, setSearch] = useState('')
   const [compensationSyncStatus, setCompensationSyncStatus] = useState('idle')
   const [compensationSyncError, setCompensationSyncError] = useState('')
+  const [historySyncState, setHistorySyncState] = useState('') 
+  const [historySyncBusy, setHistorySyncBusy] = useState(false)
   const [month, setMonth] = useState(currentMonth)
   const [isOpen, setIsOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -395,6 +397,36 @@ export default function InsegnantiPage() {
     teachersQuery.isFetching, coursesQuery.isFetching, payoutPaymentsQuery.isFetching,
     teachersQuery.error, coursesQuery.error, payoutPaymentsQuery.error,
   ])
+
+  async function syncLast12Months() {
+    if (!isAdmin || teachersQuery.error || coursesQuery.error ||
+        payoutPaymentsQuery.error || teachersQuery.isFetching || coursesQuery.isFetching ||
+        payoutPaymentsQuery.isFetching || historySyncBusy) return
+    setHistorySyncBusy(true)
+    setHistorySyncState('Preparo lo storico compensi Nova…')
+    try {
+      const today = new Date()
+      const currentMonthDate = new Date(today.getFullYear(), today.getMonth(), 1)
+      for (let i = 0; i < 12; i++) {
+        const date = new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth() - i, 1)
+        const targetMonth = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0')
+        setHistorySyncState('Sincronizzo ' + targetMonth + ' (' + (i + 1) + '/12)…')
+        const paymentRows = await fetchAllieviPaymentsMonth({
+          month: targetMonth, search: '', courseId: 'all', status: 'all',
+        })
+        const calculated = buildTeacherMonthlyPayouts({
+          teachers, courses, paymentRows, month: targetMonth,
+        })
+        if (!calculated.length) throw new Error('Nessun insegnante disponibile per ' + targetMonth)
+        await syncNovaTeacherPayouts({ month: targetMonth, payouts: calculated, supabase })
+      }
+      setHistorySyncState('Ultimi 12 mesi sincronizzati con l’app insegnanti.')
+    } catch (error) {
+      setHistorySyncState('Sincronizzazione interrotta: ' + (error?.message || 'errore sconosciuto'))
+    } finally {
+      setHistorySyncBusy(false)
+    }
+  }
 
   function teacherCourses(row) {
     const key = norm(row?.full_name)
@@ -536,6 +568,16 @@ export default function InsegnantiPage() {
              compensationSyncStatus === 'error' ? 'sincronizzazione non riuscita' :
              'in attesa dei dati del mese'}
             {compensationSyncError ? <small style={{ display: 'block' }}>{compensationSyncError}</small> : null}
+            <button
+              type="button"
+              className="actionBtn"
+              style={{ marginTop: 6 }}
+              disabled={historySyncBusy || teachersQuery.isFetching || coursesQuery.isFetching || payoutPaymentsQuery.isFetching}
+              onClick={syncLast12Months}
+            >
+              {historySyncBusy ? 'Sincronizzazione storico…' : 'Sincronizza gli ultimi 12 mesi'}
+            </button>
+            {historySyncState ? <small style={{ display: 'block' }}>{historySyncState}</small> : null}
           </div>
         )}
         {payoutPaymentsQuery.error ? (
