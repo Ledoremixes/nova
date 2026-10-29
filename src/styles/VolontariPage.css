@@ -22,3 +22,38 @@
   .vol-modal__panel{max-height:calc(100dvh - max(16px,env(safe-area-inset-top)) - max(16px,env(safe-area-inset-bottom)));margin:auto 0;border-radius:18px}
   .vol-contract-preview-panel{height:calc(100dvh - max(16px,env(safe-area-inset-top)) - max(16px,env(safe-area-inset-bottom)));max-height:none}
 }
+
+/* 2026-10-29 - Rifinitura mobile scheda volontario */
+.vol-profile-badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.vol-profile-badge{display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:7px 12px;border-radius:999px;border:1px solid rgba(114,56,243,.14);background:rgba(255,255,255,.86);color:#643ac8;font-size:12px;font-weight:800;line-height:1.35}
+.vol-profile-badge.is-active{border-color:rgba(8,122,85,.18);background:#ebfbf3;color:#087a55}
+.vol-profile-badge.is-inactive{border-color:rgba(201,40,70,.18);background:#fff1f3;color:#bf1e3e}
+.vol-profile-panel{background:linear-gradient(180deg,#fff,#fcfbff)}
+.vol-profile-panel>header{gap:16px}
+.vol-profile-panel>header>div{min-width:0}
+.vol-profile-panel>header h2{line-height:1.08}
+.vol-profile-panel>header p{max-width:720px;line-height:1.5}
+
+@media(max-width:720px){
+  .vol-profile-panel{border-radius:22px}
+  .vol-profile-panel>header{padding:18px 18px 16px}
+  .vol-profile-panel>header h2{font-size:clamp(1.55rem,7vw,2rem)}
+  .vol-profile-panel>header p{font-size:14px}
+  .vol-profile-badges{display:grid;grid-template-columns:1fr;gap:8px}
+  .vol-profile-badge{text-align:center}
+  .vol-profile-content{padding:4px 18px 8px}
+  .vol-profile-content section{padding:20px 0}
+  .vol-profile-grid{grid-template-columns:1fr;gap:12px}
+  .vol-profile-grid>div{padding:13px;border-radius:13px}
+  .vol-profile-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:18px;border-top:1px solid #ececf2}
+  .vol-profile-actions button{width:100%;justify-content:center;min-height:44px;padding:12px 14px}
+  .vol-profile-actions__close{grid-column:1/-1}
+}
+
+@media(max-width:520px){
+  .vol-modal{padding:8px}
+  .vol-modal__panel{border-radius:18px}
+  .vol-profile-panel>header,.vol-profile-content,.vol-profile-actions{padding-left:14px;padding-right:14px}
+  .vol-profile-actions{grid-template-columns:1fr}
+  .vol-profile-actions__close{grid-column:auto}
+}

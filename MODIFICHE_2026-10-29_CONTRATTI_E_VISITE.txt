@@ -1,0 +1,38 @@
+NOVA - 29 ottobre 2026 | Contratti firmati e date visite mediche
+
+NOVITA'
+1. Insegnanti > Apri scheda > Contratti firmati: carica PDF/JPG/PNG/WEBP
+   (max 10 MB), data firma facoltativa, elenco versioni con data e apertura
+   protetta per controlli. La generazione PDF esistente resta invariata.
+2. Volontari sportivi > Apri scheda > Contratti firmati: stessi comandi e
+   conservazione dello storico. Restano disponibili anteprima e PDF generati.
+3. Visite mediche: compilando Data rilascio Nova valorizza automaticamente
+   la scadenza allo stesso giorno dell'anno successivo. Il 29/02 diventa
+   28/02. Scadenza SEMPRE modificabile, senza intervenire sulle vecchie visite.
+
+ATTIVAZIONE SUPABASE (NECESSARIA PER L'ARCHIVIAZIONE DOCUMENTI)
+- Aprire il SQL Editor del database NOVA indicato da VITE_SUPABASE_URL;
+  NON usare il database separato Orchidea Allievi.
+- Eseguire il file update/nova_signed_contracts.sql una sola volta.
+- Questo crea tabella staff_signed_contracts, bucket Storage privato
+  nova-signed-contracts, index e policy RLS.
+- Accesso: admin attivi possono caricare; admin e utenti Nova attivi con
+  ruolo user possono consultare. Nessun documento e' pubblico.
+- Il collegamento insegnante usa ID e tabella di origine per evitare
+  collisioni tra DB Orchidea e Nova.
+- Apri contratto usa un URL firmato con scadenza di 120 secondi.
+- Il SQL NON contiene dati personali e non sovrascrive contratti esistenti.
+
+TEST MANUALE DOPO SQL E PUBBLICAZIONE
+A) Da admin carica una copia firmata sulla scheda insegnante e una sulla
+   scheda volontario; chiudi e riapri le schede; verifica che i file siano
+   ancora presenti e apribili, anche dopo il logout/login.
+B) Con utenza non admin verifica la sola consultazione.
+C) Crea visita 29/10/2026 -> scadenza 29/10/2027; modifica la scadenza
+   manualmente, salva e verifica in elenco. Testa 29/02/2028 -> 28/02/2029.
+
+NOTE
+- L'archivio resta sul database Nova anche quando l'insegnante viene letto
+  dal database distinto di Orchidea Allievi.
+- Per ragioni di sicurezza non sono inclusi i segreti .env nello ZIP di
+  distribuzione. Conservare le variabili di ambiente gia' impostate su Vercel.

@@ -1926,12 +1926,18 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px;
   align-items: end;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   margin-bottom: 18px;
 }
 
 .teacher-assign-course-form label {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   gap: 8px;
   font-size: 0.78rem;
   font-weight: 900;
@@ -1941,6 +1947,10 @@
 }
 
 .teacher-assign-course-form select {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: 52px;
   border: 1px solid #dbe1ea;
   border-radius: 16px;
@@ -2012,10 +2022,28 @@
   }
 
   .teacher-detail-grid,
-  .teacher-assign-course-form,
   .teacher-info-grid--fixed,
   .teacher-info-cards {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teacher-assign-course-form {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .teacher-assign-course-form > .topbar__button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 46px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
   }
 
   .teacher-detail-modal {
@@ -3659,4 +3687,258 @@
   color: #a15c07;
   font-size: 0.78rem;
   line-height: 1.45;
+}
+
+/* 2026-10-29 - Rifinitura mobile scheda insegnante */
+.teacher-detail-actions__close {
+  border-color: rgba(15, 23, 42, 0.09);
+}
+
+@media (max-width: 760px) {
+  .teacher-detail-modal {
+    width: min(100vw, 100%);
+    max-height: calc(100dvh - 8px);
+    border-radius: 22px;
+  }
+
+  .teacher-detail-hero {
+    gap: 12px;
+    padding: 14px 14px 12px;
+  }
+
+  .teacherAvatar--xl {
+    width: 58px;
+    height: 58px;
+    flex-basis: 58px;
+    border-radius: 18px;
+    font-size: 1.2rem;
+  }
+
+  .teacher-detail-hero__main {
+    width: 100%;
+    align-items: flex-start;
+    flex-direction: row;
+    gap: 12px;
+  }
+
+  .teacher-detail-hero__content {
+    width: 100%;
+  }
+
+  .teacher-detail-hero .dashboard-hero__eyebrow {
+    margin-bottom: 6px;
+    font-size: 0.68rem;
+  }
+
+  .teacher-detail-hero__content h3 {
+    margin: 0 0 6px;
+    font-size: clamp(1.15rem, 6.5vw, 1.7rem);
+    line-height: 1.02;
+  }
+
+  .teacher-detail-hero__content p {
+    font-size: 0.84rem;
+    line-height: 1.42;
+  }
+
+  .teacher-detail-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .teacher-detail-badge {
+    width: auto;
+    min-height: 28px;
+    justify-content: center;
+    padding: 6px 10px;
+    font-size: 0.72rem;
+    text-align: center;
+  }
+
+  .teacher-detail-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px;
+  }
+
+  .teacher-detail-actions .topbar__button {
+    width: 100%;
+    min-height: 40px;
+    padding-inline: 10px;
+    font-size: 0.84rem;
+    border-radius: 14px;
+  }
+
+  .teacher-detail-actions .topbar__button svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .teacher-detail-actions__close {
+    grid-column: auto;
+  }
+
+  .teacher-detail-grid {
+    gap: 12px;
+    padding: 12px 14px 0;
+  }
+
+  .teacher-panel,
+  .teacher-courses-manager {
+    border-radius: 18px;
+  }
+
+  .teacher-panel {
+    padding: 14px;
+  }
+
+  .teacher-info-cards,
+  .teacher-personal-summary {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .teacher-info-card {
+    padding: 12px 13px;
+    border-radius: 15px;
+  }
+
+  .teacher-panel-title {
+    gap: 9px;
+    margin-bottom: 12px;
+  }
+
+  .teacher-panel-title h3 {
+    font-size: 0.98rem;
+  }
+
+  .teacher-panel-title p,
+  .teacher-payout-total-card > small,
+  .teacher-payout-breakdown__row small,
+  .teacher-payout-audit-warning span,
+  .teacher-personal-summary span,
+  .teacher-info-card strong {
+    font-size: 0.82rem;
+  }
+
+  .teacher-info-card span,
+  .teacher-payout-stat span,
+  .teacher-personal-summary strong {
+    font-size: 0.68rem;
+  }
+
+  .teacher-payout-total-card > strong {
+    font-size: 1.45rem;
+  }
+
+  .teacher-payout-stat {
+    border-radius: 14px;
+    padding: 12px;
+  }
+
+  .teacher-payout-stat strong {
+    font-size: 1.05rem;
+  }
+
+  .teacher-payout-breakdown,
+  .teacher-course-row--compensation,
+  .teacher-course-compensation {
+    border-radius: 16px;
+  }
+
+  .teacher-course-row__info strong {
+    line-height: 1.3;
+  }
+}
+
+
+@media (max-width: 520px) {
+  .teacher-detail-modal {
+    border-radius: 18px;
+  }
+
+  .teacher-detail-hero {
+    padding: 12px 12px 10px;
+  }
+
+  .teacherAvatar--xl {
+    width: 52px;
+    height: 52px;
+    flex-basis: 52px;
+    border-radius: 16px;
+    font-size: 1.05rem;
+  }
+
+  .teacher-detail-hero__main {
+    gap: 10px;
+  }
+
+  .teacher-detail-hero__content h3 {
+    font-size: 1.02rem;
+  }
+
+  .teacher-detail-hero__content p {
+    font-size: 0.8rem;
+  }
+
+  .teacher-detail-badges {
+    gap: 5px;
+    margin-top: 8px;
+  }
+
+  .teacher-detail-badge {
+    min-height: 26px;
+    padding: 5px 8px;
+    font-size: 0.68rem;
+  }
+
+  .teacher-detail-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .teacher-detail-grid,
+  .teacher-courses-manager,
+  .teacher-contract-warning,
+  .teacher-contract-form,
+  .teacher-signed-contracts-wrap {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .teacher-courses-manager {
+    margin: 12px;
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+}
+
+/* 2026-10-29 - Contenimento modulo "Assegna corso" su smartphone/tablet */
+@media (max-width: 760px) {
+  .teacher-courses-manager,
+  .teacher-courses-manager__head,
+  .teacher-assign-course-form,
+  .teacher-course-list,
+  .teacher-course-row--compensation,
+  .teacher-course-compensation {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .teacher-courses-manager__head > div {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .teacher-assign-course-form select {
+    font-size: 0.94rem;
+    text-overflow: ellipsis;
+  }
+
+  .teacher-assign-course-form > .topbar__button {
+    padding: 12px 14px;
+    border-radius: 13px;
+  }
 }

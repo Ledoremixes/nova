@@ -1,0 +1,30 @@
+.signed-contracts{box-sizing:border-box;width:100%;min-width:0;background:#fff;border:1px solid #e4e8f0;border-radius:20px;padding:21px;color:#19243c;box-shadow:0 8px 24px rgba(24,35,69,.045)}
+.signed-contracts__head{display:flex;align-items:center;gap:13px;flex-wrap:wrap}
+.signed-contracts__head>div:nth-child(2){flex:1;min-width:200px}
+.signed-contracts__symbol,.signed-contracts__file-icon{display:grid;place-items:center;width:44px;height:44px;flex-shrink:0;border-radius:13px;background:#e9f0ff;color:#345bd2}
+.signed-contracts__head h3{font-size:18px;line-height:1.3;margin:0 0 5px;color:#19243c}
+.signed-contracts__head p{font-size:13px;color:#6b7890;line-height:1.5;margin:0}
+.signed-contracts__count{border-radius:999px;background:#edf1fa;padding:7px 11px;font-size:12px;font-weight:800;white-space:nowrap;color:#3b5280}
+.signed-contracts .signed-contracts__form{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:18px;padding:16px;background:#f7f9ff;border:1px dashed #cbd7f3;border-radius:14px}
+.signed-contracts__choose{display:inline-flex;align-items:center;gap:8px;padding:11px 13px;border:1px solid #c5d2ef;border-radius:11px;background:white;color:#3156ae;font-size:13px;font-weight:800;cursor:pointer}
+.signed-contracts__choose input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.signed-contracts__date{display:flex;gap:7px;align-items:center;font-size:12px;font-weight:750;color:#5c6882}
+.signed-contracts__date input{border:1px solid #d6dcea;border-radius:10px;padding:10px;font:inherit;color:#25314c;background:white;min-width:145px}
+.signed-contracts__upload,.signed-contracts__view{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:0;border-radius:11px;background:#305ddd;color:white;padding:11px 14px;font-size:13px;font-weight:800;cursor:pointer}
+.signed-contracts__upload:disabled,.signed-contracts__view:disabled{opacity:.55;cursor:not-allowed}
+.signed-contracts__help{flex-basis:100%;font-size:12px;color:#7a8599}
+.signed-contracts__selected{flex-basis:100%;font-size:12px;overflow-wrap:anywhere}
+.signed-contracts__message,.signed-contracts__error,.signed-contracts__empty{border-radius:11px;padding:13px 14px;margin:14px 0 0;font-size:13px;line-height:1.5}
+.signed-contracts__message{background:#eaf9f0;color:#13623d}.signed-contracts__error{background:#fff1f1;color:#ad2839;overflow-wrap:anywhere}.signed-contracts__empty{background:#f7f9fb;color:#748096}
+.signed-contracts__list{margin-top:16px;display:grid;gap:10px}
+.signed-contracts__item{display:flex;align-items:center;gap:12px;padding:13px;border:1px solid #e9edf4;border-radius:13px;min-width:0}
+.signed-contracts__file-icon{width:38px;height:38px}
+.signed-contracts__file-info{flex:1;min-width:0;display:grid;gap:4px}
+.signed-contracts__file-info strong{font-size:13px;overflow-wrap:anywhere}
+.signed-contracts__file-info small{font-size:12px;color:#7a8498;line-height:1.4}
+.signed-contracts__view{background:#eef2fc;color:#3055a7;border:1px solid #dce5fa;flex-shrink:0}
+@keyframes signed-contracts-spin{to{transform:rotate(360deg)}}.signed-contracts__spin{animation:signed-contracts-spin .75s linear infinite}
+@media(max-width:670px){.signed-contracts{padding:15px}.signed-contracts__count{margin-left:0}.signed-contracts .signed-contracts__form{display:grid;grid-template-columns:1fr}.signed-contracts__date{flex-wrap:wrap}.signed-contracts__date input{flex:1;min-width:0}.signed-contracts__item{align-items:flex-start;flex-wrap:wrap}.signed-contracts__file-info{flex-basis:calc(100% - 55px)}.signed-contracts__view{margin-left:auto}}
+
+.teacher-signed-contracts-wrap{padding:20px 26px 0}
+@media(max-width:860px){.teacher-signed-contracts-wrap{padding:16px 16px 0}}

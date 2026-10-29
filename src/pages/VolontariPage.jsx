@@ -20,6 +20,7 @@ import {
 import { createVolunteer, deleteVolunteer, fetchVolunteers, updateVolunteer } from '../api/volunteers'
 import { createVolunteerContractPdfBlob, generateVolunteerContractPdf } from '../utils/volunteerContractPdf'
 import { useAuth } from '../context/authContext'
+import SignedContractsPanel from '../components/staff/SignedContractsPanel'
 import '../styles/VolontariPage.css'
 
 const ROLES = [
@@ -217,7 +218,16 @@ export default function VolontariPage() {
       {viewing && <div className="vol-modal" role="dialog" aria-modal="true" onClick={() => setViewing(null)}>
         <div className="vol-modal__panel vol-profile-panel" onClick={(e) => e.stopPropagation()}>
           <header>
-            <div><span className="vol-eyebrow">SCHEDA VOLONTARIO</span><h2>{viewing.full_name}</h2><p>{roleMeta(viewing.role).label} · {viewing.active ? 'Attivo' : 'Non attivo'}</p></div>
+            <div>
+              <span className="vol-eyebrow">SCHEDA VOLONTARIO</span>
+              <h2>{viewing.full_name}</h2>
+              <p>Consulta dati anagrafici, accordo operativo e archivio dei contratti firmati.</p>
+              <div className="vol-profile-badges">
+                <span className="vol-profile-badge">{roleMeta(viewing.role).label}</span>
+                <span className={`vol-profile-badge ${viewing.active ? 'is-active' : 'is-inactive'}`}>{viewing.active ? 'Attivo' : 'Non attivo'}</span>
+                {(viewing.contract_start_date || viewing.contract_end_date) ? <span className="vol-profile-badge">Accordo {humanDate(viewing.contract_start_date)} – {humanDate(viewing.contract_end_date)}</span> : null}
+              </div>
+            </div>
             <button onClick={() => setViewing(null)} aria-label="Chiudi scheda"><X /></button>
           </header>
           <div className="vol-profile-content">
@@ -248,11 +258,14 @@ export default function VolontariPage() {
                 <div className="wide"><dt>Note interne</dt><dd>{viewing.notes || 'Nessuna nota'}</dd></div>
               </dl>
             </section>
+            <section className="vol-contracts-section">
+              <SignedContractsPanel kind="volunteer" source="sport_volunteers" staffId={viewing.id} staffName={viewing.full_name} isAdmin={isAdmin} />
+            </section>
           </div>
           <footer className="vol-profile-actions">
-            <button type="button" onClick={() => setViewing(null)}>Chiudi</button>
-            <button type="button" onClick={() => { const row = viewing; setViewing(null); openContractPreview(row) }}><FileText size={16} /> Anteprima contratto</button>
-            {isAdmin ? <button type="button" className="vol-primary" onClick={() => { const row = viewing; setViewing(null); openEdit(row) }}><Pencil size={16} /> Modifica dati</button> : null}
+            <button type="button" className="vol-profile-actions__close" onClick={() => setViewing(null)}>Chiudi</button>
+            <button type="button" className="vol-profile-actions__preview" onClick={() => { const row = viewing; setViewing(null); openContractPreview(row) }}><FileText size={16} /> Anteprima contratto</button>
+            {isAdmin ? <button type="button" className="vol-primary vol-profile-actions__edit" onClick={() => { const row = viewing; setViewing(null); openEdit(row) }}><Pencil size={16} /> Modifica dati</button> : null}
           </footer>
         </div>
       </div>}

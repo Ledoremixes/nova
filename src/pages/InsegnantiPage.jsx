@@ -34,6 +34,7 @@ import {
 import { generateTeacherContractPdf } from '../utils/teacherContractPdf'
 import { fetchAllieviPaymentsMonth } from '../api/orchideaPayments'
 import { buildTeacherMonthlyPayouts } from '../lib/teacherPayouts'
+import SignedContractsPanel from '../components/staff/SignedContractsPanel'
 import { syncNovaTeacherPayouts } from '../lib/teacherCompensationSync'
 import { supabase } from '../api/supabase'
 
@@ -789,6 +790,16 @@ export default function InsegnantiPage() {
                   </div>
                 </div>
               ) : null}
+            </div>
+
+            <div className="teacher-signed-contracts-wrap">
+              <SignedContractsPanel
+                kind="teacher"
+                source={selectedTeacher._table || 'insegnanti'}
+                staffId={selectedTeacher.id}
+                staffName={selectedTeacher.full_name}
+                isAdmin={isAdmin}
+              />
             </div>
 
             <div className="teacher-courses-manager">

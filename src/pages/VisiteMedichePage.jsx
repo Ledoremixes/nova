@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, CheckCircle2, ChevronDown, FileText, HeartPulse, Plus, Search, Trash2, Upload, UserRoundSearch, X } from 'lucide-react'
 import { createMedicalVisit, deleteMedicalVisit, fetchMedicalStudents, fetchMedicalVisits } from '../api/medicalVisits'
 import { useAuth } from '../context/authContext'
+import { annualMedicalExpiry } from '../utils/medicalExpiry'
 
 const emptyForm = { tesseramento_id: '', issued_at: '', expires_at: '', doctor: '', notes: '', status: 'valida' }
 
@@ -164,12 +165,12 @@ export default function VisiteMedichePage() {
                 <span className="medical-field__label">Data rilascio</span>
                 <div className="medical-inputWrap">
                   <CalendarDays size={18} />
-                  <input type="date" value={form.issued_at} onChange={(e) => setForm({ ...form, issued_at: e.target.value })} />
+                  <input type="date" value={form.issued_at} onChange={(e) => setForm((current) => ({ ...current, issued_at: e.target.value, expires_at: annualMedicalExpiry(e.target.value) }))} />
                 </div>
               </label>
 
               <label>
-                <span className="medical-field__label">Scadenza</span>
+                <span className="medical-field__label">Scadenza (calcolata automaticamente, modificabile)</span>
                 <div className="medical-inputWrap">
                   <CalendarDays size={18} />
                   <input type="date" value={form.expires_at} onChange={(e) => setForm({ ...form, expires_at: e.target.value })} />
