@@ -17,11 +17,11 @@ export function buildNovaTeacherPayoutSync(payouts = []) {
       const target = grouped.get(key)
       target.rawCompenso += Number(row.teacher_quota || 0)
       target.rawIncasso += Math.max(0, Number(row.student_quota || 0))
-      if (row.student_name) target.students.add(row.student_name)
+      if (!['fisso', 'orario'].includes(row.source) && row.student_name) target.students.add(row.student_name)
       const rate = Number.isFinite(Number(row.percentuale_insegnante))
         && row.percentuale_insegnante !== null && row.percentuale_insegnante !== undefined
         ? Number(row.percentuale_insegnante) : null
-      const method = String(row.source || 'percentuale')
+      const method = String(row.method || row.source || 'percentuale')
       if (target.method !== null && (target.method !== method || target.aliquota !== rate)) {
         target.mixed = true
       }
@@ -30,20 +30,30 @@ export function buildNovaTeacherPayoutSync(payouts = []) {
     }
     const items = [...grouped.values()]
     const totalCents = moneyCents(payout.total)
-    let assignedCents = 0
-    const breakdown = items.map((row, index) => {
-      const cents = index === items.length - 1 ? totalCents - assignedCents : moneyCents(row.rawCompenso)
-      assignedCents += cents
-      return {
-        corso_nome: row.corso_nome,
-        corso_livello: row.corso_livello,
-        compenso: cents / 100,
-        incasso_attribuito: moneyCents(row.rawIncasso) / 100,
-        aliquota: row.mixed ? null : row.aliquota,
-        metodo_compenso: row.mixed ? 'misto' : row.method,
-        corsisti_paganti: row.students.size,
-      }
+    // Allocate integer cents without changing Nova's total. Independent rounding
+    // can otherwise make the sum of several courses differ by a cent or two.
+    const parts = items.map((row, i) => {
+      const exact = Math.max(0, row.rawCompenso) * 100
+      const floor = Math.floor(exact + 1e-8)
+      return { row, i, cents: floor, remainder: exact - floor }
     })
+    let centsLeft = totalCents - parts.reduce((sum, p) => sum + p.cents, 0)
+    if (centsLeft < 0 || centsLeft > parts.length) {
+      throw new Error('I dettagli Nova non corrispondono al totale.')
+    }
+    for (const p of [...parts].sort((a, b) => b.remainder - a.remainder).slice(0, centsLeft)) {
+      p.cents++
+    }
+    const breakdown = parts.map(({ row, cents }) => ({
+      corso_nome: row.corso_nome,
+      corso_livello: row.corso_livello,
+      compenso: cents / 100,
+      incasso_attribuito: moneyCents(row.rawIncasso) / 100,
+      aliquota: row.mixed ? null : row.aliquota,
+      metodo_compenso: row.mixed ? 'misto' : row.method,
+      corsisti_paganti: row.method?.toLowerCase().includes('fiss') ||
+                        row.method?.toLowerCase().includes('orar') ? null : row.students.size,
+    }))
     if (breakdown.some(row => row.compenso < 0)) {
       throw new Error('Errore arrotondamento compensi Nova.')
     }
