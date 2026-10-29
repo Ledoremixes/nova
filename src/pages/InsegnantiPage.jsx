@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   BookOpenCheck,
@@ -34,6 +34,8 @@ import {
 import { generateTeacherContractPdf } from '../utils/teacherContractPdf'
 import { fetchAllieviPaymentsMonth } from '../api/orchideaPayments'
 import { buildTeacherMonthlyPayouts } from '../lib/teacherPayouts'
+import { syncNovaTeacherPayouts } from '../lib/teacherCompensationSync'
+import { supabase } from '../api/supabase'
 
 const CONTRACT_DEFAULTS_KEY = 'nova.teacherContractDefaults.v2'
 
@@ -280,6 +282,8 @@ export default function InsegnantiPage() {
   const isAdmin = role === 'admin'
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
+  const [compensationSyncStatus, setCompensationSyncStatus] = useState('idle')
+  const [compensationSyncError, setCompensationSyncError] = useState('')
   const [month, setMonth] = useState(currentMonth)
   const [isOpen, setIsOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -368,6 +372,29 @@ export default function InsegnantiPage() {
   }), [teachers, courses, payoutPaymentRows, month])
   const payoutsByName = useMemo(() => new Map(payouts.map((item) => [norm(item.teacher_name), item])), [payouts])
   const totalPayouts = payouts.reduce((sum, item) => sum + Number(item.total || 0), 0)
+
+  // Publish exactly the numbers Nova is showing. Skip incomplete/loading/error
+  // data; otherwise a temporary read failure could overwrite valid amounts with zero.
+  useEffect(() => {
+    if (!isAdmin || teachersQuery.isFetching || coursesQuery.isFetching ||
+        payoutPaymentsQuery.isFetching || teachersQuery.error ||
+        coursesQuery.error || payoutPaymentsQuery.error || !payouts.length) return
+    let active = true
+    setCompensationSyncStatus('syncing')
+    setCompensationSyncError('')
+    syncNovaTeacherPayouts({ month, payouts, supabase })
+      .then(() => { if (active) setCompensationSyncStatus('synced') })
+      .catch(error => {
+        if (!active) return
+        setCompensationSyncStatus('error')
+        setCompensationSyncError(error?.message || 'Sincronizzazione non riuscita')
+      })
+    return () => { active = false }
+  }, [
+    isAdmin, month, payouts,
+    teachersQuery.isFetching, coursesQuery.isFetching, payoutPaymentsQuery.isFetching,
+    teachersQuery.error, coursesQuery.error, payoutPaymentsQuery.error,
+  ])
 
   function teacherCourses(row) {
     const key = norm(row?.full_name)
@@ -501,6 +528,16 @@ export default function InsegnantiPage() {
         {teachersQuery.isLoading ? <p>Caricamento insegnanti…</p> : null}
         {teachersQuery.error ? <p className="form-error">Errore: {teachersQuery.error.message}</p> : null}
         {coursesQuery.error ? <p className="form-error">Errore corsi: {coursesQuery.error.message}</p> : null}
+        {isAdmin && !payoutPaymentsQuery.error && (
+          <div className="page-card" role="status" style={{ marginBottom: 12, padding: '10px 16px' }}>
+            <strong>Compensi condivisi con Orchidea Allievi: </strong>
+            {compensationSyncStatus === 'synced' ? 'sincronizzati con Nova' :
+             compensationSyncStatus === 'syncing' ? 'sincronizzazione in corso…' :
+             compensationSyncStatus === 'error' ? 'sincronizzazione non riuscita' :
+             'in attesa dei dati del mese'}
+            {compensationSyncError ? <small style={{ display: 'block' }}>{compensationSyncError}</small> : null}
+          </div>
+        )}
         {payoutPaymentsQuery.error ? (
           <div className="form-error">
             Non riesco a leggere i pagamenti del mese: {payoutPaymentsQuery.error.message}. I compensi non vengono mostrati come 0 € per evitare dati falsi.
