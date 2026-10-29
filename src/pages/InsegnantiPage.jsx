@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   BookOpenCheck,
@@ -286,6 +286,7 @@ export default function InsegnantiPage() {
   const [compensationSyncError, setCompensationSyncError] = useState('')
   const [historySyncState, setHistorySyncState] = useState('') 
   const [historySyncBusy, setHistorySyncBusy] = useState(false)
+  const historyAutoSyncStarted = useRef(false)
   const [month, setMonth] = useState(currentMonth)
   const [isOpen, setIsOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -427,6 +428,18 @@ export default function InsegnantiPage() {
       setHistorySyncBusy(false)
     }
   }
+
+  // Sync the historical Nova figures automatically once the teacher overview
+  // has loaded.  The manual button remains available for later corrections.
+  useEffect(() => {
+    if (historyAutoSyncStarted.current || !isAdmin ||
+        teachersQuery.isFetching || coursesQuery.isFetching || payoutPaymentsQuery.isFetching ||
+        teachersQuery.error || coursesQuery.error || payoutPaymentsQuery.error ||
+        !teachers.length || !courses.length) return;
+    historyAutoSyncStarted.current = true;
+    void syncLast12Months();
+  }, [isAdmin, teachersQuery.isFetching, coursesQuery.isFetching, payoutPaymentsQuery.isFetching,
+      teachersQuery.error, coursesQuery.error, payoutPaymentsQuery.error, teachers.length, courses.length]);
 
   function teacherCourses(row) {
     const key = norm(row?.full_name)
