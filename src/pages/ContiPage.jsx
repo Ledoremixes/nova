@@ -9,6 +9,8 @@ import {
   Search,
 } from 'lucide-react'
 import '../styles/ContiPage.css'
+import { volunteerRoleCode } from '../lib/volunteerRoles'
+import { isVolunteerRoleInUse } from '../api/volunteers'
 import {
   fetchLookupOptions,
   createLookupOption,
@@ -25,6 +27,14 @@ const LOOKUP_SECTIONS = [
       { listKey: 'corsi', label: 'Corsi' },
       { listKey: 'livelli_corso', label: 'Livelli corso' },
       { listKey: 'tipi_tesseramento', label: 'Tipi tesseramento' },
+    ],
+  },
+  {
+    sectionKey: 'volontari',
+    title: 'Volontari sportivi',
+    description: 'Ruoli selezionabili nelle schede dei volontari, nei filtri e nei contratti.',
+    lists: [
+      { listKey: 'ruoli_volontari', label: 'Ruoli dei volontari sportivi' },
     ],
   },
   {
@@ -103,6 +113,10 @@ const emptyForm = {
 
 function prettifyKey(value) {
   return String(value || '').replaceAll('_', ' ')
+}
+
+function isVolunteerRoles(sectionKey, listKey) {
+  return sectionKey === 'volontari' && listKey === 'ruoli_volontari'
 }
 
 function isAccountingSection(sectionKey) {
@@ -262,11 +276,26 @@ export default function ContiPage() {
       return
     }
 
+    const volunteerRole = isVolunteerRoles(form.section_key, form.list_key)
+    const roleValue = volunteerRole
+      ? (editingItem?.id ? editingItem.value : volunteerRoleCode(form.value?.trim() || form.label))
+      : (form.value?.trim() || null)
+    if (volunteerRole && (!roleValue || !/^[a-z0-9_]+$/.test(roleValue))) {
+      alert('Inserisci un codice valido per il ruolo (solo lettere, numeri e underscore).')
+      return
+    }
+    if (volunteerRole && !editingItem && allItems.some((item) =>
+      isVolunteerRoles(item.section_key, item.list_key) && item.value === roleValue
+    )) {
+      alert('Esiste già un ruolo con questo codice. Usa un nome o un codice diverso.')
+      return
+    }
+
     const payload = {
       section_key: form.section_key,
       list_key: form.list_key,
       label: form.label.trim(),
-      value: form.value?.trim() || null,
+      value: roleValue,
       sort_order: Number(form.sort_order || 0),
       is_active: form.is_active,
       report_area: form.report_area || null,
@@ -283,7 +312,18 @@ export default function ContiPage() {
     createMutation.mutate(payload)
   }
 
-  function handleDelete(item) {
+  async function handleDelete(item) {
+    if (isVolunteerRoles(item.section_key, item.list_key)) {
+      try {
+        if (await isVolunteerRoleInUse(item.value)) {
+          window.alert(`Il ruolo "${item.label}" è già assegnato ad almeno un volontario. Per conservarne lo storico, modifica la voce e disattivala invece di eliminarla.`)
+          return
+        }
+      } catch (error) {
+        window.alert(`Non riesco a verificare se il ruolo è utilizzato: ${error?.message || 'errore sconosciuto'}. Eliminazione annullata per sicurezza.`)
+        return
+      }
+    }
     const ok = window.confirm(`Vuoi eliminare "${item.label}"?`)
     if (!ok) return
     deleteMutation.mutate(item.id)
@@ -351,7 +391,7 @@ export default function ContiPage() {
             <div className="lookup-block-header">
               <div>
                 <h2>{list.label}</h2>
-                <p>{prettifyKey(list.listKey)}</p>
+                <p>{isVolunteerRoles(selectedSection, list.listKey) ? 'Crea, rinomina, riordina o disattiva i ruoli. Le assegnazioni già registrate vengono conservate.' : prettifyKey(list.listKey)}</p>
               </div>
 
               <button
@@ -498,7 +538,10 @@ export default function ContiPage() {
                     name="value"
                     value={form.value}
                     onChange={handleChange}
+                    readOnly={Boolean(editingItem && isVolunteerRoles(form.section_key, form.list_key))}
+                    placeholder={isVolunteerRoles(form.section_key, form.list_key) ? 'Automatico dal nome (es. addetto_cassa)' : ''}
                   />
+                  {isVolunteerRoles(form.section_key, form.list_key) ? <small>Codice stabile per non alterare i ruoli già assegnati. Per cambiarne il nome, modifica l'etichetta.</small> : null}
                 </label>
 
                 <label>

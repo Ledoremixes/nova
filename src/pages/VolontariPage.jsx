@@ -15,28 +15,27 @@ import {
   Sparkles,
   Trash2,
   UsersRound,
+  UserRound,
   X,
 } from 'lucide-react'
 import { createVolunteer, deleteVolunteer, fetchVolunteers, updateVolunteer } from '../api/volunteers'
+import { fetchLookupOptions } from '../api/lookups'
+import { getVolunteerRoleOptions, prettyVolunteerRole } from '../lib/volunteerRoles'
 import { createVolunteerContractPdfBlob, generateVolunteerContractPdf } from '../utils/volunteerContractPdf'
 import { useAuth } from '../context/authContext'
 import SignedContractsPanel from '../components/staff/SignedContractsPanel'
 import '../styles/VolontariPage.css'
 
-const ROLES = [
-  { value: 'barman', label: 'Barman', icon: GlassWater },
-  { value: 'cameriere', label: 'Cameriere', icon: UsersRound },
-  { value: 'barlady', label: 'Barlady', icon: Martini },
-  { value: 'ballerino', label: 'Ballerino', icon: Sparkles },
-  { value: 'animatore', label: 'Animatore', icon: BadgeCheck },
-  { value: 'videomaker', label: 'Videomaker', icon: Film },
-  { value: 'fotografo', label: 'Fotografo', icon: Camera },
-]
+const ROLE_ICONS = {
+  barman: GlassWater, cameriere: UsersRound, barlady: Martini,
+  ballerino: Sparkles, animatore: BadgeCheck, videomaker: Film,
+  fotografo: Camera,
+}
 
 const emptyForm = {
   full_name: '', email: '', phone: '', tax_code: '', birth_date: '', birth_place: '', birth_province: '',
   residence_address: '', residence_city: '', residence_province: '', residence_postal_code: '',
-  role: 'barman', additional_roles: [], duties: '',
+  role: '', additional_roles: [], duties: '',
   venue: 'Club Orchidea ASD - Via Giuseppe Ungaretti 34, Saronno (VA)',
   contract_start_date: '2026-09-07', contract_end_date: '2027-06-30', notice_days: 15,
   signing_place: 'Saronno', notes: '', active: true,
@@ -52,7 +51,7 @@ const organization = {
 function initials(name) {
   return String(name || '?').split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
 }
-function roleMeta(role) { return ROLES.find((item) => item.value === role) || ROLES[0] }
+
 function humanDate(value) {
   if (!value) return 'Non indicata'
   const d = new Date(`${String(value).slice(0, 10)}T12:00:00`)
@@ -80,6 +79,26 @@ export default function VolontariPage() {
     queryKey: ['sport-volunteers', 'full-access'],
     queryFn: () => fetchVolunteers({ includePrivate: true }),
   })
+  const rolesQuery = useQuery({
+    queryKey: ['lookup-options'],
+    queryFn: fetchLookupOptions,
+  })
+  const roles = useMemo(() => getVolunteerRoleOptions(
+    (rolesQuery.data || []).filter((item) => item.section_key === 'volontari' && item.list_key === 'ruoli_volontari'),
+    (query.data || []).flatMap((item) => [item.role, ...(item.additional_roles || [])]).concat(form.role, form.additional_roles)
+  ), [rolesQuery.data, query.data, form.role, form.additional_roles])
+  const activeRoles = useMemo(() => roles.filter((item) => item.isActive), [roles])
+  function roleMeta(code) {
+    const item = roles.find((entry) => entry.value === code)
+    return { value: code, label: item?.label || prettyVolunteerRole(code), icon: ROLE_ICONS[code] || UserRound }
+  }
+  function contractWithLabels(row) {
+    return {
+      ...row,
+      role_labels: Object.fromEntries(roles.map((item) => [item.value, item.label])),
+    }
+  }
+
   const save = useMutation({
     mutationFn: (payload) => editing?.id ? updateVolunteer(editing.id, payload) : createVolunteer(payload),
     onSuccess: () => { client.invalidateQueries({ queryKey: ['sport-volunteers'] }); closeModal() },
@@ -94,16 +113,16 @@ export default function VolontariPage() {
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase()
     return (query.data || []).filter((row) => {
-      const matchesTerm = !term || [row.full_name, row.email, row.phone, row.tax_code, row.role].some((v) => String(v || '').toLowerCase().includes(term))
+      const matchesTerm = !term || [row.full_name, row.email, row.phone, row.tax_code, row.role, roleMeta(row.role).label, ...(row.additional_roles || []).map((code) => roleMeta(code).label)].some((v) => String(v || '').toLowerCase().includes(term))
       const matchesRole = roleFilter === 'tutti' || row.role === roleFilter || row.additional_roles?.includes(roleFilter)
       return matchesTerm && matchesRole
     })
-  }, [query.data, search, roleFilter])
+  }, [query.data, search, roleFilter, roles])
 
-  function openNew() { if (!isAdmin) return; setEditing(null); setForm({ ...emptyForm }); setError(''); setIsModalOpen(true) }
+  function openNew() { if (!isAdmin) return; setEditing(null); setForm({ ...emptyForm, role: activeRoles[0]?.value || '' }); setError(''); setIsModalOpen(true) }
   function openEdit(row) { if (!isAdmin) return; setEditing(row); setForm(toForm(row)); setError(''); setIsModalOpen(true) }
   function closeModal() { setEditing(null); setForm({ ...emptyForm }); setError(''); setIsModalOpen(false) }
-  function updateField(name, value) { setForm((current) => ({ ...current, [name]: value })) }
+  function updateField(name, value) { setForm((current) => ({ ...current, [name]: value, ...(name === 'role' ? { additional_roles: current.additional_roles.filter((code) => code !== value) } : {}) })) }
   function toggleExtraRole(value) {
     setForm((current) => ({
       ...current,
@@ -117,6 +136,7 @@ export default function VolontariPage() {
     if (!isAdmin) return setError('Solo un amministratore può modificare le anagrafiche dei volontari.')
     if (!form.full_name.trim()) return setError('Inserisci nome e cognome.')
     if (!form.tax_code.trim()) return setError('Inserisci il codice fiscale.')
+    if (!form.role) return setError('Configura e seleziona un ruolo principale da Conti → Volontari sportivi.')
     if (form.contract_end_date && form.contract_start_date && form.contract_end_date < form.contract_start_date) return setError('La data di fine deve essere successiva alla data di inizio.')
     save.mutate({ ...form, full_name: form.full_name.trim(), tax_code: form.tax_code.trim().toUpperCase(), notice_days: Number(form.notice_days || 15) })
   }
@@ -137,7 +157,7 @@ export default function VolontariPage() {
     setContractPreviewError('')
     setContractPreviewLoading(true)
     try {
-      const blob = await createVolunteerContractPdfBlob(row, organization)
+      const blob = await createVolunteerContractPdfBlob(contractWithLabels(row), organization)
       setContractPreviewUrl(URL.createObjectURL(blob))
     } catch (err) {
       setContractPreviewError(err?.message || 'Impossibile generare l’anteprima del contratto.')
@@ -172,16 +192,17 @@ export default function VolontariPage() {
       <section className="vol-stats">
         <article><span>Volontari registrati</span><strong>{query.data?.length || 0}</strong><small>Anagrafiche complessive</small></article>
         <article><span>Attivi</span><strong>{(query.data || []).filter((r) => r.active).length}</strong><small>Disponibili nella stagione</small></article>
-        <article><span>Ruoli coperti</span><strong>{new Set((query.data || []).flatMap((r) => [r.role, ...(r.additional_roles || [])])).size}</strong><small>Su {ROLES.length} ruoli previsti</small></article>
+        <article><span>Ruoli coperti</span><strong>{new Set((query.data || []).flatMap((r) => [r.role, ...(r.additional_roles || [])])).size}</strong><small>Su {activeRoles.length} ruoli disponibili</small></article>
       </section>
 
       <section className="vol-toolbar">
         <label className="vol-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cerca nome, codice fiscale, telefono o ruolo" /></label>
         <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
-          <option value="tutti">Tutti i ruoli</option>{ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          <option value="tutti">Tutti i ruoli</option>{roles.map((r) => <option key={r.value} value={r.value}>{r.label}{r.isActive ? '' : ' (non attivo)'}</option>)}
         </select>
       </section>
 
+      {rolesQuery.isError && <div className="vol-error">Impossibile caricare i ruoli configurati: {rolesQuery.error?.message}. Sono mostrati temporaneamente i ruoli storici.</div>}
       {query.isError && <div className="vol-error">{query.error?.message}</div>}
       {query.isLoading ? <div className="vol-empty">Caricamento volontari…</div> : (
         <section className="vol-grid">
@@ -294,7 +315,7 @@ export default function VolontariPage() {
           </div>
           <footer className="vol-profile-actions vol-contract-preview-actions">
             <button type="button" onClick={closeContractPreview}>Chiudi</button>
-            <button type="button" className="vol-primary" onClick={() => generateVolunteerContractPdf(contractPreviewRow, organization)} disabled={contractPreviewLoading}>
+            <button type="button" className="vol-primary" onClick={() => generateVolunteerContractPdf(contractWithLabels(contractPreviewRow), organization)} disabled={contractPreviewLoading}>
               <Download size={16} /> Scarica PDF
             </button>
           </footer>
@@ -321,9 +342,9 @@ export default function VolontariPage() {
               <label>CAP<input value={form.residence_postal_code} onChange={(e) => updateField('residence_postal_code', e.target.value)} /></label>
             </div></section>
             <section><h3>Ruolo e attività</h3><div className="vol-form-grid">
-              <label>Ruolo principale<select value={form.role} onChange={(e) => updateField('role', e.target.value)}>{ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}</select></label>
+              <label>Ruolo principale<select value={form.role} onChange={(e) => updateField('role', e.target.value)} required><option value="">Seleziona un ruolo</option>{roles.filter((r) => r.isActive || r.value === form.role).map((r) => <option key={r.value} value={r.value}>{r.label}{r.isActive ? '' : ' (non attivo)'}</option>)}</select></label>
               <label className="wide">Mansioni<textarea rows="3" value={form.duties} onChange={(e) => updateField('duties', e.target.value)} placeholder="Descrivi le attività assegnate" /></label>
-              <div className="wide"><span className="vol-label">Ruoli aggiuntivi</span><div className="vol-role-picker">{ROLES.filter((r) => r.value !== form.role).map((r) => <label key={r.value}><input type="checkbox" checked={form.additional_roles.includes(r.value)} onChange={() => toggleExtraRole(r.value)} />{r.label}</label>)}</div></div>
+              <div className="wide"><span className="vol-label">Ruoli aggiuntivi</span><div className="vol-role-picker">{roles.filter((r) => r.value !== form.role && (r.isActive || form.additional_roles.includes(r.value))).map((r) => <label key={r.value}><input type="checkbox" checked={form.additional_roles.includes(r.value)} onChange={() => toggleExtraRole(r.value)} />{r.label}{r.isActive ? '' : ' (non attivo)'}</label>)}</div><p className="vol-role-hint">Modifica i ruoli disponibili da Conti → Volontari sportivi. I ruoli disattivati restano leggibili nelle schede già registrate.</p></div>
             </div></section>
             <section><h3>Accordo di volontariato</h3><div className="vol-form-grid">
               <label>Data inizio<input type="date" value={form.contract_start_date} onChange={(e) => updateField('contract_start_date', e.target.value)} /></label>

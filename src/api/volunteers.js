@@ -66,3 +66,14 @@ export async function deleteVolunteer(id) {
   if (error) throw error
   return true
 }
+
+// Protegge lo storico dalle eliminazioni accidentali di ruoli ancora assegnati.
+export async function isVolunteerRoleInUse(value) {
+  if (!value) return false
+  const primary = await supabase.from('sport_volunteers').select('id', { count: 'exact', head: true }).eq('role', value)
+  if (primary.error) throw primary.error
+  if (primary.count > 0) return true
+  const secondary = await supabase.from('sport_volunteers').select('id', { count: 'exact', head: true }).contains('additional_roles', [value])
+  if (secondary.error) throw secondary.error
+  return secondary.count > 0
+}

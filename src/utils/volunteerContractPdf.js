@@ -36,9 +36,9 @@ function residence(v) {
   const city = [v.residence_postal_code, v.residence_city, v.residence_province ? `(${v.residence_province})` : ''].filter(Boolean).join(' ')
   return [v.residence_address, city].filter(Boolean).join(', ') || '____________________________'
 }
-function roleLabel(role) {
+function roleLabel(role, labels = {}) {
   const map = { barman: 'Barman', cameriere: 'Cameriere', barlady: 'Barlady', ballerino: 'Ballerino', animatore: 'Animatore', videomaker: 'Videomaker', fotografo: 'Fotografo' }
-  return map[role] || val(role, 'Volontario sportivo')
+  return labels[role] || map[role] || val(role, 'Volontario sportivo')
 }
 
 async function buildVolunteerContractPdf(volunteer, settings = {}) {
@@ -96,7 +96,8 @@ async function buildVolunteerContractPdf(volunteer, settings = {}) {
   paragraph('l’Associazione è un ente sportivo dilettantistico senza finalità lucrative e il Volontario intende offrire spontaneamente e gratuitamente la propria collaborazione, condividendone le finalità istituzionali e sportive.')
   paragraph('Tutto ciò premesso, le parti convengono e stipulano quanto segue.', { bold: true })
 
-  const roles = [roleLabel(volunteer.role), ...(volunteer.additional_roles || []).map(roleLabel)].filter(Boolean)
+  const roleLabels = volunteer.role_labels || {}
+  const roles = [roleLabel(volunteer.role, roleLabels), ...(volunteer.additional_roles || []).map((role) => roleLabel(role, roleLabels))].filter(Boolean)
   const activities = val(volunteer.duties) || `Attività connesse al ruolo di ${roles.join(', ') || 'volontario sportivo'}.`
   article(1, 'Premesse', 'Le premesse costituiscono parte integrante e sostanziale del presente accordo.')
   article(2, 'Oggetto dell’attività volontaria', `Il Volontario presta la propria opera personalmente, spontaneamente e gratuitamente nel ruolo di ${roles.join(', ')}. Attività assegnate: ${activities}`)

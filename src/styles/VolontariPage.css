@@ -57,3 +57,5 @@
   .vol-profile-actions{grid-template-columns:1fr}
   .vol-profile-actions__close{grid-column:auto}
 }
+
+.vol-role-hint{margin:9px 0 0;color:#697386;font-size:12px;line-height:1.55}
