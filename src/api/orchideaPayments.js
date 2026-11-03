@@ -8,6 +8,22 @@ import { resolveCoursePricing } from '../lib/coursePriceList'
 import { COURSE_MEMBERSHIP_FEE, fetchMembershipFeeRecord, fetchMembershipFeeRecords, resolveMembershipFeeState } from './membershipFees'
 import { fetchOrchideaCourseCatalog, fetchOrchideaStudents } from './orchideaEntities'
 
+// Lettura dello storico tramite endpoint protetto Nova: la tabella audit
+// non e' accessibile direttamente dal client o dagli account corsisti.
+export async function fetchStudentPaymentHistory(tesseramentoId) {
+  if (!tesseramentoId) return []
+  const { data: authData, error: authError } = await supabase.auth.getSession()
+  const token = authData?.session?.access_token
+  if (authError || !token) throw new Error('Accedi a Nova per consultare lo storico.')
+  const query = new URLSearchParams({ history: '1', studentId: String(tesseramentoId) })
+  const response = await fetch(`/api/orchidea-payments-read?${query.toString()}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data.error || 'Storico pagamenti non disponibile.')
+  return Array.isArray(data.history) ? data.history : []
+}
+
 export function euro(value) {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
 }
