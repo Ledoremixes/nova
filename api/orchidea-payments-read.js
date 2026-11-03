@@ -66,6 +66,59 @@ export default async function handler(req, res) {
     await requireNovaOperator(req)
     const orchidea = orchideaAdminClient()
 
+    // Lo storico e' consultabile solo da operatori Nova autenticati. I log
+    // completi rimangono nel database e non sono esposti alle sessioni allievi.
+    if (String(req.query?.history || '') === '1') {
+      const historyStudentId = String(req.query?.studentId || '').trim()
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(historyStudentId)) {
+        return json(res, 400, { error: 'Seleziona un allievo valido per lo storico.' })
+      }
+      const { data: changes, error: historyError } = await orchidea
+        .from('nova_payment_change_history')
+        .select('id,payment_id,periodo,event_type,changed_at,actor_email,actor_role,old_data,new_data')
+        .eq('tesseramento_id', historyStudentId)
+        .order('changed_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(150)
+      if (historyError) throw historyError
+
+      const paymentState = (row) => row ? ({
+        importo: row.importo,
+        stato: row.stato,
+        metodo: row.metodo,
+        note: row.note,
+        descrizione: row.descrizione,
+        periodo: row.periodo,
+        tipo: row.tipo,
+        billing_cycle: row.billing_cycle,
+        copertura_mesi: row.copertura_mesi,
+        periodo_inizio: row.periodo_inizio,
+        periodo_fine: row.periodo_fine,
+        nova_package_name: row.nova_package_name,
+        nova_package_type: row.nova_package_type,
+        nova_package_total: row.nova_package_total,
+        nova_package_duration_months: row.nova_package_duration_months,
+        nova_coverage_from: row.nova_coverage_from,
+        nova_coverage_to: row.nova_coverage_to,
+        nova_cash_amount: row.nova_cash_amount,
+        pacchetto_nome: row.pacchetto_nome,
+      }) : null
+      return json(res, 200, {
+        ok: true,
+        history: (changes || []).map((item) => ({
+          id: item.id,
+          payment_id: item.payment_id,
+          periodo: item.periodo,
+          event_type: item.event_type,
+          changed_at: item.changed_at,
+          actor_email: item.actor_email,
+          actor_role: item.actor_role,
+          before: paymentState(item.old_data),
+          after: paymentState(item.new_data),
+        })),
+      })
+    }
+
     const month = String(req.query?.month || '').slice(0, 7)
     const studentId = String(req.query?.studentId || '').trim()
     const monthStart = /^\d{4}-\d{2}$/.test(month) ? `${month}-01` : ''
