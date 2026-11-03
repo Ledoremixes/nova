@@ -10,6 +10,8 @@ import {
   CreditCard,
   Euro,
   Eye,
+  FileDown,
+  History,
   PackageCheck,
   RotateCcw,
   Search,
@@ -22,7 +24,8 @@ import {
 } from 'lucide-react'
 import '../styles/PagamentiPage.css'
 import { fetchOrchideaCourseCatalog } from '../api/orchideaEntities'
-import { euro, fetchAllieviPaymentsMonth, setAllievoMonthlyPayment, setAllievoPackagePayment } from '../api/orchideaPayments'
+import { euro, fetchAllieviPaymentsMonth, fetchStudentPaymentHistory, setAllievoMonthlyPayment, setAllievoPackagePayment } from '../api/orchideaPayments'
+import { exportUnpaidStudentsPdf, getUnpaidStudents } from '../lib/unpaidStudentsPdf'
 import { fetchPackagesCatalog } from '../api/packagesCatalog'
 import { packagesForCourseSelection, resolveCoursePricing } from '../lib/coursePriceList'
 import { COURSE_MEMBERSHIP_FEE, setMembershipFeePaidAmount } from '../api/membershipFees'
@@ -74,6 +77,30 @@ function parseAmount(value) {
   return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : 0
 }
 
+function historicalPaymentLabel(snapshot) {
+  if (!snapshot) return 'Nessun record'
+  const kind = snapshot.nova_package_name || snapshot.pacchetto_nome
+    || snapshot.descrizione || (snapshot.tipo === 'quota_mensile' ? 'Mensile' : snapshot.tipo) || 'Quota corsi'
+  const months = Number(snapshot.nova_package_duration_months || snapshot.copertura_mesi || 0)
+  const span = snapshot.nova_coverage_from && snapshot.nova_coverage_to
+    ? ` · ${formatDate(snapshot.nova_coverage_from)} - ${formatDate(snapshot.nova_coverage_to)}`
+    : months > 1 ? ` · ${months} mesi` : ''
+  return `${kind}${span}`
+}
+
+function historicalPaymentFields(snapshot) {
+  if (!snapshot) return null
+  return [
+    ['Pacchetto', historicalPaymentLabel(snapshot)],
+    ['Quota del mese', euro(snapshot.importo)],
+    ['Totale pacchetto', snapshot.nova_package_total != null ? euro(snapshot.nova_package_total) : '—'],
+    ['Incasso', snapshot.nova_cash_amount != null ? euro(snapshot.nova_cash_amount) : '—'],
+    ['Stato', snapshot.stato || '—'],
+    ['Metodo', snapshot.metodo || '—'],
+    ['Note', snapshot.note || '—'],
+  ]
+}
+
 function paymentHeadline(row) {
   if (row.stato_pagamento === 'gettone') {
     const count = Number(row.token_payments_count || 0)
@@ -102,6 +129,7 @@ export default function PagamentiPage() {
   const [selectedPackageId, setSelectedPackageId] = useState('')
   const [coverageStartMonth, setCoverageStartMonth] = useState(currentMonth)
   const [feedback, setFeedback] = useState('')
+  const [historyStudent, setHistoryStudent] = useState(null)
 
   const coursesQuery = useQuery({
     queryKey: ['orchidea-course-catalog'],
@@ -116,6 +144,14 @@ export default function PagamentiPage() {
     staleTime: 60_000,
     gcTime: 15 * 60_000,
     placeholderData: (previousData) => previousData,
+  })
+
+  const historyQuery = useQuery({
+    queryKey: ['nova-student-payment-history', historyStudent?.tesseramento_id],
+    queryFn: () => fetchStudentPaymentHistory(historyStudent.tesseramento_id),
+    enabled: Boolean(historyStudent?.tesseramento_id),
+    staleTime: 0,
+    retry: 1,
   })
 
   const packagesQuery = useQuery({
@@ -173,6 +209,9 @@ export default function PagamentiPage() {
       return true
     })
   }, [baseRows, search, courseId, status])
+  // Il PDF usa la fotografia completa del mese, indipendentemente dai filtri
+  // della tabella: cosi' non si perdono allievi a causa di una ricerca attiva.
+  const unpaidForPdf = useMemo(() => getUnpaidStudents(baseRows), [baseRows])
   const courses = coursesQuery.data || []
   const packages = packagesQuery.data || []
   const paymentPackages = paymentEditor ? packagesForCourseSelection(paymentEditor.corsi || [], packages) : packages
@@ -208,6 +247,16 @@ export default function PagamentiPage() {
   const editorResidueAfter = paymentEditor ? Math.max(Number(paymentEditor.quota_mese || 0) - editorPaidAfter, 0) : 0
   const editorError = paymentEditor && !isGiftPackage && (editorAmount <= 0 || (!selectedPackage && editorAmount > Number(paymentEditor.residuo || 0) + 0.001))
   const anyPaymentPending = setPaymentMutation.isPending || packagePaymentMutation.isPending
+
+  function downloadUnpaidPdf() {
+    if (paymentsQuery.isFetching || paymentsQuery.error || !baseRows.length || !unpaidForPdf.length) return
+    try {
+      const count = exportUnpaidStudentsPdf({ month, rows: baseRows })
+      setFeedback(`PDF con ${count} allievi da controllare generato. Le caselle stampate non modificano i pagamenti.`)
+    } catch (error) {
+      setFeedback(`Impossibile generare il PDF: ${error.message || 'errore sconosciuto'}`)
+    }
+  }
 
   function changeMonth(delta) {
     setMonth(dayjs(`${month}-01`).add(delta, 'month').format('YYYY-MM'))
@@ -346,7 +395,18 @@ export default function PagamentiPage() {
           <h1>Quote corsisti di {monthLabel(month)}</h1>
           <p>Ogni corsista ha un solo saldo mensile autorevole. Aggiunte di corsi, riaperture e pagamenti parziali vengono ricalcolati senza sommare vecchi duplicati.</p>
         </div>
-        <span className="payments-students-hero-pill"><WalletCards size={17} /> Saldi controllati</span>
+        <div className="payments-hero-tools">
+          <span className="payments-students-hero-pill"><WalletCards size={17} /> Saldi controllati</span>
+          <button
+            type="button"
+            className="payments-primary-btn"
+            onClick={downloadUnpaidPdf}
+            disabled={paymentsQuery.isFetching || Boolean(paymentsQuery.error) || unpaidForPdf.length === 0}
+            title="Scarica la lista completa degli insoluti del mese, con caselle da spuntare"
+          >
+            <FileDown size={17} /> PDF non paganti ({unpaidForPdf.length})
+          </button>
+        </div>
       </div>
 
       <div className="payments-summary-grid payments-student-summary-grid">
@@ -543,6 +603,7 @@ export default function PagamentiPage() {
               )}
 
               <button type="button" className="payments-detail-btn" onClick={() => setSelectedRow(row)}><Eye size={16} /> Dettagli</button>
+              <button type="button" className="payments-detail-btn" onClick={() => setHistoryStudent(row)}><History size={16} /> Storico</button>
             </div>
           </article>
         ))}
@@ -632,6 +693,59 @@ export default function PagamentiPage() {
         </div>
       ) : null}
 
+      {historyStudent ? (
+        <div className="payments-modal-overlay" onClick={() => setHistoryStudent(null)}>
+          <div className="payments-modal payments-history-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="payments-modal-header">
+              <div>
+                <span className="payments-modal-eyebrow">Registro delle modifiche</span>
+                <h2>{historyStudent.nomeCompleto}</h2>
+                <p>Creazioni, modifiche, riaperture e annullamenti · tutti i mesi</p>
+              </div>
+              <button type="button" className="payments-close-btn" onClick={() => setHistoryStudent(null)}><X size={18} /></button>
+            </div>
+            <p className="payments-history-help">Lo storico viene registrato automaticamente dal database. I valori precedenti non vengono sostituiti e non modificano il saldo o i compensi degli insegnanti. Sono disponibili le operazioni successive all'attivazione del registro.</p>
+            {historyQuery.isLoading ? <div className="payments-empty-state">Caricamento storico…</div> : null}
+            {historyQuery.error ? <div className="form-error">{historyQuery.error.message}</div> : null}
+            {historyQuery.isSuccess && !historyQuery.data.length ? <div className="payments-empty-state">Nessuna modifica registrata da quando è stato attivato lo storico.</div> : null}
+            <div className="payments-history-list">
+              {(historyQuery.data || []).map((entry) => (
+                <article key={entry.id} className="payments-history-entry">
+                  <div className="payments-history-entry-head">
+                    <div>
+                      <strong>{entry.event_type === 'INSERT' ? 'Pagamento creato' : entry.event_type === 'DELETE' ? 'Pagamento eliminato' : 'Pagamento modificato'}</strong>
+                      <small>{entry.periodo || 'Periodo non indicato'} · {dayjs(entry.changed_at).format('DD/MM/YYYY HH:mm')}</small>
+                    </div>
+                    <span>{entry.actor_email || (entry.actor_role === 'service_role' ? 'Sistema' : 'Operatore non identificato')}</span>
+                  </div>
+                  <div className="payments-history-compare">
+                    {[
+                      { name: 'Prima', snapshot: entry.before },
+                      { name: 'Dopo', snapshot: entry.after },
+                    ].map(({ name, snapshot }) => (
+                      <div className="payments-history-state" key={name}>
+                        <h4>{name}</h4>
+                        {snapshot
+                          ? historicalPaymentFields(snapshot).map(([label, value]) => (
+                            <div className="payments-history-field" key={label}>
+                              <span>{label}</span><strong>{value}</strong>
+                            </div>
+                          ))
+                          : <p>Nessun pagamento</p>}
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+            <div className="payments-form-actions">
+              <button type="button" className="payments-secondary-btn" onClick={() => historyQuery.refetch()} disabled={historyQuery.isFetching}><RotateCcw size={15} /> Aggiorna</button>
+              <button type="button" className="payments-secondary-btn" onClick={() => setHistoryStudent(null)}>Chiudi</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {selectedRow ? (
         <div className="payments-modal-overlay" onClick={() => setSelectedRow(null)}>
           <div className="payments-modal payments-student-detail-modal" onClick={(event) => event.stopPropagation()}>
@@ -680,6 +794,7 @@ export default function PagamentiPage() {
             </div>
 
             <div className="payments-student-actions">
+              <button type="button" className="payments-detail-btn" onClick={() => { setHistoryStudent(selectedRow); setSelectedRow(null) }}><History size={16} /> Storico modifiche</button>
               {selectedRow.stato_pagamento !== 'pagato' && selectedRow.stato_pagamento !== 'omaggio' && selectedRow.stato_pagamento !== 'sospeso' ? <button type="button" className="payments-primary-btn" onClick={() => { setSelectedRow(null); openPaymentEditor(selectedRow) }}><CreditCard size={17} /> {selectedRow.stato_pagamento === 'gettone' ? 'Registra altro gettone' : 'Registra incasso'}</button> : null}
               {selectedRow.stato_pagamento !== 'da_pagare' && selectedRow.stato_pagamento !== 'gettone' ? <button type="button" className="payments-secondary-btn" onClick={() => markDue(selectedRow)}><RotateCcw size={16} /> Riapri pagamento</button> : null}
               <button type="button" className="payments-secondary-btn" onClick={() => setSelectedRow(null)}>Chiudi</button>
