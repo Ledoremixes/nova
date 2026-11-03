@@ -2127,3 +2127,62 @@
   padding-top: 8px;
   border-top: 1px dashed rgba(100, 116, 139, .24);
 }
+
+
+/* Registro pagamenti e stampa insoluti - novembre 2026 */
+.payments-hero-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+}
+.payments-hero-tools .payments-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.payments-hero-tools .payments-primary-btn:disabled { opacity: .52; cursor: not-allowed; }
+.payments-history-modal { width: min(920px, calc(100vw - 26px)); max-height: min(90vh, 850px); overflow-y: auto; }
+.payments-history-help { font-size: 12px; line-height: 1.55; color: #64748b; margin: 4px 0 18px; }
+.payments-history-list { display: grid; gap: 14px; }
+.payments-history-entry { border-radius: 15px; border: 1px solid #e2e8f0; overflow: hidden; background: #fff; }
+.payments-history-entry-head {
+  padding: 12px 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #f8fafc;
+}
+.payments-history-entry-head > div { display: grid; gap: 3px; }
+.payments-history-entry-head strong { font-size: 13px; color: #17253e; }
+.payments-history-entry-head small,
+.payments-history-entry-head > span { font-size: 11px; color: #64748b; overflow-wrap: anywhere; }
+.payments-history-compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; }
+.payments-history-state { min-width: 0; padding: 13px 15px; }
+.payments-history-state:first-child { border-right: 1px solid #e2e8f0; background: #fcfcfd; }
+.payments-history-state h4 { font-size: 12px; margin: 0 0 10px; color: #334155; }
+.payments-history-state p { font-size: 12px; color: #94a3b8; }
+.payments-history-field {
+  display: grid;
+  grid-template-columns: minmax(94px, .45fr) minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
+  padding: 6px 0;
+  border-bottom: 1px solid #edf2f7;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.payments-history-field:last-child { border-bottom: 0; }
+.payments-history-field > span { color: #64748b; }
+.payments-history-field > strong { color: #1e293b; overflow-wrap: anywhere; font-weight: 600; }
+@media (max-width: 640px) {
+  .payments-hero-tools { width: 100%; justify-content: flex-start; }
+  .payments-hero-tools .payments-primary-btn { width: 100%; justify-content: center; }
+  .payments-history-modal { max-height: 94vh; }
+  .payments-history-entry-head { align-items: flex-start; flex-direction: column; }
+  .payments-history-compare { grid-template-columns: 1fr; }
+  .payments-history-state:first-child { border-right: 0; border-bottom: 1px solid #e2e8f0; }
+}
