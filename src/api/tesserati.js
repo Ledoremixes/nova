@@ -470,48 +470,52 @@ export async function fetchTesseratoDetails(id) {
   }
 }
 
-export async function updateTesserato(id, payload) {
-  try {
-    const { data, error } = await orchideaSupabase
-      .from('tesseramenti')
-      .update(cleanStudentPayload(payload))
-      .eq('id', id)
-      .select(TESSERAMENTI_SELECT)
-      .single()
+async function updateOrchideaStudentViaServer(id, payload, expectedEmail) {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  if (sessionError) throw sessionError
+  const token = sessionData?.session?.access_token
+  if (!token) throw new Error('Sessione Nova scaduta. Esegui nuovamente l’accesso prima di modificare il tesserato.')
 
-    if (error) throw error
-    invalidateTesseratiCache()
-    return { ...data, _sourceTable: 'tesseramenti', _sourceLabel: 'Orchidea Allievi' }
-  } catch (error) {
-    if (isOrchideaAuthRequired(error)) {
-      throw error
-    }
-
-    if (hasDedicatedOrchideaConfig && isPermissionError(error)) {
-      try {
-        const updated = await updateOrchideaTesseramentoViaBridge(id, payload)
-        invalidateTesseratiCache()
-        return updated
-      } catch (bridgeError) {
-        throw new Error(bridgeError.message || 'Non hai i permessi per modificare i tesserati sul database Orchidea Allievi.')
-      }
-    }
-
-    if (!isMissingTableError(error) && !isMissingColumnError(error) && !isPermissionError(error)) {
-      throw new Error(error.message || 'Errore salvataggio scheda allievo')
-    }
-
-    const { data, error: legacyError } = await supabase
-      .from('tesserati')
-      .update(cleanLegacyPayload(payload))
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (legacyError) throw new Error(legacyError.message || 'Errore modifica tesserato Nova')
-    invalidateTesseratiCache()
-    return { ...normalizeLegacyTesserato(data), _sourceTable: 'tesserati', _sourceLabel: 'Nova legacy' }
+  const response = await fetch('/api/orchidea-student-update', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + token,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      studentId: id,
+      payload: cleanStudentPayload(payload),
+      ...(expectedEmail !== undefined ? { expectedEmail } : {}),
+    }),
+  })
+  const result = await response.json().catch(() => ({}))
+  if (!response.ok || !result.ok || !result.student) {
+    throw new Error(result.error || 'Impossibile salvare la scheda e sincronizzare l’email di accesso (' + response.status + ').')
   }
+  return { ...result.student, _sourceTable: 'tesseramenti', _sourceLabel: 'Orchidea Allievi' }
+}
+
+export async function updateTesserato(id, payload, { expectedEmail, sourceTable } = {}) {
+  // Le modifiche a Orchidea passano sempre dalla funzione server autenticata:
+  // quando cambia la mail aggiorniamo anche Supabase Auth, non solo tesseramenti.
+  if (sourceTable !== 'tesserati') {
+    const updated = await updateOrchideaStudentViaServer(id, payload, expectedEmail)
+    invalidateTesseratiCache()
+    return updated
+  }
+
+  // Compatibilita' esclusiva per le vecchie schede locali Nova.
+  const { data, error } = await supabase
+    .from('tesserati')
+    .update(cleanLegacyPayload(payload))
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message || 'Errore modifica tesserato Nova legacy')
+  invalidateTesseratiCache()
+  return { ...normalizeLegacyTesserato(data), _sourceTable: 'tesserati', _sourceLabel: 'Nova legacy' }
 }
 
 export async function toggleCorsista(student) {
