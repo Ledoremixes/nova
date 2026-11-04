@@ -1000,3 +1000,119 @@ button.tesserati-password-button:disabled {
 }
 
 .tesserati-header-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* 2026-11-04 - intestazione scheda tesserato compatta su smartphone.
+   La barra sticky non deve occupare mezzo schermo e nascondere il modulo. */
+@media (max-width: 760px) {
+  .tesserati-detail-modal {
+    max-height: min(96dvh, 960px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .tesserati-detail-modal .student-profile-hero {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 9px;
+    padding: 10px 12px;
+    min-height: 64px;
+    position: sticky;
+    top: 0;
+  }
+
+  .tesserati-detail-modal .student-profile-identity {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .tesserati-detail-modal .student-profile-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    font-size: 14px;
+    box-shadow: 0 4px 12px rgba(109, 74, 255, 0.17);
+  }
+
+  .tesserati-detail-modal .student-profile-identity > div {
+    min-width: 0;
+  }
+
+  .tesserati-detail-modal .student-profile-identity .dashboard-hero__eyebrow,
+  .tesserati-detail-modal .student-profile-identity p {
+    display: none;
+  }
+
+  .tesserati-detail-modal .student-profile-identity h3 {
+    font-size: 16px;
+    line-height: 1.2;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .tesserati-detail-modal .student-profile-chips {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-top: 5px;
+  }
+
+  .tesserati-detail-modal .student-profile-chips .nova-pill {
+    font-size: 10px;
+    line-height: 1.1;
+    padding: 4px 6px;
+    white-space: nowrap;
+  }
+
+  .tesserati-detail-modal .student-profile-close {
+    flex: 0 0 auto;
+    align-self: center;
+    width: auto;
+    min-height: 36px;
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 11px;
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  /* Riduce anche lo spazio iniziale del modulo, senza alterare i campi. */
+  .tesserati-detail-modal .student-editor-card {
+    margin-top: 10px;
+  }
+}
+
+@media (max-width: 380px) {
+  .tesserati-detail-modal .student-profile-hero {
+    padding: 9px 10px;
+    gap: 6px;
+  }
+
+  .tesserati-detail-modal .student-profile-identity {
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .tesserati-detail-modal .student-profile-avatar {
+    width: 34px;
+    height: 34px;
+  }
+
+  .tesserati-detail-modal .student-profile-identity h3 {
+    font-size: 14px;
+  }
+
+  .tesserati-detail-modal .student-profile-chips .nova-pill {
+    font-size: 9px;
+    padding: 3px 5px;
+  }
+
+  .tesserati-detail-modal .student-profile-close {
+    padding: 7px 8px;
+  }
+}
