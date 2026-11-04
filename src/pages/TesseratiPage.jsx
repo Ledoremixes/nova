@@ -153,6 +153,7 @@ export default function TesseratiPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(100)
   const [selectedStudent, setSelectedStudent] = useState(null)
+  const [studentSaveMessage, setStudentSaveMessage] = useState('')
   const [studentForm, setStudentForm] = useState(emptyStudentForm)
   const [passwordForm, setPasswordForm] = useState({ password: '', password2: '' })
   const historicalFileInputRef = useRef(null)
@@ -221,8 +222,13 @@ export default function TesseratiPage() {
   }, [students])
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, payload }) => updateTesserato(id, payload),
+    mutationFn: ({ id, payload, expectedEmail, sourceTable }) => updateTesserato(id, payload, { expectedEmail, sourceTable }),
     onSuccess: (updated) => {
+      setStudentSaveMessage(updated._emailChanged
+        ? updated._emailLoginSynced
+          ? 'Email aggiornata anche nell’account di accesso Orchidea Allievi. La password rimane invariata.'
+          : 'Email anagrafica aggiornata. Nessun account di accesso precedente è stato trovato: verifica il primo accesso del tesserato.'
+        : 'Scheda tesserato salvata correttamente.')
       setSelectedStudent(updated)
       setStudentForm(buildStudentForm(updated))
       queryClient.invalidateQueries({ queryKey: ['tesseramenti-orchidea'] })
@@ -279,6 +285,8 @@ export default function TesseratiPage() {
   })
 
   function openStudentDetail(student) {
+    setStudentSaveMessage('')
+    updateMutation.reset()
     searchBeforeDetailRef.current = search
     setSelectedStudent(student)
     setStudentForm(buildStudentForm(student))
@@ -286,6 +294,7 @@ export default function TesseratiPage() {
   }
 
   function closeStudentDetail() {
+    setStudentSaveMessage('')
     setSearch(searchBeforeDetailRef.current)
     setSelectedStudent(null)
     setStudentForm(emptyStudentForm)
@@ -307,7 +316,13 @@ export default function TesseratiPage() {
         console.warn('Quota tessera corsista non inizializzata:', error)
       }
     }
-    updateMutation.mutate({ id: selectedStudent.id, payload: studentForm })
+    setStudentSaveMessage('')
+    updateMutation.mutate({
+      id: selectedStudent.id,
+      payload: studentForm,
+      expectedEmail: selectedStudent.email || '',
+      sourceTable: selectedStudent._sourceTable || 'tesseramenti',
+    })
   }
 
   function handlePasswordChange() {
@@ -670,6 +685,7 @@ export default function TesseratiPage() {
         {isLoading ? <p>Caricamento tesserati...</p> : null}
         {error ? <p className="form-error">Errore: {error.message}</p> : null}
         {updateMutation.error ? <p className="form-error">Errore salvataggio: {updateMutation.error.message}</p> : null}
+        {studentSaveMessage ? <p className="info-box compact-info" role="status">{studentSaveMessage}</p> : null}
         {generateNumberMutation.error ? <p className="form-error">Errore numero tessera: {generateNumberMutation.error.message}</p> : null}
         {generateMissingMutation.error ? <p className="form-error">Errore numeri mancanti: {generateMissingMutation.error.message}</p> : null}
         {toggleCorsistaMutation.error ? <p className="form-error">Errore ruolo corsista: {toggleCorsistaMutation.error.message}</p> : null}
@@ -821,6 +837,7 @@ export default function TesseratiPage() {
                 <input value={studentForm.cognome} onChange={(e) => handleChange('cognome', e.target.value)} disabled={!canEditStudent} required />
               </label>
               <label>Email
+                {canEditStudent ? <small style={{ display: 'block', margin: '4px 0', fontWeight: 400 }}>La modifica dell’email sincronizza anche l’accesso Orchidea Allievi (solo admin).</small> : null}
                 <input
                   type="email"
                   name="nova-tesserato-email"
