@@ -493,7 +493,7 @@ async function updateOrchideaStudentViaServer(id, payload, expectedEmail) {
   if (!response.ok || !result.ok || !result.student) {
     throw new Error(result.error || 'Impossibile salvare la scheda e sincronizzare l’email di accesso (' + response.status + ').')
   }
-  return { ...result.student, _sourceTable: 'tesseramenti', _sourceLabel: 'Orchidea Allievi' }
+  return { ...result.student, _sourceTable: 'tesseramenti', _sourceLabel: 'Orchidea Allievi', _emailChanged: Boolean(result.emailChanged), _emailLoginSynced: Boolean(result.emailLoginSynced), _loginAccountFound: Boolean(result.loginAccountFound) }
 }
 
 export async function updateTesserato(id, payload, { expectedEmail, sourceTable } = {}) {
@@ -520,7 +520,7 @@ export async function updateTesserato(id, payload, { expectedEmail, sourceTable 
 
 export async function toggleCorsista(student) {
   if (student?._sourceTable === 'tesserati') {
-    return updateTesserato(student.id, { ...student, is_corsista: !student.is_corsista })
+    return updateTesserato(student.id, { ...student, is_corsista: !student.is_corsista }, { sourceTable: 'tesserati' })
   }
 
   const { data, error } = await orchideaSupabase
