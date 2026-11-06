@@ -12,6 +12,36 @@ export async function fetchMedicalStudents() {
   return fetchOrchideaStudents({ onlyCorsisti: true })
 }
 
+export async function fetchMedicalActiveStudents(month) {
+  const { data: authData, error: authError } = await supabase.auth.getSession()
+  const token = authData?.session?.access_token
+  if (authError || !token) throw new Error('Accedi a Nova per consultare i corsisti attivi.')
+
+  const selectedMonth = String(month || '').slice(0, 7)
+  const [allStudents, response] = await Promise.all([
+    fetchOrchideaStudents({ onlyCorsisti: false }),
+    fetch('/api/orchidea-medical-enrollments?month=' + encodeURIComponent(selectedMonth), {
+      headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
+    }),
+  ])
+
+  const result = await response.json().catch(() => ({}))
+  if (!response.ok || !result.ok || !Array.isArray(result.students)) {
+    throw new Error(result.error || 'Impossibile verificare le iscrizioni attive ai corsi.')
+  }
+
+  const byId = new Map(allStudents.map((student) => [String(student.id), student]))
+  const unidentified = result.students.filter((entry) => !byId.has(String(entry.id)))
+  if (unidentified.length) {
+    throw new Error('Alcuni corsisti attivi non risultano nell’anagrafica. Ricarica la pagina prima di generare il PDF.')
+  }
+
+  return result.students.map((entry) => ({
+    ...byId.get(String(entry.id)),
+    corsi: Array.isArray(entry.courses) ? entry.courses : [],
+  }))
+}
+
 export async function fetchMedicalVisits() {
   const { data, error } = await supabase
     .from('medical_visits')
