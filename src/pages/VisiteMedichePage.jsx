@@ -197,7 +197,7 @@ export default function VisiteMedichePage() {
         {statusFilter === 'non_presente' ? (
           <p className="medical-visits-filter-hint">
             Corsisti con iscrizioni attive a {dayjs(currentMonth + '-01').format('MMMM YYYY')} e senza certificato allegato.
-            Le visite scadute sono consultabili con il filtro dedicato.
+            Le visite scadute sono consultabili con il filtro dedicato. Il PDF include sempre l’elenco completo, anche se stai usando una ricerca.
           </p>
         ) : null}
         {exportFeedback ? <p className="medical-visits-feedback" role="status">{exportFeedback}</p> : null}
