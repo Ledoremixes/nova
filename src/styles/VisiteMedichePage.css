@@ -1,0 +1,111 @@
+/* Visite mediche: controlli segreteria, filtro Non presente e PDF. */
+.medical-visits-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.medical-visits-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.medical-visits-hero-actions .topbar__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.medical-visits-hero-actions .topbar__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.medical-visits-toolbar {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.medical-visits-toolbar .searchWrapper {
+  flex: 1 1 300px;
+  min-width: min(300px, 100%);
+}
+.medical-visits-status-filter {
+  flex: 0 1 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 750;
+}
+.medical-visits-status-filter select {
+  appearance: auto;
+  min-height: 42px;
+  border-radius: 12px;
+  border: 1px solid #d7dce8;
+  padding: 8px 12px;
+  color: #1f2544;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+}
+.medical-visits-status-filter select:focus-visible {
+  outline: 3px solid rgba(109, 74, 255, .22);
+  outline-offset: 2px;
+}
+.medical-visits-filter-hint,
+.medical-visits-feedback {
+  margin: 8px 0 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #64748b;
+}
+.medical-visits-feedback {
+  padding: 10px 13px;
+  background: #f1f9f5;
+  border: 1px solid #c9ead7;
+  border-radius: 12px;
+  color: #146c43;
+}
+.medical-visits-table {
+  min-width: 740px;
+}
+.medical-visits-secondary,
+.medical-visits-courses {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.medical-visits-courses {
+  color: #6255a5;
+  max-width: 340px;
+}
+@media (max-width: 760px) {
+  .medical-visits-hero {
+    align-items: stretch;
+  }
+  .medical-visits-hero-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .medical-visits-hero-actions .topbar__button {
+    flex: 1 1 180px;
+    min-height: 42px;
+  }
+  .medical-visits-toolbar {
+    align-items: stretch;
+  }
+  .medical-visits-toolbar .searchWrapper,
+  .medical-visits-status-filter {
+    flex: 1 1 100%;
+    min-width: 0;
+    width: 100%;
+  }
+}
