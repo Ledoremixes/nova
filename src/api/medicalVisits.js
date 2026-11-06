@@ -43,14 +43,32 @@ export async function fetchMedicalActiveStudents(month) {
 }
 
 export async function fetchMedicalVisits() {
-  const { data, error } = await supabase
-    .from('medical_visits')
-    .select('*')
-    .order('expires_at', { ascending: true, nullsFirst: false })
+  // La query predefinita Supabase restituisce al massimo 1000 righe:
+  // paginiamo tutto l'archivio per non classificare erroneamente come
+  // 'non presenti' visite fuori dalla prima pagina.
+  const rows = []
+  const pageSize = 1000
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('medical_visits')
+      .select('*')
+      .order('id', { ascending: true })
+      .range(from, from + pageSize - 1)
+    if (error) throw new Error(error.message || 'Errore caricamento visite mediche')
+    const chunk = data || []
+    rows.push(...chunk)
+    if (chunk.length < pageSize) break
+  }
 
-  if (error) throw new Error(error.message || 'Errore caricamento visite mediche')
-  const rows = data || []
-  return Promise.all(rows.map(async (row) => ({ ...row, file_signed_url: await signedUrl(row.file_path) })))
+  const signed = await Promise.all(rows.map(async (row) => ({
+    ...row,
+    file_signed_url: await signedUrl(row.file_path),
+  })))
+  return signed.sort((a, b) => {
+    const dateA = a.expires_at || '9999-12-31'
+    const dateB = b.expires_at || '9999-12-31'
+    return String(dateA).localeCompare(String(dateB)) || String(a.id).localeCompare(String(b.id))
+  })
 }
 
 export async function createMedicalVisit({ student, payload, file }) {
