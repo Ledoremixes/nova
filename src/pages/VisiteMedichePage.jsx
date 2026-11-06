@@ -96,8 +96,10 @@ export default function VisiteMedichePage() {
 
   const visits = useMemo(() => visitsQuery.data || [], [visitsQuery.data])
   const missingStudents = useMemo(
-    () => getMissingMedicalStudents(activeStudents, visits),
-    [activeStudents, visits],
+    () => activeStudentsQuery.isSuccess && visitsQuery.isSuccess
+      ? getMissingMedicalStudents(activeStudents, visits)
+      : [],
+    [activeStudentsQuery.isSuccess, visitsQuery.isSuccess, activeStudents, visits],
   )
   const missingVisits = useMemo(() => missingStudents.map((student) => ({
     id: 'missing:' + student.id,
