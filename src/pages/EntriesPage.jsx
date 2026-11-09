@@ -593,6 +593,9 @@ export default function EntriesPage() {
     try {
       const buffer = await file.arrayBuffer()
       const workbook = XLSX.read(buffer, { type: 'array' })
+      if (classificationRulesQuery.isFetching) {
+        throw new Error('Le regole di classificazione si stanno caricando. Riprova dopo il caricamento.')
+      }
       if (classificationRulesQuery.error) {
         throw new Error('Regole di classificazione non disponibili. Riprova l’import per non perdere le assegnazioni automatiche.')
       }
@@ -1279,7 +1282,7 @@ export default function EntriesPage() {
                     <input type="radio" name="vat_mode" value="debit" checked={form.vat_mode === 'debit'} onChange={onChange} />
                     <div>
                       <strong>A debito</strong>
-                      <span>Vendite / IVA da versare</span>
+                      <span>Vendite / IVA lorda: in Contabilità si applica la detrazione forfetaria 398</span>
                     </div>
                   </label>
 
@@ -1287,7 +1290,7 @@ export default function EntriesPage() {
                     <input type="radio" name="vat_mode" value="credit" checked={form.vat_mode === 'credit'} onChange={onChange} />
                     <div>
                       <strong>A credito</strong>
-                      <span>Acquisti / IVA detraibile</span>
+                      <span>Acquisti / IVA documentale: nel regime 398 non si detrae nuovamente</span>
                     </div>
                   </label>
                 </div>
