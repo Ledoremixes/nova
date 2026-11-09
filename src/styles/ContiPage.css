@@ -706,3 +706,15 @@
     width: 100%;
   }
 }
+/* Regole di classificazione descrittiva - pannello Conti */
+.lookup-rules-help {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: #f6f4ff;
+  border: 1px solid #e2dcff;
+  color: #51468c;
+  font-size: 12px;
+  line-height: 1.55;
+}
