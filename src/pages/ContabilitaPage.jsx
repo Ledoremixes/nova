@@ -888,13 +888,13 @@ export default function ContabilitaPage() {
                                 </div>
 
                                 <div className="contabilita-table-wrap">
-                                    <table className="contabilita-table">
+                                    <table className="contabilita-table contabilita-table--rendiconto">
                                         <thead>
                                             <tr>
                                                 <th>Sezione</th>
                                                 <th>Entrate</th>
                                                 <th>Uscite</th>
-                                                <th>IVA da versare (stima)</th>
+                                                <th>Saldo</th>
                                                 <th>Movimenti</th>
                                             </tr>
                                         </thead>
@@ -1010,7 +1010,7 @@ export default function ContabilitaPage() {
                                 </div>
 
                                 <div className="contabilita-table-wrap">
-                                    <table className="contabilita-table">
+                                    <table className="contabilita-table contabilita-table--iva">
                                         <thead>
                                             <tr>
                                                 <th>Periodo</th>
@@ -1067,7 +1067,7 @@ export default function ContabilitaPage() {
                             />
                         ) : (
                             <div className="contabilita-table-wrap">
-                                <table className="contabilita-table">
+                                <table className="contabilita-table contabilita-table--recenti">
                                     <thead>
                                         <tr>
                                             <th>Data</th>
