@@ -1,0 +1,459 @@
+/* Prima nota: interfaccia mobile per movimenti contabili e regole descrittive */
+.entries-mobile-filter-toggle { display: none; }
+
+@media (max-width: 760px) {
+  .accounting-entries-page,
+  .accounting-entries-page > .page-card {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .accounting-entries-page .page-card {
+    padding: 13px;
+    border-radius: 17px;
+  }
+
+  .accounting-entries-page .section-head {
+    gap: 9px;
+    margin-bottom: 12px;
+  }
+
+  .accounting-entries-page .section-head h2 {
+    font-size: 19px;
+    line-height: 1.25;
+  }
+
+  .accounting-entries-page .section-head p {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .accounting-entries-page .section-head .topbar__button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .entries-mobile-filter-toggle {
+    display: flex;
+    width: 100%;
+    min-height: 42px;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 0 11px;
+    padding: 9px 12px;
+    border: 1px solid #ded8fb;
+    border-radius: 12px;
+    background: #f7f5ff;
+    color: #513aaf;
+    font-size: 12.5px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .entries-mobile-filter-toggle span {
+    font-size: 19px;
+    line-height: 1;
+  }
+
+  .accounting-entries-page .entries-filters-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  /* Cerca + date visibili subito; tutti gli altri filtri sono espandibili. */
+  .entries-filters-grid:not(.entries-filters-grid--expanded) > :nth-child(3),
+  .entries-filters-grid:not(.entries-filters-grid--expanded) > :nth-child(5),
+  .entries-filters-grid:not(.entries-filters-grid--expanded) > :nth-child(n+6):not(.entries-actions) {
+    display: none;
+  }
+
+  .accounting-entries-page .entries-filters-grid > .entries-field:first-child,
+  .accounting-entries-page .entries-filters-grid > .entries-actions {
+    grid-column: 1 / -1;
+  }
+
+  .accounting-entries-page .entries-filters-grid > .entries-field:nth-child(2),
+  .accounting-entries-page .entries-filters-grid > .entries-field:nth-child(4) {
+    grid-column: span 6;
+    min-width: 0;
+  }
+
+  .accounting-entries-page .entries-field {
+    min-width: 0;
+    gap: 5px;
+  }
+
+  .accounting-entries-page .entries-field label {
+    font-size: 12px;
+  }
+
+  .accounting-entries-page .entries-field input,
+  .accounting-entries-page .entries-field select {
+    min-width: 0;
+    width: 100%;
+    min-height: 44px;
+    padding: 9px;
+    box-sizing: border-box;
+    border-radius: 12px;
+    font-size: 16px;
+  }
+
+  .accounting-entries-page .entries-filters-grid .entries-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .accounting-entries-page .entries-actions > button {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 9px;
+    font-size: 12px;
+  }
+
+  .accounting-entries-page .entries-import-meta {
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+
+  .accounting-entries-page .entries-import-box {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .accounting-entries-page .entries-import-box__row {
+    min-width: 0;
+    padding: 9px;
+  }
+
+  .accounting-entries-page .entries-import-box__row input[type="file"] {
+    min-width: 0;
+    width: 100%;
+    font-size: 11px;
+  }
+
+  .accounting-entries-page .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .accounting-entries-page .stats-grid .stat-card {
+    min-width: 0;
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .accounting-entries-page .stats-grid .stat-card__title {
+    font-size: 11px;
+  }
+
+  .accounting-entries-page .stats-grid .stat-card__value {
+    font-size: clamp(17px, 4.8vw, 23px);
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .accounting-entries-page .entries-pagination-top,
+  .accounting-entries-page .entries-pagination-bottom {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    justify-content: stretch;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .accounting-entries-page .entries-pagination-bottom > button:first-child,
+  .accounting-entries-page .entries-pagination-bottom > button:last-child {
+    display: none;
+  }
+
+  .accounting-entries-page .entries-pagination-top .topbar__button,
+  .accounting-entries-page .entries-pagination-bottom .topbar__button {
+    min-width: 0;
+    min-height: 42px;
+    width: 100%;
+    padding: 8px 6px;
+    font-size: 12px;
+  }
+
+  .accounting-entries-page .entries-page-indicator {
+    white-space: nowrap;
+    padding: 10px 7px;
+    font-size: 11px;
+    text-align: center;
+  }
+
+  /* Ogni movimento della Prima nota diventa una scheda, non una riga di 10 colonne. */
+  .accounting-entries-page .entries-ledger-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+  }
+
+  .accounting-entries-page .entries-ledger-table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    border-spacing: 0;
+  }
+
+  .accounting-entries-page .entries-ledger-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .accounting-entries-page .entries-ledger-table tbody {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .accounting-entries-page .entries-ledger-table tbody tr {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid #e3e8f1;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 3px 10px rgba(23, 31, 57, .04);
+  }
+
+  .accounting-entries-page .entries-ledger-table tbody td {
+    display: grid;
+    grid-template-columns: minmax(0, 40%) minmax(0, 60%);
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    border-bottom: 1px solid #f0f2f7;
+    padding: 7px 11px;
+    font-size: 12px;
+    line-height: 1.45;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  .accounting-entries-page .entries-ledger-table tbody td::before {
+    font-size: 11px;
+    font-weight: 750;
+    color: #778398;
+    text-align: left;
+  }
+
+  .accounting-entries-page .entries-ledger-table tbody td:first-child {
+    display: block;
+    padding: 10px 11px;
+    color: #5140b0;
+    background: #f7f5ff;
+    font-weight: 800;
+    font-size: 12px;
+    text-align: left;
+  }
+
+  .accounting-entries-page .entries-ledger-table tbody td:first-child::before {
+    content: 'Data  ·  ';
+    display: inline;
+  }
+
+  .accounting-entries-page .entries-ledger-table tbody td:nth-child(2) {
+    display: block;
+    font-weight: 800;
+    font-size: 13.5px;
+    text-align: left;
+  }
+
+  .accounting-entries-page .entries-ledger-table tbody td:nth-child(2)::before {
+    content: none;
+  }
+
+  .accounting-entries-page .entries-ledger-table tbody td:nth-child(3)::before { content: 'Entrata'; }
+  .accounting-entries-page .entries-ledger-table tbody td:nth-child(4)::before { content: 'Uscita'; }
+  .accounting-entries-page .entries-ledger-table tbody td:nth-child(5)::before { content: 'Conto'; }
+  .accounting-entries-page .entries-ledger-table tbody td:nth-child(6)::before { content: 'Metodo'; }
+  .accounting-entries-page .entries-ledger-table tbody td:nth-child(7)::before { content: 'Centro'; }
+  .accounting-entries-page .entries-ledger-table tbody td:nth-child(8)::before { content: 'Natura'; }
+  .accounting-entries-page .entries-ledger-table tbody td:nth-child(9)::before { content: 'IVA'; }
+
+  .accounting-entries-page .entries-ledger-table tbody td:last-child {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 0;
+  }
+
+  .accounting-entries-page .entries-ledger-table tbody td:last-child::before { content: 'Azioni'; }
+
+  .accounting-entries-page .entries-ledger-table tbody td:last-child .rowActions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  .accounting-entries-page .entries-ledger-table .actionBtn {
+    min-height: 42px;
+    padding: 9px 11px;
+    font-size: 12px;
+  }
+
+  /* Modali compatti, campi a colonna e barra superiore piccola. */
+  .accounting-entries-page .modalOverlay {
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+    overscroll-behavior: contain;
+  }
+
+  .accounting-entries-page .modalCard {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
+    margin: auto 0;
+    padding: 12px;
+    border-radius: 18px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .accounting-entries-page .modalCard > .section-head {
+    top: -12px;
+    z-index: 15;
+    margin: -12px -12px 10px;
+    padding: 12px;
+    background: rgba(255, 255, 255, .98);
+  }
+
+  .accounting-entries-page .modalCard > .section-head h3 {
+    font-size: 18px;
+    line-height: 1.25;
+  }
+
+  .accounting-entries-page .modalCard > .section-head p {
+    display: none;
+  }
+
+  .accounting-entries-page .entry-modal-form {
+    gap: 12px;
+  }
+
+  .accounting-entries-page .entry-modal-section {
+    min-width: 0;
+    padding: 11px;
+    border-radius: 14px;
+  }
+
+  .accounting-entries-page .entry-modal-section__header {
+    margin-bottom: 9px;
+  }
+
+  .accounting-entries-page .entry-modal-section__header h4 {
+    font-size: 15px;
+  }
+
+  .accounting-entries-page .entry-modal-section__header p {
+    font-size: 11.5px;
+    line-height: 1.45;
+  }
+
+  .accounting-entries-page .entry-modal-grid--3,
+  .accounting-entries-page .entry-modal-grid--2,
+  .accounting-entries-page .entry-modal-grid--1 {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .accounting-entries-page .entry-modal-field {
+    min-width: 0;
+  }
+
+  .accounting-entries-page .entry-modal-field label {
+    font-size: 12px;
+  }
+
+  .accounting-entries-page .entry-modal-field input,
+  .accounting-entries-page .entry-modal-field select {
+    box-sizing: border-box;
+    min-width: 0;
+    width: 100%;
+    min-height: 44px;
+    padding: 9px 11px;
+    font-size: 16px;
+    border-radius: 11px;
+  }
+
+  .accounting-entries-page .entry-vat-cards {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .accounting-entries-page .entry-vat-card {
+    min-width: 0;
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .accounting-entries-page .entry-vat-card strong {
+    font-size: 13px;
+  }
+
+  .accounting-entries-page .entry-vat-card span {
+    font-size: 11px;
+  }
+
+  .accounting-entries-page .entry-modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .accounting-entries-page .entry-modal-actions__left,
+  .accounting-entries-page .entry-modal-actions__right {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .accounting-entries-page .entry-modal-actions button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .accounting-entries-page .entry-description-rule-hint {
+    margin: 0 0 10px;
+    padding: 11px;
+    border-radius: 12px;
+    gap: 8px;
+  }
+
+  /* L'anteprima import mantiene lo scorrimento, senza estendere il modale. */
+  .accounting-entries-page .modalCard .tableWrap:not(.entries-ledger-wrap) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 365px) {
+  .accounting-entries-page .entries-filters-grid > .entries-field:nth-child(2),
+  .accounting-entries-page .entries-filters-grid > .entries-field:nth-child(4) {
+    grid-column: 1 / -1;
+  }
+  .accounting-entries-page .stats-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .accounting-entries-page .entries-ledger-table tbody td {
+    grid-template-columns: minmax(0, 42%) minmax(0, 58%);
+  }
+}
