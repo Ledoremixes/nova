@@ -565,6 +565,10 @@ function vatDebitFromRow(row) {
   return safeNumber(row?.commercial_vat_amount ?? row?.vat_amount)
 }
 
+function vatDeductionFromRow(row) {
+  return safeNumber(row?.commercial_vat_deduction)
+}
+
 function taxableFromRow(row) {
   const explicitTaxable = row?.commercial_taxable_amount
 
@@ -594,6 +598,7 @@ function makeEmptyExportAggregate({ key, label }) {
 function addRowToExportAggregate(target, row) {
   const gross = grossFromRow(row)
   const vatDebit = vatDebitFromRow(row)
+  const vatDeduction = vatDeductionFromRow(row)
   const taxable = taxableFromRow(row)
   const typeKey = typeKeyFromRow(row)
   const typeLabel = typeLabelFromRow(row)
@@ -601,6 +606,7 @@ function addRowToExportAggregate(target, row) {
   target.grossCommercialIncome += gross
   target.taxableCommercialIncome += taxable
   target.vatDebit += vatDebit
+  target.vatCredit += vatDeduction
   target.balance = target.vatDebit - target.vatCredit
   target.commercialRowsCount += 1
   target.rows.push(row)
@@ -617,6 +623,7 @@ function addRowToExportAggregate(target, row) {
   typeTarget.grossCommercialIncome += gross
   typeTarget.taxableCommercialIncome += taxable
   typeTarget.vatDebit += vatDebit
+  typeTarget.vatCredit += vatDeduction
   typeTarget.balance = typeTarget.vatDebit - typeTarget.vatCredit
   typeTarget.commercialRowsCount += 1
   typeTarget.rows.push(row)
@@ -705,7 +712,7 @@ function normalizeExportPeriods({ iva, scadenziario }) {
       grossCommercialIncome: rows.reduce((acc, row) => acc + grossFromRow(row), 0),
       taxableCommercialIncome: rows.reduce((acc, row) => acc + taxableFromRow(row), 0),
       vatDebit: rows.reduce((acc, row) => acc + vatDebitFromRow(row), 0),
-      vatCredit: safeNumber(iva?.vatCredit),
+      vatCredit: rows.reduce((acc, row) => acc + vatDeductionFromRow(row), 0),
       balance: safeNumber(iva?.balance),
       commercialRowsCount: rows.length,
     },
@@ -803,14 +810,14 @@ function addSummaryCards(doc, { totals, startY }) {
       text: [22, 101, 52],
     },
     {
-      label: 'IVA a debito',
+      label: 'IVA lorda commerciale',
       value: euro(totals.vatDebit),
       fill: [255, 241, 242],
       border: [244, 63, 94],
       text: [155, 23, 38],
     },
     {
-      label: 'Saldo IVA',
+      label: 'IVA stimata da versare',
       value: euro(totals.balance),
       fill: [245, 243, 255],
       border: [139, 92, 246],
@@ -959,8 +966,8 @@ export function exportIvaPdf({
       'Entrate commerciali',
       'Imponibile stimato',
       'IVA debito',
-      'IVA credito',
-      'Saldo IVA',
+      'Detrazione 398',
+      'IVA stimata da versare',
       'Mov.',
     ]],
     body:
@@ -1158,9 +1165,9 @@ export function exportIvaExcel({ periodLabel, iva, scadenziario }) {
       ['Periodo', periodLabel || 'Periodo selezionato'],
       ['Entrate commerciali', Number(totals.grossCommercialIncome || 0)],
       ['Imponibile stimato', Number(totals.taxableCommercialIncome || 0)],
-      ['IVA a debito', Number(totals.vatDebit || 0)],
-      ['IVA a credito', Number(totals.vatCredit || 0)],
-      ['Saldo IVA', Number(totals.balance || 0)],
+      ['IVA lorda commerciale', Number(totals.vatDebit || 0)],
+      ['Detrazione forfetaria 398', Number(totals.vatCredit || 0)],
+      ['IVA stimata da versare', Number(totals.balance || 0)],
       ['Movimenti commerciali', Number(totals.commercialRowsCount || 0)],
     ]),
     'Sintesi IVA'
@@ -1176,7 +1183,7 @@ export function exportIvaExcel({ periodLabel, iva, scadenziario }) {
         EntrateCommerciali: Number(month.grossCommercialIncome || 0),
         ImponibileStimato: Number(month.taxableCommercialIncome || 0),
         IvaDebito: Number(month.vatDebit || 0),
-        IvaCredito: Number(month.vatCredit || 0),
+        Detrazione398: Number(month.vatCredit || 0),
         SaldoIva: Number(month.balance || 0),
         Movimenti: Number(month.commercialRowsCount || 0),
       })
