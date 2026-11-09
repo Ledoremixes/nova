@@ -274,6 +274,15 @@
     content: none;
   }
 
+  .accounting-entries-page .entries-ledger-table tbody td[colspan] {
+    display: block;
+    text-align: center;
+    padding: 18px 12px;
+  }
+  .accounting-entries-page .entries-ledger-table tbody td[colspan]::before {
+    content: none;
+  }
+
   .accounting-entries-page .entries-ledger-table tbody td:nth-child(3)::before { content: 'Entrata'; }
   .accounting-entries-page .entries-ledger-table tbody td:nth-child(4)::before { content: 'Uscita'; }
   .accounting-entries-page .entries-ledger-table tbody td:nth-child(5)::before { content: 'Conto'; }
