@@ -71,6 +71,7 @@ const LOOKUP_SECTIONS = [
     description: 'Classificazione dei conti per rendiconto gestionale, PDF ed export.',
     lists: [
       { listKey: 'conti_rendiconto', label: 'Conti rendiconto' },
+      { listKey: 'regole_descrizione', label: 'Regole per descrizione (automatiche)' },
     ],
   },
 ]
@@ -121,6 +122,10 @@ function isVolunteerRoles(sectionKey, listKey) {
 
 function isAccountingSection(sectionKey) {
   return sectionKey === 'contabilita'
+}
+
+function isDescriptionRule(sectionKey, listKey) {
+  return sectionKey === 'contabilita' && listKey === 'regole_descrizione'
 }
 
 export default function ContiPage() {
@@ -189,6 +194,7 @@ export default function ContiPage() {
   })
 
   const allItems = useMemo(() => lookupsQuery.data ?? [], [lookupsQuery.data])
+  const accountOptions = useMemo(() => allItems.filter((item) => item.section_key === 'contabilita' && item.list_key === 'conti_rendiconto' && item.is_active && item.value), [allItems])
 
   const filteredItems = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -291,6 +297,21 @@ export default function ContiPage() {
       return
     }
 
+    if (isDescriptionRule(form.section_key, form.list_key)) {
+      if (String(form.value || '').trim().length < 3) {
+        alert('Inserisci almeno 3 caratteri nel testo da cercare nella descrizione.')
+        return
+      }
+      if (!['istituzionale', 'commerciale'].includes(form.report_area)) {
+        alert('Seleziona la natura istituzionale oppure commerciale.')
+        return
+      }
+      if (!accountOptions.some((item) => item.value === form.report_row_code)) {
+        alert('Seleziona un conto esistente e attivo. Prima crealo nella sezione Conti rendiconto.')
+        return
+      }
+    }
+
     const payload = {
       section_key: form.section_key,
       list_key: form.list_key,
@@ -391,7 +412,11 @@ export default function ContiPage() {
             <div className="lookup-block-header">
               <div>
                 <h2>{list.label}</h2>
-                <p>{isVolunteerRoles(selectedSection, list.listKey) ? 'Crea, rinomina, riordina o disattiva i ruoli. Le assegnazioni già registrate vengono conservate.' : prettifyKey(list.listKey)}</p>
+                <p>{isDescriptionRule(selectedSection, list.listKey)
+                  ? 'Inserisci una parola o frase presente nella descrizione; scegli natura e conto. Priorità crescente: vince il numero più piccolo. Non modifica gli esercizi già registrati.'
+                  : isVolunteerRoles(selectedSection, list.listKey)
+                    ? 'Crea, rinomina, riordina o disattiva i ruoli. Le assegnazioni già registrate vengono conservate.'
+                    : prettifyKey(list.listKey)}</p>
               </div>
 
               <button
@@ -411,15 +436,14 @@ export default function ContiPage() {
                 <table className="lookup-table">
                   <thead>
                     <tr>
-                      <th>Etichetta</th>
-                      <th>Valore</th>
-                      <th>Ordine</th>
+                      <th>{isDescriptionRule(selectedSection, list.listKey) ? 'Nome regola' : 'Etichetta'}</th>
+                      <th>{isDescriptionRule(selectedSection, list.listKey) ? 'Testo nella descrizione' : 'Valore'}</th>
+                      <th>Priorità</th>
                       {isAccountingSection(selectedSection) ? (
                         <>
-                          <th>Area</th>
-                          <th>Bucket rendiconto</th>
-                          <th>Riga</th>
-                          <th>Descrizione riga</th>
+                          <th>{isDescriptionRule(selectedSection, list.listKey) ? 'Natura' : 'Area'}</th>
+                          <th>{isDescriptionRule(selectedSection, list.listKey) ? 'Conto predefinito' : 'Bucket rendiconto'}</th>
+                          {!isDescriptionRule(selectedSection, list.listKey) ? <><th>Riga</th><th>Descrizione riga</th></> : null}
                         </>
                       ) : null}
                       <th>Stato</th>
@@ -436,9 +460,8 @@ export default function ContiPage() {
                         {isAccountingSection(selectedSection) ? (
                           <>
                             <td>{item.report_area || '—'}</td>
-                            <td>{item.report_bucket || '—'}</td>
-                            <td>{item.report_row_code || '—'}</td>
-                            <td>{item.report_row_label || '—'}</td>
+                            <td>{isDescriptionRule(selectedSection, list.listKey) ? (accountOptions.find((account) => account.value === item.report_row_code)?.label || item.report_row_code || '—') : (item.report_bucket || '—')}</td>
+                            {!isDescriptionRule(selectedSection, list.listKey) ? <><td>{item.report_row_code || '—'}</td><td>{item.report_row_label || '—'}</td></> : null}
                           </>
                         ) : null}
 
@@ -489,9 +512,11 @@ export default function ContiPage() {
               <div>
                 <h2>{editingItem ? 'Modifica voce' : 'Nuova voce'}</h2>
                 <p>
-                  {isAccountingSection(form.section_key)
-                    ? 'Configura qui la classificazione contabile usata dal rendiconto.'
-                    : 'Compila i campi necessari per salvare la configurazione.'}
+                  {isDescriptionRule(form.section_key, form.list_key)
+                    ? 'Nova userà questa frase per proporre il conto e la natura agli incassi, alle uscite e agli import SumUp.'
+                    : isAccountingSection(form.section_key)
+                      ? 'Configura qui la classificazione contabile usata dal rendiconto.'
+                      : 'Compila i campi necessari per salvare la configurazione.'}
                 </p>
               </div>
 
@@ -523,7 +548,7 @@ export default function ContiPage() {
                 </label>
 
                 <label>
-                  <span>Etichetta</span>
+                  <span>{isDescriptionRule(form.section_key, form.list_key) ? 'Nome regola' : 'Etichetta'}</span>
                   <input
                     name="label"
                     value={form.label}
@@ -533,7 +558,7 @@ export default function ContiPage() {
                 </label>
 
                 <label>
-                  <span>Valore / codice</span>
+                  <span>{isDescriptionRule(form.section_key, form.list_key) ? 'Testo da cercare nella descrizione' : 'Valore / codice'}</span>
                   <input
                     name="value"
                     value={form.value}
@@ -545,7 +570,7 @@ export default function ContiPage() {
                 </label>
 
                 <label>
-                  <span>Ordine</span>
+                  <span>{isDescriptionRule(form.section_key, form.list_key) ? 'Priorità (numero minore prima)' : 'Ordine'}</span>
                   <input
                     name="sort_order"
                     type="number"
@@ -564,7 +589,28 @@ export default function ContiPage() {
                   <span>Voce attiva</span>
                 </label>
 
-                {isAccountingSection(form.section_key) ? (
+                {isDescriptionRule(form.section_key, form.list_key) ? (
+                  <>
+                    <label>
+                      <span>Natura predefinita</span>
+                      <select name="report_area" value={form.report_area} onChange={handleChange} required>
+                        <option value="">Seleziona...</option>
+                        <option value="istituzionale">Istituzionale</option>
+                        <option value="commerciale">Commerciale</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Conto predefinito</span>
+                      <select name="report_row_code" value={form.report_row_code} onChange={handleChange} required>
+                        <option value="">Seleziona conto...</option>
+                        {accountOptions.map((account) => (
+                          <option key={account.id} value={account.value}>{account.value} - {account.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <p className="lookup-rules-help">Vale sui nuovi movimenti e sugli import successivi. Il conto e la natura si possono sempre correggere manualmente in Prima nota.</p>
+                  </>
+                ) : isAccountingSection(form.section_key) ? (
                   <>
                     <label>
                       <span>Area rendiconto</span>
