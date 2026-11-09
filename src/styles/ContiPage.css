@@ -718,3 +718,306 @@
   font-size: 12px;
   line-height: 1.55;
 }
+
+/* Nova Conti · configurazioni e regole automatiche leggibili da smartphone */
+@media (max-width: 760px) {
+  .conti-page,
+  .conti-page .card-surface {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .conti-page {
+    gap: 12px;
+  }
+
+  .conti-hero,
+  .conti-toolbar {
+    padding: 13px;
+    border-radius: 16px;
+  }
+
+  .conti-hero h1 {
+    font-size: 24px;
+    line-height: 1.2;
+  }
+
+  .conti-hero .hero-subtitle {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .conti-section-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+  }
+
+  .conti-section-tabs .section-tab {
+    width: 100%;
+    min-width: 0;
+    min-height: 46px;
+    padding: 9px;
+    gap: 6px;
+    justify-content: flex-start;
+    font-size: 12px;
+    line-height: 1.3;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  .conti-section-tabs .section-tab svg {
+    flex: 0 0 auto;
+  }
+
+  .conti-toolbar .search-field,
+  .conti-toolbar .search-field input {
+    min-height: 44px;
+    height: 44px;
+  }
+
+  .lookup-block {
+    min-width: 0;
+    padding: 13px;
+    border-radius: 17px;
+  }
+
+  .lookup-block-header {
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .lookup-block-header h2 {
+    font-size: 17px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .lookup-block-header p {
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .lookup-block-header .primary-btn {
+    width: 100%;
+    min-height: 43px;
+    justify-content: center;
+  }
+
+  /* Niente più tabelle min-width 640px: una voce = una scheda verticale. */
+  .lookup-block .table-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+  }
+
+  .lookup-block .lookup-table {
+    display: block;
+    min-width: 0;
+    width: 100%;
+    border-spacing: 0;
+  }
+
+  .lookup-block .lookup-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .lookup-block .lookup-table tbody {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .lookup-block .lookup-table tbody tr {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid #e3e7f0;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 2px 9px rgba(17, 24, 39, .04);
+  }
+
+  .lookup-block .lookup-table tbody td {
+    display: grid;
+    grid-template-columns: minmax(0, 42%) minmax(0, 58%);
+    align-items: center;
+    min-width: 0;
+    gap: 6px;
+    padding: 8px 10px;
+    border-bottom: 1px solid #f0f2f7;
+    font-size: 12px;
+    line-height: 1.45;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  .lookup-block .lookup-table tbody td::before {
+    font-size: 11px;
+    font-weight: 700;
+    color: #768197;
+    text-align: left;
+  }
+
+  .lookup-block .lookup-table tbody td:first-child {
+    display: block;
+    padding: 11px 10px;
+    color: #17233c;
+    background: #f7f5ff;
+    font-size: 13px;
+    font-weight: 800;
+    text-align: left;
+  }
+
+  .lookup-block .lookup-table tbody td:first-child::before {
+    content: none;
+  }
+
+  .lookup-block .lookup-table tbody td:last-child {
+    border-bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .lookup-block .lookup-table tbody td:last-child::before {
+    content: 'Azioni';
+  }
+
+  .lookup-block .lookup-table tbody td:last-child .row-actions {
+    margin-left: auto;
+    display: flex;
+    justify-content: flex-end;
+    gap: 9px;
+  }
+
+  .lookup-block .lookup-table .row-actions .icon-btn {
+    min-width: 44px;
+    width: 44px;
+    min-height: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+  }
+
+  .lookup-table--regular tbody td:nth-child(2)::before,
+  .lookup-table--accounts tbody td:nth-child(2)::before { content: 'Codice'; }
+  .lookup-table--regular tbody td:nth-child(3)::before,
+  .lookup-table--accounts tbody td:nth-child(3)::before { content: 'Ordine'; }
+  .lookup-table--regular tbody td:nth-child(4)::before { content: 'Stato'; }
+  .lookup-table--accounts tbody td:nth-child(4)::before { content: 'Area'; }
+  .lookup-table--accounts tbody td:nth-child(5)::before { content: 'Bucket'; }
+  .lookup-table--accounts tbody td:nth-child(6)::before { content: 'Riga'; }
+  .lookup-table--accounts tbody td:nth-child(7)::before { content: 'Descrizione'; }
+  .lookup-table--accounts tbody td:nth-child(8)::before { content: 'Stato'; }
+
+  .lookup-table--rules tbody td:nth-child(2)::before { content: 'Testo cercato'; }
+  .lookup-table--rules tbody td:nth-child(3)::before { content: 'Priorità'; }
+  .lookup-table--rules tbody td:nth-child(4)::before { content: 'Natura'; }
+  .lookup-table--rules tbody td:nth-child(5)::before { content: 'Conto'; }
+  .lookup-table--rules tbody td:nth-child(6)::before { content: 'Stato'; }
+
+  .conti-modal-overlay {
+    padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .conti-modal-card {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
+    margin: auto 0;
+    border-radius: 18px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .conti-modal-card .modal-header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    gap: 10px;
+    padding: 12px 13px;
+    background: rgba(255, 255, 255, .98);
+    border-bottom: 1px solid #edf0f5;
+    backdrop-filter: blur(10px);
+  }
+
+  .conti-modal-card .modal-header h2 {
+    font-size: 18px;
+  }
+
+  .conti-modal-card .modal-header p {
+    display: none;
+  }
+
+  .conti-modal-card .modal-header .icon-btn {
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+  }
+
+  .conti-modal-card .lookup-form {
+    padding: 13px;
+  }
+
+  .conti-modal-card .lookup-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .conti-modal-card .lookup-form-grid label {
+    min-width: 0;
+  }
+
+  .conti-modal-card .lookup-form-grid label span {
+    font-size: 12.5px;
+  }
+
+  .conti-modal-card .lookup-form-grid input,
+  .conti-modal-card .lookup-form-grid select {
+    min-width: 0;
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px; /* evita lo zoom automatico sui browser mobili */
+  }
+
+  .conti-modal-card .modal-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    margin-top: 12px;
+    padding: 12px 0 max(8px, env(safe-area-inset-bottom));
+  }
+
+  .conti-modal-card .modal-actions > button {
+    width: 100%;
+    min-height: 46px;
+  }
+
+  .lookup-rules-help {
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+}
+
+@media (max-width: 345px) {
+  .conti-section-tabs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
