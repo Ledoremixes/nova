@@ -48,7 +48,8 @@ const NATURE_OPTIONS = [
 
 const CENTER_OPTIONS = ['Bar', 'Sheet0']
 const VAT_RATE_OPTIONS = ['0.00', '10.00', '22.00', '22.01']
-const PAGE_SIZE = 1000
+// Su smartphone poche schede per pagina evitano liste lunghissime e lente.
+const PAGE_SIZE = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 760px)').matches ? 50 : 1000
 
 const emptyForm = {
   date: today,
@@ -251,6 +252,7 @@ export default function EntriesPage() {
   const fileInputRef = useRef(null)
 
   const [searchDraft, setSearchDraft] = useState('')
+  const [mobileAdvancedFiltersOpen, setMobileAdvancedFiltersOpen] = useState(false)
   const [fromDateDraft, setFromDateDraft] = useState('')
   const [fromTimeDraft, setFromTimeDraft] = useState('')
   const [toDateDraft, setToDateDraft] = useState('')
@@ -463,6 +465,7 @@ export default function EntriesPage() {
   }
 
   function resetFilters() {
+    setMobileAdvancedFiltersOpen(false)
     setSearchDraft('')
     setFromDateDraft('')
     setFromTimeDraft('')
@@ -739,7 +742,7 @@ export default function EntriesPage() {
   }
 
   return (
-    <section className="page">
+    <section className="page accounting-entries-page">
       {saveAlert ? (
         <div
           style={{
@@ -785,7 +788,21 @@ export default function EntriesPage() {
           ) : null}
         </div>
 
-        <div className="entries-filters-grid entries-filters-grid--light">
+        <button
+          type="button"
+          className="entries-mobile-filter-toggle"
+          aria-expanded={mobileAdvancedFiltersOpen}
+          aria-controls="entries-accounting-filters"
+          onClick={() => setMobileAdvancedFiltersOpen((value) => !value)}
+        >
+          {mobileAdvancedFiltersOpen ? 'Nascondi filtri avanzati' : 'Mostra filtri avanzati'}
+          <span aria-hidden="true">{mobileAdvancedFiltersOpen ? '−' : '+'}</span>
+        </button>
+
+        <div
+          id="entries-accounting-filters"
+          className={`entries-filters-grid entries-filters-grid--light ${mobileAdvancedFiltersOpen ? 'entries-filters-grid--expanded' : ''}`}
+        >
           <div className="entries-field entries-field--full">
             <label>Ricerca</label>
             <input
@@ -1016,8 +1033,8 @@ export default function EntriesPage() {
         {entriesQuery.error ? <p>Errore: {entriesQuery.error.message}</p> : null}
 
         {!entriesQuery.isLoading && !entriesQuery.error ? (
-          <div className="tableWrap">
-            <table className="dataTable">
+          <div className="tableWrap entries-ledger-wrap">
+            <table className="dataTable entries-ledger-table">
               <thead>
                 <tr>
                   <th>Data</th>
