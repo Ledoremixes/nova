@@ -699,7 +699,7 @@ export default function EntriesPage() {
     }
 
     if (!editing) {
-      createMutation.mutate(applyDescriptionRule(payload, classificationRules))
+      createMutation.mutate(classificationManuallyChanged ? payload : applyDescriptionRule(payload, classificationRules))
       return
     }
 
