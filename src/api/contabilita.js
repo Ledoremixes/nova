@@ -696,7 +696,7 @@ export async function fetchRendicontoGestionale({
       fromDate,
       toDate,
       criteriaNote:
-        'Il rendiconto usa la classificazione configurata nei Conti. I trasferimenti tra cassa e banca sono esclusi da entrate e uscite ma aggiornano i saldi dei due conti.',
+        'Il rendiconto usa i conti configurati in Conti. L’IVA delle operazioni commerciali connesse è stimata con detrazione forfetaria L. 398/91; l’IVA sugli acquisti non viene sottratta una seconda volta. I saldi di Prima nota non costituiscono una riconciliazione bancaria.',
     },
   }
 }
@@ -791,6 +791,20 @@ function calculateCommercialTaxable(row) {
   const vat = calculateCommercialVat(row)
 
   return Math.max(amountIn - vat, 0)
+}
+
+// Regime speciale L. 398/1991, art. 74 comma 6 DPR 633/72:
+// detrazione forfetaria ordinaria del 50% sull'IVA delle operazioni
+// commerciali connesse; non si sottrae separatamente l'IVA degli acquisti.
+// Eccezione diritti radiotelevisivi: detrazione di 1/3, versamento 2/3.
+function commercialVatForfeitDeduction(row, grossVat) {
+  const description = normalizeText(row.description)
+  const isBroadcastRights = containsAny(description, [
+    'diritti radiotelevisivi', 'diritti radio tv', 'diritti radio-tv',
+    'diritti di ripresa televisiva', 'diritti di trasmissione radiofonica',
+    'cessione diritti televisivi', 'diritti tv',
+  ])
+  return grossVat * (isBroadcastRights ? 1 / 3 : 0.5)
 }
 
 function classifyCommercialIncomeType(row) {
@@ -889,6 +903,7 @@ function normalizeIvaReportRow(row) {
   const referenceDate = getIvaReferenceDate(row)
   const commercialType = classifyCommercialIncomeType(row)
   const vatAmount = calculateCommercialVat(row)
+  const deduction = commercialVatForfeitDeduction(row, vatAmount)
   const taxableAmount = calculateCommercialTaxable(row)
 
   return {
@@ -899,6 +914,9 @@ function normalizeIvaReportRow(row) {
     amount_out: normalizeNumber(row.amount_out),
     vat_amount: normalizeNumber(row.vat_amount),
     commercial_vat_amount: vatAmount,
+    commercial_vat_deduction: deduction,
+    commercial_vat_payable: vatAmount - deduction,
+    commercial_vat_missing: normalizeNumber(row.amount_in) > 0 && vatAmount === 0 && normalizeVatRate(row.vat_rate) === 0,
     commercial_taxable_amount: taxableAmount,
     commercial_type_key: commercialType.key,
     commercial_type_label: commercialType.label,
@@ -1059,10 +1077,12 @@ function ensureTypeAggregate(target, row) {
 
 function addCommercialRowToAggregate(target, row) {
   const vat = normalizeNumber(row.commercial_vat_amount)
+  const deduction = normalizeNumber(row.commercial_vat_deduction)
   const taxable = normalizeNumber(row.commercial_taxable_amount)
   const gross = normalizeNumber(row.amount_in)
 
   target.vatDebit += vat
+  target.vatCredit += deduction
   target.balance = target.vatDebit - target.vatCredit
   target.grossCommercialIncome += gross
   target.taxableCommercialIncome += taxable
@@ -1071,6 +1091,7 @@ function addCommercialRowToAggregate(target, row) {
 
   const typeTarget = ensureTypeAggregate(target, row)
   typeTarget.vatDebit += vat
+  typeTarget.vatCredit += deduction
   typeTarget.balance = typeTarget.vatDebit - typeTarget.vatCredit
   typeTarget.grossCommercialIncome += gross
   typeTarget.taxableCommercialIncome += taxable
@@ -1106,16 +1127,16 @@ function buildIvaSummaryFromRows(rows, { fromDate, toDate, accountClassification
     .map(normalizeIvaReportRow)
 
   const commercialRows = rowsInPeriod.filter((row) => isCommercialIncomeRow(row, accountClassifications))
-  const creditRows = rowsInPeriod.filter((row) => {
-    return normalizeText(row.vat_side) === 'credito' && normalizeNumber(row.vat_amount) > 0
-  })
+  // L'IVA sugli acquisti non e' un credito analitico in regime 398:
+  // puo' essere registrata per archivio, ma NON riduce il versamento.
+  const creditRows = []
 
   const vatDebit = commercialRows.reduce(
     (acc, row) => acc + normalizeNumber(row.commercial_vat_amount),
     0
   )
-  const vatCredit = creditRows.reduce(
-    (acc, row) => acc + normalizeNumber(row.vat_amount),
+  const vatCredit = commercialRows.reduce(
+    (acc, row) => acc + normalizeNumber(row.commercial_vat_deduction),
     0
   )
   const grossCommercialIncome = commercialRows.reduce(
@@ -1136,6 +1157,8 @@ function buildIvaSummaryFromRows(rows, { fromDate, toDate, accountClassification
     balance: vatDebit - vatCredit,
     grossCommercialIncome,
     taxableCommercialIncome,
+    missingVatRowsCount: commercialRows.filter((row) => row.commercial_vat_missing).length,
+    taxRegime: '398/1991',
   }
 }
 
