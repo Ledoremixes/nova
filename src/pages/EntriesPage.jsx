@@ -384,14 +384,14 @@ export default function EntriesPage() {
   })
 
   const importMutation = useMutation({
-    mutationFn: importSumupEntries,
+    mutationFn: (args) => importSumupEntries({ ...args, rules: classificationRules }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       queryClient.invalidateQueries({ queryKey: ['entries-totals'] })
       queryClient.invalidateQueries({ queryKey: ['last-sumup-import'] })
 
       alert(
-        `Import completato.\nNuove righe: ${result.imported_rows}\nDuplicate saltate: ${result.skipped_rows}`
+        `Import completato.\nNuove righe: ${result.imported_rows}\nDuplicate saltate: ${result.skipped_rows}\nConti assegnati automaticamente: ${result.classified_rows || 0}${result.classification_error ? '\nATTENZIONE: import riuscito, classificazione non completa: ' + result.classification_error + '. NON ripetere l’import.' : ''}`
       )
 
       setImportPreview([])
