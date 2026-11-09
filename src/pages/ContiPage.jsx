@@ -438,7 +438,7 @@ export default function ContiPage() {
               <div className="empty-state">Nessuna voce configurata.</div>
             ) : (
               <div className="table-wrap">
-                <table className="lookup-table">
+                <table className={`lookup-table ${isDescriptionRule(selectedSection, list.listKey) ? 'lookup-table--rules' : isAccountingSection(selectedSection) ? 'lookup-table--accounts' : 'lookup-table--regular'}`}>
                   <thead>
                     <tr>
                       <th>{isDescriptionRule(selectedSection, list.listKey) ? 'Nome regola' : 'Etichetta'}</th>
@@ -483,6 +483,7 @@ export default function ContiPage() {
                               className="icon-btn"
                               onClick={() => handleOpenEdit(item)}
                               title="Modifica"
+                              aria-label={`Modifica ${item.label}`}
                             >
                               <Pencil size={16} />
                             </button>
@@ -492,6 +493,7 @@ export default function ContiPage() {
                               className="icon-btn danger"
                               onClick={() => handleDelete(item)}
                               title="Elimina"
+                              aria-label={`Elimina ${item.label}`}
                             >
                               <Trash2 size={16} />
                             </button>
