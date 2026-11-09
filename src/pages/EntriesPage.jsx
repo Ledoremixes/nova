@@ -33,13 +33,15 @@ function accountingDateToIso(date) {
 
 const today = localDateString()
 
+// Le nature fiscali da usare nelle nuove registrazioni sono in cima.
+// Le etichette storiche restano selezionabili per compatibilità con l'archivio.
 const NATURE_OPTIONS = [
+  'istituzionale',
+  'commerciale',
   'Acquisti',
   'Bar',
-  'commerciale',
   'Compensi insegnanti',
   'Ingressi serate',
-  'istituzionale',
   'Servizi',
   'Tesseramenti',
 ]
