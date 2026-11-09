@@ -306,8 +306,13 @@ export default function ContiPage() {
         alert('Seleziona la natura istituzionale oppure commerciale.')
         return
       }
-      if (!accountOptions.some((item) => item.value === form.report_row_code)) {
+      const linkedAccount = accountOptions.find((item) => item.value === form.report_row_code)
+      if (!linkedAccount) {
         alert('Seleziona un conto esistente e attivo. Prima crealo nella sezione Conti rendiconto.')
+        return
+      }
+      if (linkedAccount.report_area && linkedAccount.report_area !== form.report_area) {
+        alert('La natura della regola deve coincidere con l’area configurata nel conto scelto. Usa un conto della stessa area.')
         return
       }
     }
