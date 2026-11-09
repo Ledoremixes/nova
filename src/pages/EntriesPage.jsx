@@ -17,6 +17,7 @@ import {
   fetchLastSumupImport,
 } from '../api/entries'
 import { fetchLookupList } from '../api/lookups'
+import { applyDescriptionRule, findDescriptionRule } from '../lib/entryAutoClassification'
 import { fetchFinancialYears } from '../api/financialYears'
 import { isDateInClosedFinancialYear } from '../lib/financialYear'
 
@@ -278,6 +279,7 @@ export default function EntriesPage() {
   const [lastImportedFile, setLastImportedFile] = useState('')
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(emptyForm)
+  const [classificationManuallyChanged, setClassificationManuallyChanged] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalSuccess, setModalSuccess] = useState(false)
   const [importPreview, setImportPreview] = useState([])
@@ -313,6 +315,12 @@ export default function EntriesPage() {
   const methodsQuery = useQuery({
     queryKey: ['lookup-metodi-pagamento'],
     queryFn: () => fetchLookupList('pagamenti', 'metodi_pagamento'),
+  })
+
+  const classificationRulesQuery = useQuery({
+    queryKey: ['lookup-regole-descrizione'],
+    queryFn: () => fetchLookupList('contabilita', 'regole_descrizione'),
+    staleTime: 60_000,
   })
 
   const lastImportQuery = useQuery({
@@ -416,6 +424,8 @@ export default function EntriesPage() {
   const displayedTotals = hasNatureFilter ? calculateEntriesTotals(entries) : totals
   const displayedTotal = hasNatureFilter ? entries.length : entriesData.total
   const accounts = accountsQuery.data || []
+  const classificationRules = classificationRulesQuery.data || []
+  const matchingDescriptionRule = findDescriptionRule(form.description, classificationRules)
   const methodOptions = (methodsQuery.data || [])
     .map((item) => item.label || item.value)
     .filter(Boolean)
@@ -482,19 +492,29 @@ export default function EntriesPage() {
 
   function onChange(e) {
     const { name, value } = e.target
+    if (name === 'account_code' || name === 'nature') setClassificationManuallyChanged(true)
 
     setForm((prev) => {
       if (name === 'vat_mode' && value === 'none') {
+        return { ...prev, vat_mode: 'none', vat_rate: '', vat_amount: '' }
+      }
+      if (name === 'description' && !editing && !classificationManuallyChanged) {
+        const rule = findDescriptionRule(value, classificationRules)
         return {
           ...prev,
-          vat_mode: 'none',
-          vat_rate: '',
-          vat_amount: '',
+          description: value,
+          account_code: rule ? rule.report_row_code : '',
+          nature: rule ? rule.report_area : '',
         }
       }
-
       return { ...prev, [name]: value }
     })
+  }
+
+  function applyMatchingDescriptionRule() {
+    if (!matchingDescriptionRule) return
+    setForm((current) => applyDescriptionRule(current, [matchingDescriptionRule], { overwrite: true }))
+    setClassificationManuallyChanged(false)
   }
 
   function clearAmounts() {
@@ -512,6 +532,7 @@ export default function EntriesPage() {
     setApplyScope('single')
     setModalSuccess(false)
     setForm(emptyForm)
+    setClassificationManuallyChanged(false)
     setIsModalOpen(true)
   }
 
@@ -521,6 +542,7 @@ export default function EntriesPage() {
       return
     }
     setEditing(row)
+    setClassificationManuallyChanged(true)
     setApplyScope('single')
     setModalSuccess(false)
     setForm({
@@ -571,7 +593,11 @@ export default function EntriesPage() {
     try {
       const buffer = await file.arrayBuffer()
       const workbook = XLSX.read(buffer, { type: 'array' })
+      if (classificationRulesQuery.error) {
+        throw new Error('Regole di classificazione non disponibili. Riprova l’import per non perdere le assegnazioni automatiche.')
+      }
       const parsedEntries = buildEntriesFromWorkbook(workbook, user.id)
+        .map((entry) => applyDescriptionRule(entry, classificationRules))
 
       if (parsedEntries.length === 0) {
         alert('Nessun movimento valido trovato nel file.')
@@ -669,7 +695,7 @@ export default function EntriesPage() {
     }
 
     if (!editing) {
-      createMutation.mutate(payload)
+      createMutation.mutate(applyDescriptionRule(payload, classificationRules))
       return
     }
 
@@ -1180,8 +1206,20 @@ export default function EntriesPage() {
               <div className="entry-modal-section">
                 <div className="entry-modal-section__header">
                   <h4>Classificazione</h4>
-                  <p>Assegna metodo, centro e natura del movimento.</p>
+                  <p>Assegna metodo, centro e natura. Le regole create in Conti propongono le voci dalla descrizione.</p>
                 </div>
+                {matchingDescriptionRule ? (
+                  <div className="entry-description-rule-hint">
+                    <div>
+                      <strong>Regola: {matchingDescriptionRule.label}</strong>
+                      <span>{matchingDescriptionRule.report_area} · Conto {matchingDescriptionRule.report_row_code}</span>
+                    </div>
+                    <button type="button" onClick={applyMatchingDescriptionRule}>Applica regola</button>
+                  </div>
+                ) : null}
+                {classificationRulesQuery.error ? (
+                  <p className="form-error">Regole automatiche non disponibili: {classificationRulesQuery.error.message}</p>
+                ) : null}
 
                 <div className="entry-modal-grid entry-modal-grid--3">
                   <div className="entry-modal-field">
