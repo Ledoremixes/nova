@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { applyDescriptionRule } from '../lib/entryAutoClassification'
 
 function makeManualEntryKey() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -513,27 +514,32 @@ export async function bulkUpdateEntries({
   return { updated_rows: updatedRows }
 }
 
-export async function importSumupEntries({ userId, fileName, rows }) {
+export async function importSumupEntries({ userId, fileName, rows, rules = [] }) {
   const safeRows = Array.isArray(rows) ? rows : []
   const chunks = chunkArray(safeRows, 500)
-
   let imported_rows = 0
   let skipped_rows = 0
   let last_import_batch_id = null
+  const importBatchIds = []
 
   for (let i = 0; i < chunks.length; i += 1) {
     const chunk = chunks[i]
 
+    // IMPORTANTE: la RPC storica calcola la chiave anti-duplicati includendo
+    // account_code. Manteniamo NULL DURANTE l'import (come negli import precedenti)
+    // e applichiamo i conti configurati soltanto alle righe appena inserite.
+    // Diversamente, un reimport con nuovi conti genererebbe duplicati economici.
+    const stableRows = chunk.map((row) => ({ ...row, account_code: null }))
+
     const { data, error } = await supabase.rpc('import_sumup_entries', {
       p_user_id: userId,
-      p_file_name: i === 0 ? fileName : `${fileName} (parte ${i + 1})`,
-      p_rows: chunk,
+      p_file_name: i === 0 ? fileName : fileName + ' (parte ' + (i + 1) + ')',
+      p_rows: stableRows,
     })
-
     if (error) {
       throw entryMutationError(
         error,
-        `Errore import SumUp nel blocco ${i + 1} di ${chunks.length}`
+        'Errore import SumUp nel blocco ' + (i + 1) + ' di ' + chunks.length,
       )
     }
 
@@ -546,11 +552,59 @@ export async function importSumupEntries({ userId, fileName, rows }) {
     imported_rows += Number(result.imported_rows || 0)
     skipped_rows += Number(result.skipped_rows || 0)
     last_import_batch_id = result.import_batch_id || last_import_batch_id
+    if (result.import_batch_id && Number(result.imported_rows || 0) > 0) {
+      importBatchIds.push(result.import_batch_id)
+    }
+  }
+
+  let classified_rows = 0
+  let classification_error = null
+  if (importBatchIds.length && rules.length) {
+    // Eventuali errori di classificazione non annullano un import già eseguito.
+    // Il messaggio di esito lo chiarisce per evitare di ripetere l'incasso.
+    try {
+      for (const batchId of importBatchIds) {
+        const { data: insertedRows, error: loadError } = await supabase
+          .from('entries')
+          .select('id,description,account_code,nature,source')
+          .eq('import_batch_id', batchId)
+          .limit(1000)
+        if (loadError) throw loadError
+
+        const byAssignment = new Map()
+        for (const row of insertedRows || []) {
+          const classified = applyDescriptionRule(row, rules)
+          if (classified.account_code === row.account_code && classified.nature === row.nature) continue
+          const assignment = {
+            account_code: classified.account_code || null,
+            nature: classified.nature || null,
+          }
+          const key = JSON.stringify(assignment)
+          if (!byAssignment.has(key)) byAssignment.set(key, { assignment, ids: [] })
+          byAssignment.get(key).ids.push(row.id)
+        }
+
+        for (const { assignment, ids } of byAssignment.values()) {
+          for (const chunk of chunkArray(ids, 100)) {
+            const { error: classifyError } = await supabase
+              .from('entries')
+              .update(assignment)
+              .in('id', chunk)
+            if (classifyError) throw classifyError
+            classified_rows += chunk.length
+          }
+        }
+      }
+    } catch (error) {
+      classification_error = error.message || 'Errore durante la classificazione'
+    }
   }
 
   return {
     imported_rows,
     skipped_rows,
+    classified_rows,
+    classification_error,
     import_batch_id: last_import_batch_id,
   }
 }
