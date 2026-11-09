@@ -659,65 +659,13 @@ export default function ContabilitaPage() {
                 </div>
             ) : null}
 
-            <div className="contabilita-stats-grid">
-                <StatCard
-                    title={selectedPeriod.mode === 'year' ? `Risultato esercizio ${selectedYear}` : 'Risultato del periodo'}
-                    value={euro(filteredTotals?.saldo || 0)}
-                    icon={Scale}
-                    variant="primary"
-                    subtitle="Entrate meno uscite del periodo"
-                />
-                <StatCard
-                    title="Cassa disponibile"
-                    value={euro(financialPosition?.cashBalance || 0)}
-                    icon={Wallet}
-                    subtitle="Contanti che dovresti avere fisicamente"
-                />
-                <StatCard
-                    title="Banca disponibile"
-                    value={euro(financialPosition?.bankBalance || 0)}
-                    icon={Landmark}
-                    subtitle="Conti bancari ed elettronici"
-                />
-                <StatCard
-                    title="Liquidità attuale"
-                    value={euro(financialPosition?.liquidity || 0)}
-                    icon={PiggyBank}
-                    variant="success"
-                    subtitle="Denaro realmente disponibile: cassa + banca"
-                />
-                <StatCard
-                    title="Posizione finanziaria netta"
-                    value={euro(financialPosition?.financialPosition || 0)}
-                    icon={Building2}
-                    subtitle="Non è denaro disponibile: liquidità + crediti − debiti"
-                />
-                <StatCard
-                    title="Entrate selezione"
-                    value={euro(filteredTotals?.total_in || 0)}
-                    icon={Banknote}
-                    variant="success"
-                    subtitle={`${appliedFilters.fromDate} → ${appliedFilters.toDate}`}
-                />
-                <StatCard
-                    title="Uscite selezione"
-                    value={euro(filteredTotals?.total_out || 0)}
-                    icon={Receipt}
-                    variant="danger"
-                    subtitle={`${filteredTotals?.total_rows || 0} movimenti economici`}
-                />
-                <StatCard
-                    title="Saldo IVA"
-                    value={euro(ivaSummary?.balance || 0)}
-                    icon={FileSpreadsheet}
-                    subtitle="Debito IVA meno credito IVA nel periodo"
-                />
-            </div>
-
-            <div className="contabilita-banner contabilita-banner--info contabilita-banner--financial-help">
+            <div className="contabilita-banner contabilita-banner--info">
                 <CircleAlert size={18} />
                 <span>
-                    <strong>Quanto denaro dovresti avere adesso?</strong> La risposta è la <strong>liquidità attuale</strong>, cioè {euro(financialPosition?.cashBalance || 0)} in cassa + {euro(financialPosition?.bankBalance || 0)} in banca = <strong>{euro(financialPosition?.liquidity || 0)}</strong>. La posizione finanziaria considera anche crediti e debiti ancora aperti e quindi non coincide con i soldi presenti oggi.
+                    <strong>ASD - regime fiscale L. 398/1991.</strong> In questa sezione trovi il rendiconto
+                    delle entrate e uscite registrate e la stima IVA commerciale con detrazione forfetaria del 50%.
+                    I vecchi saldi teorici di cassa/banca sono stati rimossi: non erano riconciliati con gli estratti conto.
+                    Non sono stati cancellati movimenti o documenti.
                 </span>
             </div>
 
@@ -792,11 +740,9 @@ export default function ContabilitaPage() {
 
                 {selectedYear ? (
                     <div className="financial-year-card__body">
-                        <div className="financial-year-position-grid">
-                            <div><span>Cassa calcolata</span><strong>{euro(selectedFinancialPosition?.cashBalance || 0)}</strong><small>Saldo iniziale + movimenti in contanti</small></div>
-                            <div><span>Banca calcolata</span><strong>{euro(selectedFinancialPosition?.bankBalance || 0)}</strong><small>Saldo iniziale + movimenti elettronici</small></div>
-                            <div><span>Crediti aperti</span><strong>{euro(selectedYearRecord?.currentReceivables || 0)}</strong><small>Da incassare, non ancora liquidità</small></div>
-                            <div><span>Debiti aperti</span><strong>{euro(selectedYearRecord?.currentPayables || 0)}</strong><small>Da pagare, non ancora un’uscita registrata</small></div>
+                        <div className="contabilita-banner contabilita-banner--info">
+                            <CircleAlert size={17} />
+                            <span>I saldi di cassa, banca, crediti e debiti non sono mostrati come dati reali finché non vengono riconciliati con conti ed estratti bancari. I movimenti storici restano disponibili in Prima nota.</span>
                         </div>
 
                         {selectedYearRecord?.status === 'closed' ? (
@@ -1183,49 +1129,6 @@ export default function ContabilitaPage() {
                             ))}
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <div className="contabilita-card contabilita-card--full">
-                <div className="contabilita-card__header">
-                    <div>
-                        <h2>Posizione finanziaria attuale</h2>
-                        <p>Situazione reale al {dayjs(financialPosition?.toDate).format('DD/MM/YYYY')}, indipendente dall’anno visualizzato sopra.</p>
-                    </div>
-                </div>
-
-                <div className="contabilita-account-list contabilita-account-list--grid">
-                    <div className="contabilita-account-row">
-                        <span>Cassa (contanti)</span>
-                        <strong>{euro(financialPosition?.cashBalance || 0)}</strong>
-                    </div>
-                    <div className="contabilita-account-row">
-                        <span>Banca / elettronici</span>
-                        <strong>{euro(financialPosition?.bankBalance || 0)}</strong>
-                    </div>
-                    <div className="contabilita-account-row">
-                        <span>Liquidità totale</span>
-                        <strong>{euro(financialPosition?.liquidity || 0)}</strong>
-                    </div>
-                    <div className="contabilita-account-row">
-                        <span>Crediti aperti</span>
-                        <strong>{euro(financialPosition?.receivables || 0)}</strong>
-                    </div>
-                    <div className="contabilita-account-row">
-                        <span>Debiti aperti</span>
-                        <strong>{euro(financialPosition?.payables || 0)}</strong>
-                    </div>
-                    <div className="contabilita-account-row contabilita-account-row--accent">
-                        <span>Posizione finanziaria</span>
-                        <strong>{euro(financialPosition?.financialPosition || 0)}</strong>
-                    </div>
-                </div>
-
-                <div className="financial-position-readout">
-                    <CircleAlert size={17} />
-                    <span>
-                        La posizione finanziaria differisce dalla liquidità di <strong>{euro((financialPosition?.receivables || 0) - (financialPosition?.payables || 0))}</strong>: crediti aperti {euro(financialPosition?.receivables || 0)} meno debiti aperti {euro(financialPosition?.payables || 0)}. Questi importi non modificano il rendiconto finché non diventano incassi o pagamenti reali in Prima nota.
-                    </span>
                 </div>
             </div>
 
