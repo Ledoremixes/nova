@@ -19,6 +19,7 @@ import {
 import { fetchLookupList } from '../api/lookups'
 import { applyDescriptionRule, findDescriptionRule } from '../lib/entryAutoClassification'
 import '../styles/EntryRules.css'
+import '../styles/AccountingEntriesMobile.css'
 import { fetchFinancialYears } from '../api/financialYears'
 import { isDateInClosedFinancialYear } from '../lib/financialYear'
 
