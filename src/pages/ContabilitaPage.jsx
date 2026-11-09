@@ -145,10 +145,9 @@ function FilterBar({
             </div>
 
             <div className="contabilita-filterbar__field">
-                <label>Periodicità IVA</label>
+                <label>Periodicità IVA - L. 398/91</label>
                 <select value={periodicity} onChange={(e) => onPeriodicityChange(e.target.value)}>
-                    <option value="quarterly">Trimestrale</option>
-                    <option value="monthly">Mensile</option>
+                    <option value="quarterly">Trimestrale (regime 398)</option>
                 </select>
             </div>
 
@@ -710,19 +709,6 @@ export default function ContabilitaPage() {
                                 </button>
                             ) : (
                                 <>
-                                    {selectedYear === currentFinancialYear ? (
-                                        <button
-                                            type="button"
-                                            className="contabilita-link-btn contabilita-link-btn--transfer"
-                                            onClick={openTransferModal}
-                                            disabled={!filtersAreApplied || refreshing}
-                                        >
-                                            <ArrowRightLeft size={16} /> Versa cassa in banca
-                                        </button>
-                                    ) : null}
-                                    <button type="button" className="contabilita-link-btn" onClick={openPositionModal} disabled={!filtersAreApplied}>
-                                        <Settings2 size={16} /> Saldi e posizioni
-                                    </button>
                                     <button
                                         type="button"
                                         className="contabilita-close-year-btn"
@@ -786,7 +772,7 @@ export default function ContabilitaPage() {
                             <QuickAction
                                 to="/conti"
                                 title="Conti"
-                                description="Verifica saldo cassa ed elettronici."
+                                description="Configura conti e regole di classificazione automatica."
                                 icon={Wallet}
                             />
                             <QuickAction
@@ -908,7 +894,7 @@ export default function ContabilitaPage() {
                                                 <th>Sezione</th>
                                                 <th>Entrate</th>
                                                 <th>Uscite</th>
-                                                <th>Saldo</th>
+                                                <th>IVA da versare (stima)</th>
                                                 <th>Movimenti</th>
                                             </tr>
                                         </thead>
@@ -965,8 +951,8 @@ export default function ContabilitaPage() {
                     <div className="contabilita-card">
                         <div className="contabilita-card__header">
                             <div>
-                                <h2>Scadenziario IVA</h2>
-                                <p>Periodicità {appliedFilters.periodicity === 'quarterly' ? 'trimestrale' : 'mensile'} sul periodo selezionato.</p>
+                                <h2>IVA commerciale - regime 398/1991</h2>
+                                <p>Stima trimestrale: IVA lorda meno detrazione forfetaria (ordinariamente 50%). L'IVA degli acquisti non si detrae una seconda volta.</p>
                             </div>
 
                             <div className="contabilita-export-actions">
@@ -996,24 +982,30 @@ export default function ContabilitaPage() {
                             />
                         ) : (
                             <>
+                                {ivaSummary.missingVatRowsCount > 0 ? (
+                                    <div className="contabilita-banner contabilita-banner--warning">
+                                        <CircleAlert size={18} />
+                                        <span><strong>{ivaSummary.missingVatRowsCount} entrate commerciali senza IVA valorizzata.</strong> La stima può risultare incompleta: verifica aliquote e documenti in Prima nota prima di usarla per l'F24.</span>
+                                    </div>
+                                ) : null}
                                 <div className="contabilita-summary-grid">
                                     <StatCard
-                                        title="IVA a debito"
+                                        title="IVA lorda commerciale"
                                         value={euro(ivaSummary.vatDebit)}
                                         icon={FileSpreadsheet}
                                         subtitle="Totale periodo"
                                     />
                                     <StatCard
-                                        title="IVA a credito"
+                                        title="Detrazione forfetaria 398"
                                         value={euro(ivaSummary.vatCredit)}
                                         icon={Landmark}
                                         subtitle="Totale periodo"
                                     />
                                     <StatCard
-                                        title="Saldo IVA"
+                                        title="IVA stimata da versare"
                                         value={euro(ivaSummary.balance)}
                                         icon={Wallet}
-                                        subtitle="Debito - credito"
+                                        subtitle="IVA lorda meno detrazione forfetaria"
                                     />
                                 </div>
 
@@ -1022,8 +1014,8 @@ export default function ContabilitaPage() {
                                         <thead>
                                             <tr>
                                                 <th>Periodo</th>
-                                                <th>IVA a debito</th>
-                                                <th>IVA a credito</th>
+                                                <th>IVA lorda</th>
+                                                <th>Detrazione 398</th>
                                                 <th>Saldo</th>
                                                 <th>Movimenti</th>
                                             </tr>
