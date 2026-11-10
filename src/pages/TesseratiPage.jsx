@@ -16,6 +16,7 @@ import { importHistoricalMembershipBatch } from '../api/historicalMembershipImpo
 import { splitHistoricalRecords } from '../lib/historicalFiscalCode'
 import { buildOpesCsv } from '../lib/opesCsv'
 import '../styles/TesseratiPage.css'
+import '../styles/StudentProfileMobile.css'
 
 const emptyStudentForm = {
   nome: '',
@@ -799,13 +800,13 @@ export default function TesseratiPage() {
       </div>
 
       {selectedStudent ? (
-        <div className="modalOverlay" onClick={closeStudentDetail}>
+        <div className="modalOverlay student-profile-overlay" onClick={closeStudentDetail}>
           <div className="modalCard tesserati-detail-modal" onClick={(e) => e.stopPropagation()}>
             <div className="student-profile-hero">
               <div className="student-profile-identity">
                 <span className="student-profile-avatar">{initials(selectedStudent)}</span>
                 <div>
-                  <div className="dashboard-hero__eyebrow">Scheda corsista</div>
+                  <div className="dashboard-hero__eyebrow">{selectedStudent.is_corsista ? 'Scheda corsista' : 'Scheda tesserato'}</div>
                   <h3>{fullName(selectedStudent)}</h3>
                   <p>Profilo completo, tessera, corsi collegati e strumenti admin in un’unica vista.</p>
                   <div className="student-profile-chips">
