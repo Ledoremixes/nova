@@ -909,7 +909,7 @@ export default function TesseratiPage() {
               <div className="modalActions">
                 {canEditStudent ? (
                   <button type="submit" className="topbar__button topbar__button--primary" disabled={updateMutation.isPending}>
-                    {updateMutation.isPending ? 'Salvataggio…' : 'Salva scheda corsista'}
+                    {updateMutation.isPending ? 'Salvataggio…' : selectedStudent.is_corsista ? 'Salva scheda corsista' : 'Salva scheda tesserato'}
                   </button>
                 ) : null}
                 {isAdmin && !hasCustomMembershipNumber(selectedStudent) ? (
