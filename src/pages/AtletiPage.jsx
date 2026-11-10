@@ -10,6 +10,7 @@ import { resolveCoursePricing } from '../lib/coursePriceList'
 import { enrollmentIsActiveForMonth } from '../lib/packagePricing'
 import { buildOpesCsv } from '../lib/opesCsv'
 import '../styles/AtletiPage.css'
+import '../styles/StudentProfileMobile.css'
 
 function fullName(row) {
   return row.nomeCompleto || `${row.nome || ''} ${row.cognome || ''}`.trim() || 'Senza nome'
@@ -291,7 +292,7 @@ export default function AtletiPage() {
       </div>
 
       {selected ? (
-        <div className="modalOverlay" onClick={() => setSelected(null)}>
+        <div className="modalOverlay student-profile-overlay" onClick={() => setSelected(null)}>
           <div className="modalCard large-modal atleti-course-modal" onClick={(e) => e.stopPropagation()}>
             <div className="atleti-course-hero">
               <div className="atleti-course-identity">
