@@ -136,7 +136,18 @@ function allocateAmount({ row = {}, courses = [], value = 0, source = 'mensile',
   }).filter((item) => item.course_id && item.paid_student_quota > 0)
 }
 
-function distributeStudentPayment(row = {}) {
+export const TEACHER_TOKEN_FIRST_MONTH = '2026-11'
+
+// La prima abilitazione del Caraibico segue il nome esatto del corso,
+// compreso "Caraibico bimbi". Ogni scelta esplicita admin prevale.
+export function isTeacherTokenEnabled(course = {}, month = '', rules = []) {
+  if (String(month) < TEACHER_TOKEN_FIRST_MONTH) return false
+  const explicit = (rules || []).find((rule) => String(rule.course_id) === String(course.id))
+  if (explicit) return Boolean(explicit.include_tokens) && String(month) >= String(explicit.effective_from || TEACHER_TOKEN_FIRST_MONTH)
+  return /\\bcaraibic[oa]\\b/i.test(String(course.nome || course.name || ''))
+}
+
+function distributeStudentPayment(row = {}, { month = '', tokenRules = [] } = {}) {
   const allCourses = uniqueCourses(row.corsi)
   if (!allCourses.length) return []
 
@@ -159,47 +170,44 @@ function distributeStudentPayment(row = {}) {
     }))
   }
 
-  const tokenRows = Array.isArray(row.token_breakdown) ? row.token_breakdown : []
-  for (let index = 0; index < tokenRows.length; index += 1) {
-    const token = tokenRows[index] || {}
-    const allowedCourses = courseSubset(allCourses, token.course_ids)
-    let warning = ''
-    let targetCourses = allowedCourses
+  // Per evitare errori di attribuzione: se un gettone non ha il corso
+  // esplicito e l'allievo segue più corsi, non si può scegliere un corso
+  // presunto. Se il pacchetto copre più corsi, ripartiamo sull'INTERA
+  // selezione e poi includiamo soltanto quelli abilitati dal pannello admin.
+  const distributeToken = (token, index, legacy = false) => {
+    const tokenAmount = amount(token.amount)
+    if (tokenAmount <= 0) return
 
-    if (!targetCourses.length) {
-      if (allCourses.length === 1) {
-        targetCourses = allCourses
-      } else {
-        targetCourses = allCourses
-        warning = `Gettone ${token.packageName || ''} non associato a un singolo corso: ripartizione proporzionale su ${allCourses.length} corsi attivi.`
-      }
-    } else if (targetCourses.length > 1) {
-      warning = `Gettone ${token.packageName || ''} valido per più corsi: ripartizione proporzionale su ${targetCourses.length} corsi.`
-    }
+    const ids = Array.isArray(token.course_ids) ? token.course_ids.map(String).filter(Boolean) : []
+    const targetCourses = ids.length
+      ? courseSubset(allCourses, ids)
+      : (allCourses.length === 1 ? allCourses : [])
 
-    rows.push(...allocateAmount({
+    if (!targetCourses.length) return
+    const warning = targetCourses.length > 1
+      ? `Gettone ${token.packageName || ''} multi-corso: incasso ripartito tra tutti i corsi e remunerato solo per i corsi abilitati.`
+      : ''
+
+    const allocated = allocateAmount({
       row: { ...row, pagamento_id: token.id || row.pagamento_id },
       courses: targetCourses,
-      value: token.amount,
-      source: `gettone-${index + 1}`,
+      value: tokenAmount,
+      source: legacy ? 'gettone-legacy' : `gettone-${index + 1}`,
       packageName: token.packageName || 'A gettone',
       warning,
-    }))
+    })
+    for (const item of allocated) {
+      const course = targetCourses.find((candidate) => String(candidate.id) === String(item.course_id))
+      if (course && isTeacherTokenEnabled(course, month, tokenRules)) rows.push(item)
+    }
   }
 
-  // Compatibilità con vecchi snapshot che esponevano solo token_paid.
-  if (!tokenRows.length && amount(row.token_paid) > 0) {
-    const warning = allCourses.length > 1
-      ? `Gettoni legacy senza corso specifico: ripartizione proporzionale su ${allCourses.length} corsi attivi.`
-      : ''
-    rows.push(...allocateAmount({
-      row,
-      courses: allCourses,
-      value: row.token_paid,
-      source: 'gettone-legacy',
-      packageName: 'Gettone legacy',
-      warning,
-    }))
+  const tokenRows = Array.isArray(row.token_breakdown) ? row.token_breakdown : []
+  if (tokenRows.length) {
+    tokenRows.forEach((token, index) => distributeToken(token || {}, index))
+  } else if (amount(row.token_paid) > 0) {
+    // Dato legacy: nessuna doppia remunerazione con token_breakdown.
+    distributeToken({ amount: row.token_paid, packageName: 'Gettone legacy' }, 0, true)
   }
 
   return rows
@@ -215,9 +223,9 @@ function distributeStudentPayment(row = {}) {
  * generano compenso; sconti e pagamenti parziali riducono proporzionalmente la
  * base di calcolo perché rappresentano l'incasso reale.
  */
-export function buildTeacherMonthlyPayouts({ teachers = [], courses = [], paymentRows = [], month = '' } = {}) {
+export function buildTeacherMonthlyPayouts({ teachers = [], courses = [], paymentRows = [], month = '', tokenRules = [] } = {}) {
   const selectedMonth = month || new Date().toISOString().slice(0, 7)
-  const paidCourseRows = paymentRows.flatMap(distributeStudentPayment)
+  const paidCourseRows = paymentRows.flatMap((row) => distributeStudentPayment(row, { month: selectedMonth, tokenRules }))
 
   const payouts = (teachers || []).map((teacher) => {
     const config = teacherPaymentConfig(teacher)
