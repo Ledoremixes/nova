@@ -144,7 +144,7 @@ export function isTeacherTokenEnabled(course = {}, month = '', rules = []) {
   if (String(month) < TEACHER_TOKEN_FIRST_MONTH) return false
   const explicit = (rules || []).find((rule) => String(rule.course_id) === String(course.id))
   if (explicit) return Boolean(explicit.include_tokens) && String(month) >= String(explicit.effective_from || TEACHER_TOKEN_FIRST_MONTH)
-  return /\\bcaraibic[oa]\\b/i.test(String(course.nome || course.name || ''))
+  return /\bcaraibic[oa]\b/i.test(String(course.nome || course.name || ''))
 }
 
 function distributeStudentPayment(row = {}, { month = '', tokenRules = [] } = {}) {
