@@ -252,7 +252,7 @@ export default function PagamentiPage() {
     if (paymentsQuery.isFetching || paymentsQuery.error || !baseRows.length || !unpaidForPdf.length) return
     try {
       const count = exportUnpaidStudentsPdf({ month, rows: baseRows })
-      setFeedback(`PDF con ${count} allievi da controllare generato. Le caselle stampate non modificano i pagamenti.`)
+      setFeedback(`PDF suddiviso per corso generato: ${count} corsisti unici da controllare. I multicorso compaiono nelle rispettive sezioni senza duplicare i totali. Le spunte non modificano i pagamenti.`)
     } catch (error) {
       setFeedback(`Impossibile generare il PDF: ${error.message || 'errore sconosciuto'}`)
     }
@@ -402,9 +402,9 @@ export default function PagamentiPage() {
             className="payments-primary-btn"
             onClick={downloadUnpaidPdf}
             disabled={paymentsQuery.isFetching || Boolean(paymentsQuery.error) || unpaidForPdf.length === 0}
-            title="Scarica la lista completa degli insoluti del mese, con caselle da spuntare"
+            title="Scarica gli insoluti del mese suddivisi per corso, con caselle da spuntare"
           >
-            <FileDown size={17} /> PDF non paganti ({unpaidForPdf.length})
+            <FileDown size={17} /> PDF non paganti per corso ({unpaidForPdf.length})
           </button>
         </div>
       </div>
