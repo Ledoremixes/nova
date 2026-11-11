@@ -143,7 +143,9 @@ export const TEACHER_TOKEN_FIRST_MONTH = '2026-11'
 export function isTeacherTokenEnabled(course = {}, month = '', rules = []) {
   if (String(month) < TEACHER_TOKEN_FIRST_MONTH) return false
   const explicit = (rules || []).find((rule) => String(rule.course_id) === String(course.id))
-  if (explicit) return Boolean(explicit.include_tokens) && String(month) >= String(explicit.effective_from || TEACHER_TOKEN_FIRST_MONTH)
+  if (explicit && String(month) >= String(explicit.effective_from || TEACHER_TOKEN_FIRST_MONTH)) {
+    return Boolean(explicit.include_tokens)
+  }
   return /\bcaraibic[oa]\b/i.test(String(course.nome || course.name || ''))
 }
 
@@ -179,9 +181,12 @@ function distributeStudentPayment(row = {}, { month = '', tokenRules = [] } = {}
     if (tokenAmount <= 0) return
 
     const ids = Array.isArray(token.course_ids) ? token.course_ids.map(String).filter(Boolean) : []
+    // Le modifiche richieste valgono da novembre 2026: lo storico precedente
+    // mantiene la ripartizione originale, per non alterare compensi chiusi.
+    const historical = String(month) < TEACHER_TOKEN_FIRST_MONTH
     const targetCourses = ids.length
       ? courseSubset(allCourses, ids)
-      : (allCourses.length === 1 ? allCourses : [])
+      : (historical || allCourses.length === 1 ? allCourses : [])
 
     if (!targetCourses.length) return
     const warning = targetCourses.length > 1
@@ -198,7 +203,7 @@ function distributeStudentPayment(row = {}, { month = '', tokenRules = [] } = {}
     })
     for (const item of allocated) {
       const course = targetCourses.find((candidate) => String(candidate.id) === String(item.course_id))
-      if (course && isTeacherTokenEnabled(course, month, tokenRules)) rows.push(item)
+      if (course && (historical || isTeacherTokenEnabled(course, month, tokenRules))) rows.push(item)
     }
   }
 
