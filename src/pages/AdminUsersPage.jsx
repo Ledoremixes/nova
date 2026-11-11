@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, ShieldCheck, Sparkles, Trash2, UserCog, X } from 'lucide-react'
 import { createGestionaleUser, deleteGestionaleUser, fetchGestionaleUsers, updateGestionaleUser } from '../api/usersManagement'
+import TeacherTokenRulesPanel from '../components/admin/TeacherTokenRulesPanel'
 
 const emptyForm = { email: '', password: '', role: 'user', is_active: true }
 
@@ -81,6 +82,8 @@ export default function AdminUsersPage() {
           </table>
         </div>
       </div>
+
+      <TeacherTokenRulesPanel />
 
       {editing ? (
         <div className="modalOverlay" onClick={() => setEditing(null)}>
