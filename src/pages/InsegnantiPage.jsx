@@ -34,6 +34,7 @@ import {
 import { generateTeacherContractPdf } from '../utils/teacherContractPdf'
 import { fetchAllieviPaymentsMonth } from '../api/orchideaPayments'
 import { buildTeacherMonthlyPayouts } from '../lib/teacherPayouts'
+import { fetchTeacherTokenRules } from '../api/teacherTokenRules'
 import SignedContractsPanel from '../components/staff/SignedContractsPanel'
 import { syncNovaTeacherPayouts } from '../lib/teacherCompensationSync'
 import { supabase } from '../api/supabase'
@@ -314,6 +315,12 @@ export default function InsegnantiPage() {
     queryFn: () => fetchAllieviPaymentsMonth({ month, search: '', courseId: 'all', status: 'all' }),
   })
 
+  const tokenRulesQuery = useQuery({
+    queryKey: ['nova-teacher-token-rules'],
+    queryFn: fetchTeacherTokenRules,
+    staleTime: 30_000,
+  })
+
   const createMutation = useMutation({
     mutationFn: createOrchideaTeacher,
     onSuccess: () => {
@@ -368,12 +375,14 @@ export default function InsegnantiPage() {
   const teachers = teachersQuery.data || []
   const courses = useMemo(() => coursesQuery.data || [], [coursesQuery.data])
   const payoutPaymentRows = useMemo(() => payoutPaymentsQuery.data || [], [payoutPaymentsQuery.data])
+  const tokenRules = tokenRulesQuery.data || []
   const payouts = useMemo(() => buildTeacherMonthlyPayouts({
     teachers,
     courses,
     paymentRows: payoutPaymentRows,
     month,
-  }), [teachers, courses, payoutPaymentRows, month])
+    tokenRules,
+  }), [teachers, courses, payoutPaymentRows, month, tokenRulesQuery.data])
   const payoutsByName = useMemo(() => new Map(payouts.map((item) => [norm(item.teacher_name), item])), [payouts])
   const totalPayouts = payouts.reduce((sum, item) => sum + Number(item.total || 0), 0)
 
@@ -381,7 +390,7 @@ export default function InsegnantiPage() {
   // data; otherwise a temporary read failure could overwrite valid amounts with zero.
   useEffect(() => {
     if (!isAdmin || teachersQuery.isFetching || coursesQuery.isFetching ||
-        payoutPaymentsQuery.isFetching || teachersQuery.error ||
+        payoutPaymentsQuery.isFetching || tokenRulesQuery.isFetching || !tokenRulesQuery.isSuccess || teachersQuery.error ||
         coursesQuery.error || payoutPaymentsQuery.error || !payouts.length) return
     let active = true
     setCompensationSyncStatus('syncing')
@@ -398,11 +407,12 @@ export default function InsegnantiPage() {
     isAdmin, month, payouts,
     teachersQuery.isFetching, coursesQuery.isFetching, payoutPaymentsQuery.isFetching,
     teachersQuery.error, coursesQuery.error, payoutPaymentsQuery.error,
+    tokenRulesQuery.isFetching, tokenRulesQuery.isSuccess,
   ])
 
   async function syncLast12Months() {
     if (!isAdmin || teachersQuery.error || coursesQuery.error ||
-        payoutPaymentsQuery.error || teachersQuery.isFetching || coursesQuery.isFetching ||
+        payoutPaymentsQuery.error || tokenRulesQuery.error || !tokenRulesQuery.isSuccess || teachersQuery.isFetching || coursesQuery.isFetching ||
         payoutPaymentsQuery.isFetching || historySyncBusy) return
     setHistorySyncBusy(true)
     setHistorySyncState('Preparo lo storico compensi Nova…')
@@ -417,7 +427,7 @@ export default function InsegnantiPage() {
           month: targetMonth, search: '', courseId: 'all', status: 'all',
         })
         const calculated = buildTeacherMonthlyPayouts({
-          teachers, courses, paymentRows, month: targetMonth,
+          teachers, courses, paymentRows, month: targetMonth, tokenRules,
         })
         if (!calculated.length) throw new Error('Nessun insegnante disponibile per ' + targetMonth)
         await syncNovaTeacherPayouts({ month: targetMonth, payouts: calculated, supabase })
@@ -435,12 +445,13 @@ export default function InsegnantiPage() {
   useEffect(() => {
     if (historyAutoSyncStarted.current || !isAdmin ||
         teachersQuery.isFetching || coursesQuery.isFetching || payoutPaymentsQuery.isFetching ||
-        teachersQuery.error || coursesQuery.error || payoutPaymentsQuery.error ||
+        teachersQuery.error || coursesQuery.error || payoutPaymentsQuery.error || !tokenRulesQuery.isSuccess ||
         !teachers.length || !courses.length) return;
     historyAutoSyncStarted.current = true;
     void syncLast12Months();
   }, [isAdmin, teachersQuery.isFetching, coursesQuery.isFetching, payoutPaymentsQuery.isFetching,
-      teachersQuery.error, coursesQuery.error, payoutPaymentsQuery.error, teachers.length, courses.length]);
+      teachersQuery.error, coursesQuery.error, payoutPaymentsQuery.error,
+      tokenRulesQuery.isSuccess, teachers.length, courses.length]);
 
   function teacherCourses(row) {
     const key = norm(row?.full_name)
@@ -564,7 +575,7 @@ export default function InsegnantiPage() {
         <div className="page-card tesserati-stat-card"><span>Totale insegnanti</span><strong>{teachers.length}</strong></div>
         <div className="page-card tesserati-stat-card"><span>Attivi</span><strong>{teachers.filter((t) => t.active !== false).length}</strong></div>
         <div className="page-card tesserati-stat-card"><span>Assegnazioni corsi</span><strong>{totalAssignedLinks}</strong></div>
-        <div className="page-card tesserati-stat-card"><span>Compensi mese</span><strong>{payoutPaymentsQuery.isLoading ? '…' : payoutPaymentsQuery.error ? '—' : money(totalPayouts)}</strong></div>
+        <div className="page-card tesserati-stat-card"><span>Compensi mese</span><strong>{payoutPaymentsQuery.isLoading || tokenRulesQuery.isLoading ? '…' : payoutPaymentsQuery.error || tokenRulesQuery.error ? '—' : money(totalPayouts)}</strong></div>
       </div>
 
       <div className="page-card">
@@ -594,6 +605,12 @@ export default function InsegnantiPage() {
             {historySyncState ? <small style={{ display: 'block' }}>{historySyncState}</small> : null}
           </div>
         )}
+        {tokenRulesQuery.error ? (
+          <div className="form-error">
+            Regole gettoni non disponibili: {tokenRulesQuery.error.message}. La sincronizzazione compensi è sospesa per evitare importi errati.
+            <button type="button" className="actionBtn" onClick={() => tokenRulesQuery.refetch()}>Riprova</button>
+          </div>
+        ) : null}
         {payoutPaymentsQuery.error ? (
           <div className="form-error">
             Non riesco a leggere i pagamenti del mese: {payoutPaymentsQuery.error.message}. I compensi non vengono mostrati come 0 € per evitare dati falsi.
@@ -627,7 +644,7 @@ export default function InsegnantiPage() {
                   <Euro size={18} />
                   <div>
                     <span>Da pagare nel mese</span>
-                    <strong>{payoutPaymentsQuery.isLoading ? 'Calcolo…' : payoutPaymentsQuery.error ? 'Non disponibile' : money(payout.total)}</strong>
+                    <strong>{payoutPaymentsQuery.isLoading || tokenRulesQuery.isLoading ? 'Calcolo…' : payoutPaymentsQuery.error || tokenRulesQuery.error ? 'Non disponibile' : money(payout.total)}</strong>
                     <small>{payoutPaymentsQuery.error ? 'Errore lettura pagamenti: premi Riprova in alto' : `${payout.students_count || 0} corsisti paganti · ${assigned.length || 0} corsi assegnati`}</small>
                   </div>
                 </div>
