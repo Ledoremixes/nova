@@ -266,14 +266,16 @@ async function fetchOrchideaTesseramenti() {
   const config = getOrchideaConfigStatus()
 
   if (hasDedicatedOrchideaConfig) {
-    const authStatus = await getOrchideaAuthStatus()
-    if (!authStatus.authenticated) {
-      // Prima scelta: endpoint server protetto dal login Nova. Non richiede che
-      // la segreteria abbia già una seconda sessione browser sul progetto Orchidea.
-      try {
-        return await fetchOrchideaTesseramentiViaServer(config)
-      } catch (serverError) {
-        // Compatibilità con installazioni precedenti: proviamo anche il bridge RPC.
+    // Priorità al server Nova: verifica il token dell'operatore prima di leggere
+    // dati sensibili dal progetto Orchidea tramite la chiave riservata server-side.
+    // Non richiede una seconda sessione Supabase nel browser.
+    try {
+      return await fetchOrchideaTesseramentiViaServer(config)
+    } catch (serverError) {
+      // Fase transitoria: manteniamo intatti i percorsi legacy per evitare
+      // interruzioni operative. Saranno rimossi solo dopo collaudi e migrazione RLS.
+      const authStatus = await getOrchideaAuthStatus()
+      if (!authStatus.authenticated) {
         try {
           return await fetchOrchideaTesseramentiViaBridge(config)
         } catch (bridgeError) {
@@ -286,6 +288,8 @@ async function fetchOrchideaTesseramenti() {
           throw authError
         }
       }
+      // Con un account Orchidea autenticato, viene usata la lettura diretta
+      // preesistente come ultima risorsa, senza cambiare il comportamento legacy.
     }
   }
 
