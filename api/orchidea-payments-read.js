@@ -60,6 +60,8 @@ function orchideaAdminClient() {
 }
 
 export default async function handler(req, res) {
+  res.setHeader('Cache-Control', 'private, no-store')
+  res.setHeader('Vary', 'Authorization')
   if (req.method !== 'GET') return json(res, 405, { error: 'Metodo non consentito' })
 
   try {
@@ -146,14 +148,30 @@ export default async function handler(req, res) {
     if (studentId) pricingQuery = pricingQuery.eq('tesseramento_id', studentId)
     if (monthEnd) pricingQuery = pricingQuery.lte('effective_from', monthEnd)
 
-    const [paymentsRes, pricingHistoryRes] = await Promise.all([paymentsQuery, pricingQuery])
+    // Opzionale per compatibilità: usa la sessione Nova già verificata per
+    // fornire anche le iscrizioni, evitando una lettura anonima dal browser.
+    const includeEnrollments = String(req.query?.includeEnrollments || '') === '1'
+    let enrollmentsQuery = includeEnrollments
+      ? orchidea
+        .from('iscrizioni_corsi')
+        .select('id,stato,tesseramento_id,corso_id,tariffa_mensile,quota_allievo_mensile,quota_insegnante_mensile,percentuale_insegnante,tipo_pagamento,data_iscrizione,data_inizio,data_fine,rinnovo_attivo,pacchetto_id,pacchetto_nome,pacchetto_totale_mensile,quota_pacchetto_percentuale,created_at')
+        .limit(studentId ? 1000 : 10000)
+      : null
+    if (enrollmentsQuery && studentId) enrollmentsQuery = enrollmentsQuery.eq('tesseramento_id', studentId)
+
+    const [paymentsRes, pricingHistoryRes, enrollmentsRes] = await Promise.all([
+      paymentsQuery, pricingQuery,
+      enrollmentsQuery || Promise.resolve({ data: [], error: null }),
+    ])
 
     if (paymentsRes.error) throw paymentsRes.error
+    if (includeEnrollments && enrollmentsRes.error) throw enrollmentsRes.error
 
     return json(res, 200, {
       ok: true,
       payments: paymentsRes.data || [],
       pricingHistory: pricingHistoryRes.error ? [] : (pricingHistoryRes.data || []),
+      ...(includeEnrollments ? { enrollments: enrollmentsRes.data || [] } : {}),
     })
   } catch (error) {
     console.error('orchidea-payments-read:', error)
