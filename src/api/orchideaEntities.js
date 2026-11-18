@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { orchideaSupabase } from './orchideaSupabase'
+import { secureOrchideaRpc } from './secureOrchideaRpc'
 import { fetchTesserati, updateTesserato } from './tesserati'
 import { summarizeMonthlyTuitionPayments } from '../lib/paymentLedger'
 import { enrollmentIsActiveForMonth, monthStartDate, resolveEnrollmentPricing } from '../lib/packagePricing'
@@ -45,7 +46,7 @@ function parseRpcJsonArray(data) {
 }
 
 async function rpcJsonArray(functionName, args = {}) {
-  const { data, error } = await orchideaSupabase.rpc(functionName, args)
+  const { data, error } = await secureOrchideaRpc(functionName, args)
   if (error) throw error
   return parseRpcJsonArray(data)
 }
@@ -337,7 +338,7 @@ export async function createOrchideaCourse(payload) {
 
   if (error) {
     if (isPermissionError(error)) {
-      const { data: rpcData, error: rpcError } = await orchideaSupabase.rpc('nova_create_corso', {
+      const { data: rpcData, error: rpcError } = await secureOrchideaRpc('nova_create_corso', {
         p_payload: clean,
       })
       if (rpcError) {
@@ -368,7 +369,7 @@ export async function updateOrchideaCourse(id, payload) {
 
   if (error) {
     if (isPermissionError(error)) {
-      const { data: rpcData, error: rpcError } = await orchideaSupabase.rpc('nova_update_corso', {
+      const { data: rpcData, error: rpcError } = await secureOrchideaRpc('nova_update_corso', {
         p_id: id,
         p_payload: clean,
       })
@@ -404,7 +405,7 @@ export async function deleteOrchideaCourse(id) {
   if (!error && Array.isArray(deletedRows) && deletedRows.length > 0) return true
 
   if (!error || isPermissionError(error)) {
-    const { data: rpcData, error: rpcError } = await orchideaSupabase.rpc('nova_delete_corso', {
+    const { data: rpcData, error: rpcError } = await secureOrchideaRpc('nova_delete_corso', {
       p_id: String(id),
     })
 
@@ -674,7 +675,7 @@ export async function addCourseParticipant({ courseId, studentId, tariffaMensile
 
   if (error) {
     if (isPermissionError(error) || isMissingTableError(error)) {
-      const { data: rpcData, error: rpcError } = await orchideaSupabase.rpc('nova_iscrivi_allievo_corso', {
+      const { data: rpcData, error: rpcError } = await secureOrchideaRpc('nova_iscrivi_allievo_corso', {
         p_corso_id: courseId,
         p_tesseramento_id: studentId,
         p_tariffa_mensile: payload.tariffa_mensile,
@@ -733,7 +734,7 @@ export async function removeCourseParticipant(enrollmentId, { effectiveMonth = n
 
   if (error) {
     if (isPermissionError(error) || isMissingTableError(error)) {
-      const { data: rpcData, error: rpcError } = await orchideaSupabase.rpc('nova_rimuovi_iscrizione_corso', {
+      const { data: rpcData, error: rpcError } = await secureOrchideaRpc('nova_rimuovi_iscrizione_corso', {
         p_iscrizione_id: enrollmentId,
       })
       if (rpcError) throw new Error(rpcError.message || 'Errore rimozione iscrizione')
@@ -778,7 +779,7 @@ export async function updateCourseEnrollmentPricing({ enrollmentId, payload = {}
 
   if (error) {
     if (isPermissionError(error) || isMissingTableError(error)) {
-      const { data: rpcData, error: rpcError } = await orchideaSupabase.rpc('nova_aggiorna_quota_iscrizione', {
+      const { data: rpcData, error: rpcError } = await secureOrchideaRpc('nova_aggiorna_quota_iscrizione', {
         p_iscrizione_id: enrollmentId,
         p_quota_allievo: clean.quota_allievo_mensile,
         p_quota_insegnante: clean.quota_insegnante_mensile,
