@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { orchideaSupabase } from './orchideaSupabase'
+import { secureOrchideaRpc } from './secureOrchideaRpc'
 import { fetchTesserati, updateTesserato } from './tesserati'
 import { summarizeMonthlyTuitionPayments } from '../lib/paymentLedger'
 import { enrollmentIsActiveForMonth, monthStartDate, resolveEnrollmentPricing } from '../lib/packagePricing'
@@ -45,7 +46,7 @@ function parseRpcJsonArray(data) {
 }
 
 async function rpcJsonArray(functionName, args = {}) {
-  const { data, error } = await orchideaSupabase.rpc(functionName, args)
+  const { data, error } = await secureOrchideaRpc(functionName, args)
   if (error) throw error
   return parseRpcJsonArray(data)
 }
@@ -337,7 +338,7 @@ export async function createOrchideaCourse(payload) {
 
   if (error) {
     if (isPermissionError(error)) {
-      const { data: rpcData, error: rpcError } = await orchideaSupabase.rpc('nova_create_corso', {
+      const { data: rpcData, error: rpcError } = await secureOrchideaRpc('nova_create_corso', {
         p_payload: clean,
       })
       if (rpcError) {
@@ -368,7 +369,7 @@ export async function updateOrchideaCourse(id, payload) {
 
   if (error) {
     if (isPermissionError(error)) {
-      const { data: rpcData, error: rpcError } = await orchideaSupabase.rpc('nova_update_corso', {
+      const { data: rpcData, error: rpcError } = await secureOrchideaRpc('nova_update_corso', {
         p_id: id,
         p_payload: clean,
       })
@@ -404,7 +405,7 @@ export async function deleteOrchideaCourse(id) {
   if (!error && Array.isArray(deletedRows) && deletedRows.length > 0) return true
 
   if (!error || isPermissionError(error)) {
-    const { data: rpcData, error: rpcError } = await orchideaSupabase.rpc('nova_delete_corso', {
+    const { data: rpcData, error: rpcError } = await secureOrchideaRpc('nova_delete_corso', {
       p_id: String(id),
     })
 
@@ -674,7 +675,7 @@ export async function addCourseParticipant({ courseId, studentId, tariffaMensile
 
   if (error) {
     if (isPermissionError(error) || isMissingTableError(error)) {
-      const { data: rpcData, error: rpcError } = await orchideaSupabase.rpc('nova_iscrivi_allievo_corso', {
+      const { data: rpcData, error: rpcError } = await secureOrchideaRpc('nova_iscrivi_allievo_corso', {
         p_corso_id: courseId,
         p_tesseramento_id: studentId,
         p_tariffa_mensile: payload.tariffa_mensile,
@@ -733,7 +734,7 @@ export async function removeCourseParticipant(enrollmentId, { effectiveMonth = n
 
   if (error) {
     if (isPermissionError(error) || isMissingTableError(error)) {
-      const { data: rpcData, error: rpcError } = await orchideaSupabase.rpc('nova_rimuovi_iscrizione_corso', {
+      const { data: rpcData, error: rpcError } = await secureOrchideaRpc('nova_rimuovi_iscrizione_corso', {
         p_iscrizione_id: enrollmentId,
       })
       if (rpcError) throw new Error(rpcError.message || 'Errore rimozione iscrizione')
@@ -778,7 +779,7 @@ export async function updateCourseEnrollmentPricing({ enrollmentId, payload = {}
 
   if (error) {
     if (isPermissionError(error) || isMissingTableError(error)) {
-      const { data: rpcData, error: rpcError } = await orchideaSupabase.rpc('nova_aggiorna_quota_iscrizione', {
+      const { data: rpcData, error: rpcError } = await secureOrchideaRpc('nova_aggiorna_quota_iscrizione', {
         p_iscrizione_id: enrollmentId,
         p_quota_allievo: clean.quota_allievo_mensile,
         p_quota_insegnante: clean.quota_insegnante_mensile,
@@ -1002,36 +1003,63 @@ function monthlyCourseHours(course, selectedMonth) {
   return countWeekdayOccurrences(selectedMonth, weekday) * hoursPerLesson
 }
 
-export async function fetchTeacherMonthlyPayouts({ month = '' } = {}) {
-  const selectedMonth = month || new Date().toISOString().slice(0, 7)
+async function fetchTeacherPayoutSourceRowsServerFirst() {
+  // Fonti amministrative: preferiamo l'API Nova che autentica l'operatore.
+  // In caso di indisponibilità tecnica conserviamo il percorso legacy fino
+  // al collaudo completo della migrazione RLS. Nessun fallback su 401/403.
+  try {
+    const { data: authData, error: authError } = await supabase.auth.getSession()
+    const token = authData?.session?.access_token
+    if (authError || !token) {
+      const error = new Error('Sessione Nova mancante per i compensi insegnanti.')
+      error.status = 401
+      throw error
+    }
+    const response = await fetch('/api/orchidea-payments-read?payoutSources=1', {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok || !payload.ok) {
+      const error = new Error(payload.error || `Errore archivio compensi (${response.status})`)
+      error.status = response.status
+      throw error
+    }
+    return {
+      enrollmentsRes: { data: payload.enrollments || [], error: null },
+      paymentsRes: { data: payload.payments || [], error: null },
+      pricingHistoryRes: { data: payload.pricingHistory || [], error: null },
+    }
+  } catch (error) {
+    if (error?.status === 401 || error?.status === 403) throw error
+    console.warn('Fonti compensi via server non disponibili; uso la lettura precedente:', error?.message || error)
+  }
 
-  const [enrollmentsRes, paymentsRes, pricingHistoryRes, teachers, courses] = await Promise.all([
+  const [enrollmentsRes, paymentsRes, pricingHistoryRes] = await Promise.all([
     orchideaSupabase
       .from('iscrizioni_corsi')
       .select(`
-        id,
-        stato,
-        tesseramento_id,
-        corso_id,
-        tariffa_mensile,
-        quota_allievo_mensile,
-        quota_insegnante_mensile,
-        percentuale_insegnante,
-        pacchetto_nome,
-        pacchetto_totale_mensile,
-        note_pacchetto,
-        data_iscrizione,
-        data_inizio,
-        data_fine,
-        rinnovo_attivo,
-        tesseramenti (id, nome, cognome)
-      `)
-      .limit(10000),
+        id,stato,tesseramento_id,corso_id,tariffa_mensile,
+        quota_allievo_mensile,quota_insegnante_mensile,
+        percentuale_insegnante,pacchetto_nome,pacchetto_totale_mensile,
+        note_pacchetto,data_iscrizione,data_inizio,data_fine,
+        rinnovo_attivo,tesseramenti(id,nome,cognome)
+      `).limit(10000),
     orchideaSupabase.from('pagamenti').select('*').limit(10000),
     orchideaSupabase.from('nova_package_pricing_history').select('*').limit(20000),
+  ])
+  return { enrollmentsRes, paymentsRes, pricingHistoryRes }
+}
+
+export async function fetchTeacherMonthlyPayouts({ month = '' } = {}) {
+  const selectedMonth = month || new Date().toISOString().slice(0, 7)
+
+  const [sourceRows, teachers, courses] = await Promise.all([
+    fetchTeacherPayoutSourceRowsServerFirst(),
     fetchOrchideaTeachers({ search: '' }).catch(() => []),
     fetchOrchideaCourses().catch(() => []),
   ])
+  const { enrollmentsRes, paymentsRes, pricingHistoryRes } = sourceRows
 
   if (enrollmentsRes.error) {
     if (isPermissionError(enrollmentsRes.error) || isMissingTableError(enrollmentsRes.error)) return []

@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { orchideaSupabase, getOrchideaConfigStatus, hasDedicatedOrchideaConfig, getOrchideaAuthStatus } from './orchideaSupabase'
+import { secureOrchideaRpc } from './secureOrchideaRpc'
 
 const TESSERAMENTI_SELECT = `
   id,
@@ -203,7 +204,7 @@ function parseRpcJsonArray(data) {
 }
 
 async function fetchOrchideaTesseramentiViaBridge(config) {
-  const { data, error } = await orchideaSupabase.rpc('nova_tesseramenti_list')
+  const { data, error } = await secureOrchideaRpc('nova_tesseramenti_list')
   if (error) throw error
   return withSource(parseRpcJsonArray(data), 'tesseramenti', 'Orchidea Allievi', config.mode)
 }
@@ -244,7 +245,7 @@ async function fetchOrchideaTesseramentiViaServer(config) {
 }
 
 async function updateOrchideaTesseramentoViaBridge(id, payload) {
-  const { data, error } = await orchideaSupabase.rpc('nova_update_tesseramento', {
+  const { data, error } = await secureOrchideaRpc('nova_update_tesseramento', {
     p_id: id,
     p_payload: cleanStudentPayload(payload),
   })
@@ -254,7 +255,7 @@ async function updateOrchideaTesseramentoViaBridge(id, payload) {
 }
 
 async function fetchTesseratoDetailsViaBridge(id) {
-  const { data, error } = await orchideaSupabase.rpc('nova_tesseramento_details', { p_tesseramento_id: id })
+  const { data, error } = await secureOrchideaRpc('nova_tesseramento_details', { p_tesseramento_id: id })
   if (error) throw error
   return {
     enrollments: Array.isArray(data?.enrollments) ? data.enrollments : [],
@@ -266,14 +267,20 @@ async function fetchOrchideaTesseramenti() {
   const config = getOrchideaConfigStatus()
 
   if (hasDedicatedOrchideaConfig) {
-    const authStatus = await getOrchideaAuthStatus()
-    if (!authStatus.authenticated) {
-      // Prima scelta: endpoint server protetto dal login Nova. Non richiede che
-      // la segreteria abbia già una seconda sessione browser sul progetto Orchidea.
-      try {
-        return await fetchOrchideaTesseramentiViaServer(config)
-      } catch (serverError) {
-        // Compatibilità con installazioni precedenti: proviamo anche il bridge RPC.
+    // Priorità al server Nova: verifica il token dell'operatore prima di leggere
+    // dati sensibili dal progetto Orchidea tramite la chiave riservata server-side.
+    // Non richiede una seconda sessione Supabase nel browser.
+    try {
+      return await fetchOrchideaTesseramentiViaServer(config)
+    } catch (serverError) {
+      // Autorizzazione negata: mai passare al client pubblico come fallback.
+      if ([401, 403].includes(serverError?.status) || serverError?.code === 'NOVA_AUTH_REQUIRED') {
+        throw serverError
+      }
+      // Fase transitoria: manteniamo intatti i percorsi legacy per evitare
+      // interruzioni operative. Saranno rimossi solo dopo collaudi e migrazione RLS.
+      const authStatus = await getOrchideaAuthStatus()
+      if (!authStatus.authenticated) {
         try {
           return await fetchOrchideaTesseramentiViaBridge(config)
         } catch (bridgeError) {
@@ -286,6 +293,8 @@ async function fetchOrchideaTesseramenti() {
           throw authError
         }
       }
+      // Con un account Orchidea autenticato, viene usata la lettura diretta
+      // preesistente come ultima risorsa, senza cambiare il comportamento legacy.
     }
   }
 
@@ -304,6 +313,9 @@ async function fetchOrchideaTesseramenti() {
         try {
           return await fetchOrchideaTesseramentiViaServer(config)
         } catch (serverError) {
+          if ([401, 403].includes(serverError?.status) || serverError?.code === 'NOVA_AUTH_REQUIRED') {
+            throw serverError
+          }
           try {
             return await fetchOrchideaTesseramentiViaBridge(config)
           } catch (bridgeError) {
@@ -410,8 +422,44 @@ export async function fetchTesserati(filters = {}) {
   }
 }
 
+async function fetchTesseratoDetailsViaServer(id) {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  if (sessionError) throw sessionError
+  const token = sessionData?.session?.access_token
+  if (!token) {
+    const error = new Error('Accedi a Nova per consultare i dettagli del tesserato.')
+    error.status = 401
+    throw error
+  }
+  const params = new URLSearchParams({ details: '1', studentId: String(id) })
+  const response = await fetch(`/api/orchidea-students?${params.toString()}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok || !payload.ok) {
+    const error = new Error(payload.error || `Dettagli tesserato non disponibili (${response.status})`)
+    error.status = response.status
+    throw error
+  }
+  return {
+    enrollments: Array.isArray(payload.enrollments) ? payload.enrollments : [],
+    payments: Array.isArray(payload.payments) ? payload.payments : [],
+  }
+}
+
 export async function fetchTesseratoDetails(id) {
   if (!id) return { enrollments: [], payments: [] }
+
+  // Serve come percorso principale e verifica i permessi lato server.
+  // Manteniamo temporaneamente il percorso legacy come fallback fino al
+  // completamento dei collaudi sulle autorizzazioni RLS.
+  try {
+    return await fetchTesseratoDetailsViaServer(id)
+  } catch (serverError) {
+    if (serverError?.status === 401 || serverError?.status === 403) throw serverError
+    console.warn('Lettura dettagli via server non disponibile:', serverError?.message || serverError)
+  }
 
   try {
     const [enrollmentsResult, paymentsResult] = await Promise.all([
@@ -523,19 +571,8 @@ export async function toggleCorsista(student) {
     return updateTesserato(student.id, { ...student, is_corsista: !student.is_corsista }, { sourceTable: 'tesserati' })
   }
 
-  const { data, error } = await orchideaSupabase
-    .from('tesseramenti')
-    .update({
-      is_corsista: !student.is_corsista,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', student.id)
-    .select(TESSERAMENTI_SELECT)
-    .single()
-
-  if (error) throw new Error(error.message || 'Errore aggiornamento ruolo corsista')
-  invalidateTesseratiCache()
-  return { ...data, _sourceTable: 'tesseramenti', _sourceLabel: 'Orchidea Allievi' }
+  // Le modifiche amministrative devono passare dal server Nova autenticato.
+  return updateTesserato(student.id, { is_corsista: !student.is_corsista }, { sourceTable: 'tesseramenti' })
 }
 
 export async function generateMembershipNumber(student) {
@@ -546,16 +583,7 @@ export async function generateMembershipNumber(student) {
   const students = await fetchTesserati()
   const nextNumber = makeNextMembershipNumber(students)
 
-  const { data, error } = await orchideaSupabase
-    .from('tesseramenti')
-    .update({ numero_tessera: nextNumber, updated_at: new Date().toISOString() })
-    .eq('id', student.id)
-    .select(TESSERAMENTI_SELECT)
-    .single()
-
-  if (error) throw new Error(error.message || 'Errore generazione numero tessera')
-  invalidateTesseratiCache()
-  return { ...data, _sourceTable: 'tesseramenti', _sourceLabel: 'Orchidea Allievi' }
+  return updateTesserato(student.id, { numero_tessera: nextNumber }, { sourceTable: 'tesseramenti' })
 }
 
 export async function generateMissingMembershipNumbers() {
@@ -574,12 +602,8 @@ export async function generateMissingMembershipNumbers() {
 
   for (const student of missing) {
     const nextNumber = makeNextMembershipNumber(localStudents)
-    const { error } = await orchideaSupabase
-      .from('tesseramenti')
-      .update({ numero_tessera: nextNumber, updated_at: new Date().toISOString() })
-      .eq('id', student.id)
-
-    if (error) throw new Error(error.message || 'Errore generazione numeri tessera')
+    // Sequenziale: la scrittura usa l'endpoint autenticato e non l'anon key.
+    await updateTesserato(student.id, { numero_tessera: nextNumber }, { sourceTable: 'tesseramenti' })
 
     localStudents = localStudents.map((item) =>
       item.id === student.id ? { ...item, numero_tessera: nextNumber } : item
