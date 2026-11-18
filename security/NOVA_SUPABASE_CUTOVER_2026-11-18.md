@@ -23,6 +23,28 @@ Codice di preparazione: branch `security/nova-server-first-tesseramenti-20261118
 5. Verificare con i log applicativi che tutti gli utilizzi delle 13 RPC elencate passino realmente dal server, inclusi eventuali altri client.
 6. Preparare e conservare la procedura di rollback; effettuare la modifica **solo** in una finestra concordata a basso utilizzo.
 
+## Fase preparatoria — migrazione letture (PR in bozza, build READY)
+
+Sulla branch `security/nova-server-first-tesseramenti-20261118` sono stati aggiunti percorsi server-first con verifica JWT e ruolo operatore Nova:
+
+- `/api/orchidea-students`: elenco tesserati, dettagli iscrizioni/pagamenti, gateway RPC con `?rpc=1`.
+- `/api/orchidea-payments-read?includeEnrollments=1&month=YYYY-MM`: fonti per il riepilogo dei pagamenti mensili e per il singolo corsista.
+- `/api/orchidea-payments-read?payoutSources=1`: fonti dei compensi insegnanti, accessibile solo ad admin Nova.
+- Il client rifiuta di ripiegare sulle API pubbliche quando il server restituisce `401` o `403`. Un fallback temporaneo rimane solo per indisponibilità tecniche, **non** per rifiuti di autorizzazione.
+- Le formule economiche, i pacchetti e i dati del database **non sono stati modificati**.
+
+**Limite del test attuale:** la chiave `ORCHIDEA_SUPABASE_SERVICE_ROLE_KEY` è configurata su Vercel Nova solo nell'ambiente production. I deployment preview compilano correttamente ma non possono ancora collaudare l'intero percorso server Orchidea con dati di test isolati. Non trasferire chiavi di produzione al preview senza un progetto separato e autorizzato.
+
+**Gate obbligatorio prima della Fase A:**
+
+1. Collaudare con operatori autorizzati tutte le letture server-first (tesserati, pagamenti, iscrizioni e compensi), confrontando risultati e somme con il comportamento precedente su record di test.
+2. Verificare in un ambiente isolato rifiuti `401`/`403`, permessi della funzione RPC e contenuto delle risposte, senza dati personali reali.
+3. Migrare tutte le **scritture dirette ancora presenti** in `src/api/orchideaPayments.js` e `src/api/orchideaEntities.js`, incluse operazioni su pagamenti, pacchetti e iscrizioni, preservando rollback e controlli di concorrenza.
+4. Approvare un rollout graduale con monitoraggio di errori e contatori database.
+5. Verificare le dipendenze da RPC anche fuori da Nova prima di revocare i permessi.
+
+Nessuna delle istruzioni SQL di seguito è stata eseguita in questa fase.
+
 ## Fase A — revoca delle RPC pubbliche (non eseguita)
 
 Le 13 RPC `SECURITY DEFINER` seguenti non hanno controlli espliciti di autenticazione nel corpo SQL e sono eseguibili da `anon`.
