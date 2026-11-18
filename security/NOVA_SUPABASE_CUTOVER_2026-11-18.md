@@ -12,7 +12,7 @@ Codice di preparazione: branch `security/nova-server-first-tesseramenti-20261118
 - Nova ha la propria istanza Supabase `Gest` (`ppkvazistdirigsnochv`).
 - L'archivio tesseramenti/pagamenti usato dal sito Orchidea è nel progetto Supabase `website` (`egiszddctzwamzndsbtx`).
 - Le API Nova su Vercel verificano il token in `Gest` e possono utilizzare la chiave server del progetto Orchidea tramite variabili riservate.
-- La nuova API `/api/orchidea-secure-rpc` utilizza un elenco chiuso di RPC e verifica ruolo e sessione Nova.
+- La nuova API `/api/orchidea-students?rpc=1` utilizza un elenco chiuso di RPC e verifica ruolo e sessione Nova.
 
 ## Prerequisiti inderogabili
 
