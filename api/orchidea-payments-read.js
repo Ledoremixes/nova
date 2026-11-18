@@ -65,8 +65,36 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return json(res, 405, { error: 'Metodo non consentito' })
 
   try {
-    await requireNovaOperator(req)
+    const operator = await requireNovaOperator(req)
     const orchidea = orchideaAdminClient()
+
+    // Fonti per il calcolo dei compensi: sola lettura e riservata agli admin.
+    // Il calcolo economico resta nel gestionale; nessuna scrittura qui.
+    if (String(req.query?.payoutSources || '') === '1') {
+      if (operator.role !== 'admin') {
+        return json(res, 403, { error: 'Operazione riservata agli amministratori Nova.' })
+      }
+      const [enrollmentsRes, paymentsRes, pricingHistoryRes] = await Promise.all([
+        orchidea.from('iscrizioni_corsi').select(`
+          id,stato,tesseramento_id,corso_id,tariffa_mensile,
+          quota_allievo_mensile,quota_insegnante_mensile,
+          percentuale_insegnante,pacchetto_nome,pacchetto_totale_mensile,
+          note_pacchetto,data_iscrizione,data_inizio,data_fine,
+          rinnovo_attivo,tesseramenti(id,nome,cognome)
+        `).limit(10000),
+        orchidea.from('pagamenti').select('*').limit(10000),
+        orchidea.from('nova_package_pricing_history').select('*').limit(20000),
+      ])
+      if (enrollmentsRes.error) throw enrollmentsRes.error
+      if (paymentsRes.error) throw paymentsRes.error
+      if (pricingHistoryRes.error) throw pricingHistoryRes.error
+      return json(res, 200, {
+        ok: true,
+        enrollments: enrollmentsRes.data || [],
+        payments: paymentsRes.data || [],
+        pricingHistory: pricingHistoryRes.data || [],
+      })
+    }
 
     // Lo storico e' consultabile solo da operatori Nova autenticati. I log
     // completi rimangono nel database e non sono esposti alle sessioni allievi.
