@@ -428,33 +428,21 @@ async function fetchAllieviPaymentsMonthSnapshot(selectedMonth) {
   const promise = (async () => {
     const monthStart = `${selectedMonth}-01`
     const monthEnd = dayjs(monthStart).endOf('month').format('YYYY-MM-DD')
-    const [enrollmentsRes, students, courses, paymentsRes, pricingHistoryRes, packages, membershipFees] = await Promise.all([
-      orchideaSupabase
-        .from('iscrizioni_corsi')
-        .select('id,stato,tesseramento_id,corso_id,tariffa_mensile,quota_allievo_mensile,quota_insegnante_mensile,percentuale_insegnante,tipo_pagamento,data_iscrizione,data_inizio,data_fine,rinnovo_attivo,pacchetto_id,pacchetto_nome,pacchetto_totale_mensile,quota_pacchetto_percentuale,created_at')
-        .limit(10000),
+    const [financialSnapshot, students, courses, packages, membershipFees] = await Promise.all([
+      fetchFinancialRowsServerFirst({ month: selectedMonth }),
       fetchOrchideaStudents({ onlyCorsisti: false }),
       fetchOrchideaCourseCatalog(),
-      orchideaSupabase
-        .from('pagamenti')
-        .select('*')
-        .or(`periodo.eq.${selectedMonth},and(mese.gte.${monthStart},mese.lte.${monthEnd}),and(scadenza.gte.${monthStart},scadenza.lte.${monthEnd})`)
-        .limit(5000),
-      orchideaSupabase
-        .from('nova_package_pricing_history')
-        .select('*')
-        .lte('effective_from', monthEnd)
-        .limit(10000),
       fetchPackagesCatalog({ includeInactive: false }).catch(() => []),
       fetchMembershipFeeRecords().catch(() => []),
     ])
+    const { enrollmentsRes, paymentsRes, pricingHistoryRes } = financialSnapshot
 
     if (enrollmentsRes.error) throw new Error(enrollmentsRes.error.message || 'Errore caricamento iscrizioni corsi')
 
     let paymentRows = paymentsRes.error ? [] : (paymentsRes.data || [])
     let pricingHistoryRows = pricingHistoryRes.error ? [] : (pricingHistoryRes.data || [])
 
-    const shouldVerifyPaymentsOnServer = Boolean(
+    const shouldVerifyPaymentsOnServer = !financialSnapshot.fromServer && Boolean(
       paymentsRes.error
       || pricingHistoryRes.error
       || ((enrollmentsRes.data || []).length > 0 && paymentRows.length === 0),
@@ -519,29 +507,14 @@ export async function fetchStudentPaymentMonth({ tesseramentoId, month, student 
 
   const monthStart = `${selectedMonth}-01`
   const monthEnd = dayjs(monthStart).endOf('month').format('YYYY-MM-DD')
-  const [enrollmentsRes, courses, paymentsRes, pricingHistoryRes, packages, membershipRecord, students] = await Promise.all([
-    orchideaSupabase
-      .from('iscrizioni_corsi')
-      .select('id,stato,tesseramento_id,corso_id,tariffa_mensile,quota_allievo_mensile,quota_insegnante_mensile,percentuale_insegnante,tipo_pagamento,data_iscrizione,data_inizio,data_fine,rinnovo_attivo,pacchetto_id,pacchetto_nome,pacchetto_totale_mensile,quota_pacchetto_percentuale,created_at')
-      .eq('tesseramento_id', tesseramentoId)
-      .limit(1000),
+  const [financialSnapshot, courses, packages, membershipRecord, students] = await Promise.all([
+    fetchFinancialRowsServerFirst({ month: selectedMonth, studentId: tesseramentoId }),
     fetchOrchideaCourseCatalog(),
-    orchideaSupabase
-      .from('pagamenti')
-      .select('*')
-      .eq('tesseramento_id', tesseramentoId)
-      .or(`periodo.eq.${selectedMonth},and(mese.gte.${monthStart},mese.lte.${monthEnd}),and(scadenza.gte.${monthStart},scadenza.lte.${monthEnd})`)
-      .limit(500),
-    orchideaSupabase
-      .from('nova_package_pricing_history')
-      .select('*')
-      .eq('tesseramento_id', tesseramentoId)
-      .lte('effective_from', monthEnd)
-      .limit(1000),
     fetchPackagesCatalog({ includeInactive: false }).catch(() => []),
     fetchMembershipFeeRecord(tesseramentoId).catch(() => null),
     student ? Promise.resolve([student]) : fetchOrchideaStudents({ onlyCorsisti: false }),
   ])
+  const { enrollmentsRes, paymentsRes, pricingHistoryRes } = financialSnapshot
 
   if (enrollmentsRes.error) throw new Error(enrollmentsRes.error.message || 'Errore caricamento corsi del corsista')
 
