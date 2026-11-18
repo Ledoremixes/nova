@@ -52,7 +52,7 @@ function filterPaymentRows(rows, { search = '', courseId = 'all', status = 'all'
 }
 
 
-async function fetchPaymentReadSnapshotViaServer({ month = '', studentId = '' } = {}) {
+async function fetchPaymentReadSnapshotViaServer({ month = '', studentId = '', includeEnrollments = false } = {}) {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
   if (sessionError || !sessionData?.session?.access_token) {
     throw new Error('Sessione Nova non disponibile per verificare i pagamenti.')
@@ -61,6 +61,7 @@ async function fetchPaymentReadSnapshotViaServer({ month = '', studentId = '' } 
   const params = new URLSearchParams()
   if (month) params.set('month', month)
   if (studentId) params.set('studentId', String(studentId))
+  if (includeEnrollments) params.set('includeEnrollments', '1')
   const response = await fetch(`/api/orchidea-payments-read${params.size ? `?${params.toString()}` : ''}`, {
     method: 'GET',
     headers: {
@@ -76,11 +77,55 @@ async function fetchPaymentReadSnapshotViaServer({ month = '', studentId = '' } 
     body = {}
   }
 
-  if (!response.ok) throw new Error(body.error || `Errore lettura pagamenti (${response.status})`)
+  if (!response.ok) {
+    const failure = new Error(body.error || `Errore lettura pagamenti (${response.status})`)
+    failure.status = response.status
+    throw failure
+  }
   return {
     payments: Array.isArray(body.payments) ? body.payments : [],
     pricingHistory: Array.isArray(body.pricingHistory) ? body.pricingHistory : [],
+    ...(includeEnrollments ? { enrollments: Array.isArray(body.enrollments) ? body.enrollments : [] } : {}),
   }
+}
+
+
+// Durante la migrazione usiamo prima la risposta autenticata del server Nova.
+// Solo problemi tecnici del server consentono il fallback di compatibilità:
+// mai usare la lettura diretta per aggirare un 401 o un 403.
+async function fetchFinancialRowsServerFirst({ month, studentId = '' }) {
+  try {
+    const snapshot = await fetchPaymentReadSnapshotViaServer({ month, studentId, includeEnrollments: true })
+    return {
+      fromServer: true,
+      enrollmentsRes: { data: snapshot.enrollments, error: null },
+      paymentsRes: { data: snapshot.payments, error: null },
+      pricingHistoryRes: { data: snapshot.pricingHistory, error: null },
+    }
+  } catch (error) {
+    if (error?.status === 401 || error?.status === 403) throw error
+    console.warn('Archivio finanziario server non disponibile; uso lettura compatibile:', error?.message || error)
+  }
+
+  const monthStart = `${month}-01`
+  const monthEnd = dayjs(monthStart).endOf('month').format('YYYY-MM-DD')
+  const enrollmentSelect = 'id,stato,tesseramento_id,corso_id,tariffa_mensile,quota_allievo_mensile,quota_insegnante_mensile,percentuale_insegnante,tipo_pagamento,data_iscrizione,data_inizio,data_fine,rinnovo_attivo,pacchetto_id,pacchetto_nome,pacchetto_totale_mensile,quota_pacchetto_percentuale,created_at'
+  let enrollmentsQuery = orchideaSupabase.from('iscrizioni_corsi').select(enrollmentSelect)
+  let paymentsQuery = orchideaSupabase.from('pagamenti').select('*')
+    .or(`periodo.eq.${month},and(mese.gte.${monthStart},mese.lte.${monthEnd}),and(scadenza.gte.${monthStart},scadenza.lte.${monthEnd})`)
+  let pricingQuery = orchideaSupabase.from('nova_package_pricing_history').select('*')
+    .lte('effective_from', monthEnd)
+  if (studentId) {
+    enrollmentsQuery = enrollmentsQuery.eq('tesseramento_id', studentId)
+    paymentsQuery = paymentsQuery.eq('tesseramento_id', studentId)
+    pricingQuery = pricingQuery.eq('tesseramento_id', studentId)
+  }
+  const [enrollmentsRes, paymentsRes, pricingHistoryRes] = await Promise.all([
+    enrollmentsQuery.limit(studentId ? 1000 : 10000),
+    paymentsQuery.limit(studentId ? 500 : 5000),
+    pricingQuery.limit(studentId ? 1000 : 10000),
+  ])
+  return { fromServer: false, enrollmentsRes, paymentsRes, pricingHistoryRes }
 }
 
 function uuidOrNull(value) {
