@@ -55,7 +55,9 @@ function filterPaymentRows(rows, { search = '', courseId = 'all', status = 'all'
 async function fetchPaymentReadSnapshotViaServer({ month = '', studentId = '', includeEnrollments = false } = {}) {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
   if (sessionError || !sessionData?.session?.access_token) {
-    throw new Error('Sessione Nova non disponibile per verificare i pagamenti.')
+    const error = new Error('Sessione Nova non disponibile per verificare i pagamenti.')
+    error.status = 401
+    throw error
   }
 
   const params = new URLSearchParams()
