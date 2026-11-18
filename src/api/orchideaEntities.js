@@ -1003,36 +1003,63 @@ function monthlyCourseHours(course, selectedMonth) {
   return countWeekdayOccurrences(selectedMonth, weekday) * hoursPerLesson
 }
 
-export async function fetchTeacherMonthlyPayouts({ month = '' } = {}) {
-  const selectedMonth = month || new Date().toISOString().slice(0, 7)
+async function fetchTeacherPayoutSourceRowsServerFirst() {
+  // Fonti amministrative: preferiamo l'API Nova che autentica l'operatore.
+  // In caso di indisponibilità tecnica conserviamo il percorso legacy fino
+  // al collaudo completo della migrazione RLS. Nessun fallback su 401/403.
+  try {
+    const { data: authData, error: authError } = await supabase.auth.getSession()
+    const token = authData?.session?.access_token
+    if (authError || !token) {
+      const error = new Error('Sessione Nova mancante per i compensi insegnanti.')
+      error.status = 401
+      throw error
+    }
+    const response = await fetch('/api/orchidea-payments-read?payoutSources=1', {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok || !payload.ok) {
+      const error = new Error(payload.error || `Errore archivio compensi (${response.status})`)
+      error.status = response.status
+      throw error
+    }
+    return {
+      enrollmentsRes: { data: payload.enrollments || [], error: null },
+      paymentsRes: { data: payload.payments || [], error: null },
+      pricingHistoryRes: { data: payload.pricingHistory || [], error: null },
+    }
+  } catch (error) {
+    if (error?.status === 401 || error?.status === 403) throw error
+    console.warn('Fonti compensi via server non disponibili; uso la lettura precedente:', error?.message || error)
+  }
 
-  const [enrollmentsRes, paymentsRes, pricingHistoryRes, teachers, courses] = await Promise.all([
+  const [enrollmentsRes, paymentsRes, pricingHistoryRes] = await Promise.all([
     orchideaSupabase
       .from('iscrizioni_corsi')
       .select(`
-        id,
-        stato,
-        tesseramento_id,
-        corso_id,
-        tariffa_mensile,
-        quota_allievo_mensile,
-        quota_insegnante_mensile,
-        percentuale_insegnante,
-        pacchetto_nome,
-        pacchetto_totale_mensile,
-        note_pacchetto,
-        data_iscrizione,
-        data_inizio,
-        data_fine,
-        rinnovo_attivo,
-        tesseramenti (id, nome, cognome)
-      `)
-      .limit(10000),
+        id,stato,tesseramento_id,corso_id,tariffa_mensile,
+        quota_allievo_mensile,quota_insegnante_mensile,
+        percentuale_insegnante,pacchetto_nome,pacchetto_totale_mensile,
+        note_pacchetto,data_iscrizione,data_inizio,data_fine,
+        rinnovo_attivo,tesseramenti(id,nome,cognome)
+      `).limit(10000),
     orchideaSupabase.from('pagamenti').select('*').limit(10000),
     orchideaSupabase.from('nova_package_pricing_history').select('*').limit(20000),
+  ])
+  return { enrollmentsRes, paymentsRes, pricingHistoryRes }
+}
+
+export async function fetchTeacherMonthlyPayouts({ month = '' } = {}) {
+  const selectedMonth = month || new Date().toISOString().slice(0, 7)
+
+  const [sourceRows, teachers, courses] = await Promise.all([
+    fetchTeacherPayoutSourceRowsServerFirst(),
     fetchOrchideaTeachers({ search: '' }).catch(() => []),
     fetchOrchideaCourses().catch(() => []),
   ])
+  const { enrollmentsRes, paymentsRes, pricingHistoryRes } = sourceRows
 
   if (enrollmentsRes.error) {
     if (isPermissionError(enrollmentsRes.error) || isMissingTableError(enrollmentsRes.error)) return []
