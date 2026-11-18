@@ -414,8 +414,44 @@ export async function fetchTesserati(filters = {}) {
   }
 }
 
+async function fetchTesseratoDetailsViaServer(id) {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  if (sessionError) throw sessionError
+  const token = sessionData?.session?.access_token
+  if (!token) {
+    const error = new Error('Accedi a Nova per consultare i dettagli del tesserato.')
+    error.status = 401
+    throw error
+  }
+  const params = new URLSearchParams({ details: '1', studentId: String(id) })
+  const response = await fetch(`/api/orchidea-students?${params.toString()}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok || !payload.ok) {
+    const error = new Error(payload.error || `Dettagli tesserato non disponibili (${response.status})`)
+    error.status = response.status
+    throw error
+  }
+  return {
+    enrollments: Array.isArray(payload.enrollments) ? payload.enrollments : [],
+    payments: Array.isArray(payload.payments) ? payload.payments : [],
+  }
+}
+
 export async function fetchTesseratoDetails(id) {
   if (!id) return { enrollments: [], payments: [] }
+
+  // Serve come percorso principale e verifica i permessi lato server.
+  // Manteniamo temporaneamente il percorso legacy come fallback fino al
+  // completamento dei collaudi sulle autorizzazioni RLS.
+  try {
+    return await fetchTesseratoDetailsViaServer(id)
+  } catch (serverError) {
+    if (serverError?.status === 401 || serverError?.status === 403) throw serverError
+    console.warn('Lettura dettagli via server non disponibile:', serverError?.message || serverError)
+  }
 
   try {
     const [enrollmentsResult, paymentsResult] = await Promise.all([
@@ -527,19 +563,8 @@ export async function toggleCorsista(student) {
     return updateTesserato(student.id, { ...student, is_corsista: !student.is_corsista }, { sourceTable: 'tesserati' })
   }
 
-  const { data, error } = await orchideaSupabase
-    .from('tesseramenti')
-    .update({
-      is_corsista: !student.is_corsista,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', student.id)
-    .select(TESSERAMENTI_SELECT)
-    .single()
-
-  if (error) throw new Error(error.message || 'Errore aggiornamento ruolo corsista')
-  invalidateTesseratiCache()
-  return { ...data, _sourceTable: 'tesseramenti', _sourceLabel: 'Orchidea Allievi' }
+  // Le modifiche amministrative devono passare dal server Nova autenticato.
+  return updateTesserato(student.id, { is_corsista: !student.is_corsista }, { sourceTable: 'tesseramenti' })
 }
 
 export async function generateMembershipNumber(student) {
@@ -550,16 +575,7 @@ export async function generateMembershipNumber(student) {
   const students = await fetchTesserati()
   const nextNumber = makeNextMembershipNumber(students)
 
-  const { data, error } = await orchideaSupabase
-    .from('tesseramenti')
-    .update({ numero_tessera: nextNumber, updated_at: new Date().toISOString() })
-    .eq('id', student.id)
-    .select(TESSERAMENTI_SELECT)
-    .single()
-
-  if (error) throw new Error(error.message || 'Errore generazione numero tessera')
-  invalidateTesseratiCache()
-  return { ...data, _sourceTable: 'tesseramenti', _sourceLabel: 'Orchidea Allievi' }
+  return updateTesserato(student.id, { numero_tessera: nextNumber }, { sourceTable: 'tesseramenti' })
 }
 
 export async function generateMissingMembershipNumbers() {
@@ -578,12 +594,8 @@ export async function generateMissingMembershipNumbers() {
 
   for (const student of missing) {
     const nextNumber = makeNextMembershipNumber(localStudents)
-    const { error } = await orchideaSupabase
-      .from('tesseramenti')
-      .update({ numero_tessera: nextNumber, updated_at: new Date().toISOString() })
-      .eq('id', student.id)
-
-    if (error) throw new Error(error.message || 'Errore generazione numeri tessera')
+    // Sequenziale: la scrittura usa l'endpoint autenticato e non l'anon key.
+    await updateTesserato(student.id, { numero_tessera: nextNumber }, { sourceTable: 'tesseramenti' })
 
     localStudents = localStudents.map((item) =>
       item.id === student.id ? { ...item, numero_tessera: nextNumber } : item
