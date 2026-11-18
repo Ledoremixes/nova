@@ -166,6 +166,9 @@ export default async function handler(req, res) {
 
     if (paymentsRes.error) throw paymentsRes.error
     if (includeEnrollments && enrollmentsRes.error) throw enrollmentsRes.error
+    // Per il nuovo percorso server-first non ignoriamo errori dello storico
+    // tariffario: un risultato parziale falserebbe saldi e compensi.
+    if (includeEnrollments && pricingHistoryRes.error) throw pricingHistoryRes.error
 
     return json(res, 200, {
       ok: true,
