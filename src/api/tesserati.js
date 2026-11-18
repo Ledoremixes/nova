@@ -273,6 +273,10 @@ async function fetchOrchideaTesseramenti() {
     try {
       return await fetchOrchideaTesseramentiViaServer(config)
     } catch (serverError) {
+      // Autorizzazione negata: mai passare al client pubblico come fallback.
+      if ([401, 403].includes(serverError?.status) || serverError?.code === 'NOVA_AUTH_REQUIRED') {
+        throw serverError
+      }
       // Fase transitoria: manteniamo intatti i percorsi legacy per evitare
       // interruzioni operative. Saranno rimossi solo dopo collaudi e migrazione RLS.
       const authStatus = await getOrchideaAuthStatus()
@@ -309,6 +313,9 @@ async function fetchOrchideaTesseramenti() {
         try {
           return await fetchOrchideaTesseramentiViaServer(config)
         } catch (serverError) {
+          if ([401, 403].includes(serverError?.status) || serverError?.code === 'NOVA_AUTH_REQUIRED') {
+            throw serverError
+          }
           try {
             return await fetchOrchideaTesseramentiViaBridge(config)
           } catch (bridgeError) {
