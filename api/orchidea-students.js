@@ -152,6 +152,45 @@ export default async function handler(req, res) {
     // per Nova quando il browser sta ancora sincronizzando la seconda sessione
     // Supabase Orchidea o quando il client dedicato non è autenticato.
     // L'accesso resta protetto: accettiamo solo un token Nova valido di admin/user.
+    if (req.method === 'GET' && String(req.query?.details || '') === '1') {
+      // La sessione Nova è già stata verificata da requireNovaOperator.
+      // Non usare RPC SECURITY DEFINER accessibili dal browser per i dettagli.
+      const studentId = String(req.query?.studentId || '').trim()
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(studentId)) {
+        return json(res, 400, { error: 'Identificativo tesserato non valido.' })
+      }
+
+      const [enrollmentsResult, paymentsResult] = await Promise.all([
+        orchidea
+          .from('iscrizioni_corsi')
+          .select(`
+            id,stato,note,tesseramento_id,corso_id,data_iscrizione,
+            tariffa_mensile,quota_allievo_mensile,quota_insegnante_mensile,
+            percentuale_insegnante,note_pacchetto,tipo_pagamento,
+            data_inizio,data_fine,rinnovo_attivo,genera_pagamento,
+            pacchetto_id,pacchetto_nome,pacchetto_totale_mensile,
+            quota_pacchetto_percentuale,created_at,
+            corsi(id,nome,disciplina,livello,giorno_settimana,ora_inizio,ora_fine,prezzo_mensile)
+          `)
+          .eq('tesseramento_id', studentId)
+          .order('created_at', { ascending: false })
+          .limit(1000),
+        orchidea
+          .from('pagamenti')
+          .select('id,tesseramento_id,descrizione,importo,periodo,scadenza,stato,metodo,pagato_il,created_at')
+          .eq('tesseramento_id', studentId)
+          .order('created_at', { ascending: false })
+          .limit(12),
+      ])
+      if (enrollmentsResult.error) throw enrollmentsResult.error
+      if (paymentsResult.error) throw paymentsResult.error
+      return json(res, 200, {
+        ok: true,
+        enrollments: enrollmentsResult.data || [],
+        payments: paymentsResult.data || [],
+      })
+    }
+
     if (req.method === 'GET') {
       const pageSize = 1000
       const students = []
