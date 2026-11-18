@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { orchideaSupabase, getOrchideaConfigStatus, hasDedicatedOrchideaConfig, getOrchideaAuthStatus } from './orchideaSupabase'
+import { secureOrchideaRpc } from './secureOrchideaRpc'
 
 const TESSERAMENTI_SELECT = `
   id,
@@ -203,7 +204,7 @@ function parseRpcJsonArray(data) {
 }
 
 async function fetchOrchideaTesseramentiViaBridge(config) {
-  const { data, error } = await orchideaSupabase.rpc('nova_tesseramenti_list')
+  const { data, error } = await secureOrchideaRpc('nova_tesseramenti_list')
   if (error) throw error
   return withSource(parseRpcJsonArray(data), 'tesseramenti', 'Orchidea Allievi', config.mode)
 }
@@ -244,7 +245,7 @@ async function fetchOrchideaTesseramentiViaServer(config) {
 }
 
 async function updateOrchideaTesseramentoViaBridge(id, payload) {
-  const { data, error } = await orchideaSupabase.rpc('nova_update_tesseramento', {
+  const { data, error } = await secureOrchideaRpc('nova_update_tesseramento', {
     p_id: id,
     p_payload: cleanStudentPayload(payload),
   })
@@ -254,7 +255,7 @@ async function updateOrchideaTesseramentoViaBridge(id, payload) {
 }
 
 async function fetchTesseratoDetailsViaBridge(id) {
-  const { data, error } = await orchideaSupabase.rpc('nova_tesseramento_details', { p_tesseramento_id: id })
+  const { data, error } = await secureOrchideaRpc('nova_tesseramento_details', { p_tesseramento_id: id })
   if (error) throw error
   return {
     enrollments: Array.isArray(data?.enrollments) ? data.enrollments : [],
