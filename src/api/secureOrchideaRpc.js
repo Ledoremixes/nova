@@ -13,7 +13,7 @@ export async function secureOrchideaRpc(functionName, args = {}) {
   }
 
   try {
-    const response = await fetch('/api/orchidea-secure-rpc', {
+    const response = await fetch('/api/orchidea-students?rpc=1', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
