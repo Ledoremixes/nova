@@ -33,3 +33,16 @@ test('Nova operator authorization remains upstream of the proxy', () => {
   assert.ok(source.indexOf('await requireNovaOperator(req)') < source.indexOf("if (req.method === 'POST' && req.body?.operation === 'postgrest-bridge')"))
   assert.ok(source.includes("Authorization: 'Bearer ' + key"))
 })
+
+test('admin canary keeps all connectivity probes read-only and admin-only', () => {
+  const utilities = readFileSync(new URL('../src/pages/UtilitaPage.jsx', import.meta.url), 'utf8')
+  const router = readFileSync(new URL('../src/app/router.jsx', import.meta.url), 'utf8')
+  assert.ok(router.includes("roles={['admin']}><UtilitaPage />"))
+  for (const table of ['tesseramenti','pagamenti','iscrizioni_corsi','corsi','insegnanti_corsi','nova_package_pricing_history']) {
+    assert.equal(validateOrchideaBridgeRoute('/rest/v1/' + table + '?select=id&limit=1', 'HEAD'), true)
+    assert.ok(utilities.includes("'" + table + "'"))
+  }
+  assert.ok(utilities.includes("httpMethod: 'HEAD'"))
+  assert.ok(utilities.includes('securityChecks?.allOk'))
+  assert.ok(utilities.includes("window.sessionStorage.removeItem(ORCHIDEA_CANARY_STORAGE_KEY)"))
+})
