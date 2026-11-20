@@ -11,6 +11,10 @@ const hasDedicatedKey = Boolean(orchideaAnonKey && orchideaAnonKey !== novaAnonK
 
 export const hasDedicatedOrchideaConfig = Boolean(orchideaUrl && orchideaAnonKey && (hasDedicatedUrl || hasDedicatedKey))
 
+// Safety switch: disabled by default in production. Enable only after
+// controlled staff testing; switching the transport does not change auth/RLS.
+export const shouldUseOrchideaServerBridge = import.meta.env.VITE_NOVA_ORCHIDEA_SECURE_BRIDGE === 'true'
+
 // Only the Nova server performs privileged queries against the Orchidea DB.
 // The Nova browser never receives the service-role key. This custom transport
 // keeps the existing PostgREST query builders working (including rpc/range).
@@ -62,7 +66,7 @@ async function novaAuthorizedOrchideaFetch(input, init) {
 // non leggono la sessione del database Nova.
 export const orchideaSupabase = hasDedicatedOrchideaConfig
   ? createClient(orchideaUrl, orchideaAnonKey, {
-      global: { fetch: novaAuthorizedOrchideaFetch },
+      ...(shouldUseOrchideaServerBridge ? { global: { fetch: novaAuthorizedOrchideaFetch } } : {}),
       auth: {
         storageKey: 'nova-orchidea-allievi-auth',
         persistSession: true,
