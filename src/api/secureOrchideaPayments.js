@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { orchideaSupabase, shouldUseOrchideaServerBridge } from './orchideaSupabase'
 
 // Solo pagamenti: usa la sessione Nova per l'autorizzazione lato server.
 // Mai esporre la chiave service_role nel browser o nella API client.
@@ -105,5 +106,6 @@ class PaymentQuery {
 // Compatibilità con lo stile supabase.from('pagamenti') nella sezione Nova.
 // Nessuna chiamata diretta alla tabella pagamenti nel client.
 export function paymentTable() {
-  return new PaymentQuery()
+  // Existing Nova traffic stays unchanged until the bridge is tested.
+  return shouldUseOrchideaServerBridge ? new PaymentQuery() : orchideaSupabase.from('pagamenti')
 }
