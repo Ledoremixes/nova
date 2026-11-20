@@ -168,18 +168,23 @@ const ORCHIDEA_REST_RPCS = new Set([
   'nova_update_tesseramento'
 ])
 const REST_ALLOWED_METHODS = new Set(['GET','HEAD','POST','PATCH','DELETE'])
+export function validateOrchideaBridgeRoute(path, method) {
+  if (typeof path !== 'string' || path.length > 3000 ||
+      !REST_ALLOWED_METHODS.has(method) ||
+      !/^\/rest\/v1\/(?:[a-z][a-z0-9_]*|rpc\/[a-z][a-z0-9_]*)(?:\?[^#]*)?$/.test(path)) return false
+  const name = path.split('?')[0].slice('/rest/v1/'.length)
+  if (name.startsWith('rpc/')) {
+    return (method === 'GET' || method === 'POST') && ORCHIDEA_REST_RPCS.has(name.slice(4))
+  }
+  return ORCHIDEA_REST_TABLES.has(name)
+}
 const REST_HEADERS = ['accept', 'content-type', 'prefer', 'range', 'accept-profile', 'content-profile', 'if-match', 'if-none-match']
 async function handleOrchideaPostgrestBridge(req, res) {
   const details = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {}
   const path = String(details.path || '')
   const method = String(details.httpMethod || '').toUpperCase()
-  if (!REST_ALLOWED_METHODS.has(method) || !/^\/rest\/v1\/(?:[a-z][a-z0-9_]*|rpc\/[a-z][a-z0-9_]*)(?:\?[^#]*)?$/.test(path)) {
-    return json(res, 400, { message: 'Percorso REST Orchidea non autorizzato.' })
-  }
-  const endpointName = path.split('?')[0].slice('/rest/v1/'.length)
-  const isRpc = endpointName.startsWith('rpc/')
-  if (isRpc ? !ORCHIDEA_REST_RPCS.has(endpointName.slice(4)) : !ORCHIDEA_REST_TABLES.has(endpointName)) {
-    return json(res, 403, { message: 'Risorsa Orchidea non autorizzata per Nova.' })
+  if (!validateOrchideaBridgeRoute(path, method)) {
+    return json(res, 403, { message: 'Percorso REST Orchidea non autorizzato.' })
   }
   const outgoingBody = details.rawBody
   if (outgoingBody != null && (typeof outgoingBody !== 'string' || outgoingBody.length > 900000 || !['POST','PATCH','DELETE'].includes(method))) {
