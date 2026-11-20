@@ -11,11 +11,58 @@ const hasDedicatedKey = Boolean(orchideaAnonKey && orchideaAnonKey !== novaAnonK
 
 export const hasDedicatedOrchideaConfig = Boolean(orchideaUrl && orchideaAnonKey && (hasDedicatedUrl || hasDedicatedKey))
 
+// Only the Nova server performs privileged queries against the Orchidea DB.
+// The Nova browser never receives the service-role key. This custom transport
+// keeps the existing PostgREST query builders working (including rpc/range).
+const PROXY_REQUEST_HEADERS = [
+  'accept', 'content-type', 'prefer', 'range',
+  'accept-profile', 'content-profile', 'if-match', 'if-none-match',
+]
+async function novaAuthorizedOrchideaFetch(input, init) {
+  const request = new Request(input, init)
+  const url = new URL(request.url)
+  if (!url.pathname.startsWith('/rest/v1/')) {
+    // Supabase Auth uses its own endpoint/session; do not redirect it.
+    return fetch(input, init)
+  }
+  const { data: sessionData, error: authError } = await novaSupabase.auth.getSession()
+  const accessToken = sessionData?.session?.access_token
+  if (authError || !accessToken) {
+    return new Response(JSON.stringify({ message: 'Sessione Nova non valida: accedi nuovamente.' }), {
+      status: 401, headers: { 'content-type': 'application/json' },
+    })
+  }
+  const forwardedHeaders = {}
+  for (const header of PROXY_REQUEST_HEADERS) {
+    const value = request.headers.get(header)
+    if (value !== null) forwardedHeaders[header] = value
+  }
+  const rawBody = request.method === 'GET' || request.method === 'HEAD'
+    ? undefined : await request.clone().text()
+  return fetch('/api/orchidea-payments-read', {
+    method: 'POST',
+    cache: 'no-store',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + accessToken,
+    },
+    body: JSON.stringify({
+      operation: 'postgrest-bridge',
+      path: url.pathname + url.search,
+      httpMethod: request.method,
+      headers: forwardedHeaders,
+      rawBody,
+    }),
+    signal: request.signal,
+  })
+}
+
 // Client separato per il database usato da orchidea-allievi.
 // Deve avere una propria sessione auth: le policy RLS del portale allievi
 // non leggono la sessione del database Nova.
 export const orchideaSupabase = hasDedicatedOrchideaConfig
   ? createClient(orchideaUrl, orchideaAnonKey, {
+      global: { fetch: novaAuthorizedOrchideaFetch },
       auth: {
         storageKey: 'nova-orchidea-allievi-auth',
         persistSession: true,
