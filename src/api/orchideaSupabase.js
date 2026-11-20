@@ -13,7 +13,20 @@ export const hasDedicatedOrchideaConfig = Boolean(orchideaUrl && orchideaAnonKey
 
 // Safety switch: disabled by default in production. Enable only after
 // controlled staff testing; switching the transport does not change auth/RLS.
-export const shouldUseOrchideaServerBridge = hasDedicatedOrchideaConfig && import.meta.env.VITE_NOVA_ORCHIDEA_SECURE_BRIDGE === 'true'
+export const ORCHIDEA_CANARY_STORAGE_KEY = 'nova-bridge-admin-canary-20261120'
+function hasAdminCanaryOptIn() {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.sessionStorage.getItem(ORCHIDEA_CANARY_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+// Only an individual, opt-in browser tab can use the new transport until
+// the coordinated RLS cutover is signed off. The server checks operator JWT.
+export const shouldUseOrchideaServerBridge = hasDedicatedOrchideaConfig && (
+  import.meta.env.VITE_NOVA_ORCHIDEA_SECURE_BRIDGE === 'true' || hasAdminCanaryOptIn()
+)
 
 // Only the Nova server performs privileged queries against the Orchidea DB.
 // The Nova browser never receives the service-role key. This custom transport
