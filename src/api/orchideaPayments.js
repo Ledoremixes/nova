@@ -1,3 +1,4 @@
+import { paymentTable } from './secureOrchideaPayments'
 import dayjs from 'dayjs'
 import { orchideaSupabase } from './orchideaSupabase'
 import { supabase } from './supabase'
@@ -390,8 +391,7 @@ async function fetchAllieviPaymentsMonthSnapshot(selectedMonth) {
         .limit(10000),
       fetchOrchideaStudents({ onlyCorsisti: false }),
       fetchOrchideaCourseCatalog(),
-      orchideaSupabase
-        .from('pagamenti')
+      paymentTable()
         .select('*')
         .or(`periodo.eq.${selectedMonth},and(mese.gte.${monthStart},mese.lte.${monthEnd}),and(scadenza.gte.${monthStart},scadenza.lte.${monthEnd})`)
         .limit(5000),
@@ -481,8 +481,7 @@ export async function fetchStudentPaymentMonth({ tesseramentoId, month, student 
       .eq('tesseramento_id', tesseramentoId)
       .limit(1000),
     fetchOrchideaCourseCatalog(),
-    orchideaSupabase
-      .from('pagamenti')
+    paymentTable()
       .select('*')
       .eq('tesseramento_id', tesseramentoId)
       .or(`periodo.eq.${selectedMonth},and(mese.gte.${monthStart},mese.lte.${monthEnd}),and(scadenza.gte.${monthStart},scadenza.lte.${monthEnd})`)
@@ -591,8 +590,7 @@ async function setAllievoMonthlyPaymentDirect({ tesseramentoId, month, amount, s
 
   // Un solo record Nova autorevole per allievo e mese. I vecchi record per-corso
   // restano nello storico ma non vengono più sommati al saldo mensile.
-  const existing = await orchideaSupabase
-    .from('pagamenti')
+  const existing = await paymentTable()
     .select('id, updated_at, created_at')
     .eq('tesseramento_id', tesseramentoId)
     .eq('periodo', selectedMonth)
@@ -602,8 +600,7 @@ async function setAllievoMonthlyPaymentDirect({ tesseramentoId, month, amount, s
 
   if (!existing.error && existing.data?.[0]?.id) {
     const { data, error } = await paymentWriteWithLegacyFallback(
-      (writePayload) => orchideaSupabase
-        .from('pagamenti')
+      (writePayload) => paymentTable()
         .update(writePayload)
         .eq('id', existing.data[0].id)
         .select()
@@ -621,7 +618,7 @@ async function setAllievoMonthlyPaymentDirect({ tesseramentoId, month, amount, s
 
   const payloadWithCreatedAt = { ...payload, created_at: now }
   const { data, error } = await paymentWriteWithLegacyFallback(
-    (writePayload) => orchideaSupabase.from('pagamenti').insert([writePayload]).select().single(),
+    (writePayload) => paymentTable().insert([writePayload]).select().single(),
     payloadWithCreatedAt,
   )
 
@@ -693,7 +690,7 @@ async function rollbackPackagePaymentWrites({ createdIds = [], previousRows = []
   const failures = []
 
   for (const id of createdIds) {
-    const { error } = await orchideaSupabase.from('pagamenti').delete().eq('id', id)
+    const { error } = await paymentTable().delete().eq('id', id)
     if (error) failures.push(error)
   }
 
@@ -701,7 +698,7 @@ async function rollbackPackagePaymentWrites({ createdIds = [], previousRows = []
     if (!row?.id) continue
     const payload = paymentRollbackPayload(row)
     const result = await paymentWriteWithLegacyFallback(
-      (writePayload) => orchideaSupabase.from('pagamenti').update(writePayload).eq('id', row.id),
+      (writePayload) => paymentTable().update(writePayload).eq('id', row.id),
       payload,
     )
     if (result?.error) failures.push(result.error)
@@ -782,7 +779,7 @@ export async function setAllievoPackagePayment({
     }
 
     const { data, error } = await paymentWriteWithLegacyFallback(
-      (writePayload) => orchideaSupabase.from('pagamenti').insert([writePayload]).select().single(),
+      (writePayload) => paymentTable().insert([writePayload]).select().single(),
       payload,
     )
     if (error) throw new Error(error.message || 'Errore registrazione gettone')
@@ -803,8 +800,7 @@ export async function setAllievoPackagePayment({
   // Snapshot prima di toccare il ledger. Se una delle mensilità fallisce,
   // ripristiniamo le righe precedenti e cancelliamo quelle appena create.
   // Così un trimestrale non può restare registrato solo per 1-2 mesi.
-  const snapshotRes = await orchideaSupabase
-    .from('pagamenti')
+  const snapshotRes = await paymentTable()
     .select('*')
     .eq('tesseramento_id', tesseramentoId)
     .in('periodo', months)
@@ -859,7 +855,7 @@ export async function setAllievoPackagePayment({
       const previous = previousByMonth.get(itemMonth)
       if (previous?.id) {
         const { data, error } = await paymentWriteWithLegacyFallback(
-          (writePayload) => orchideaSupabase.from('pagamenti').update(writePayload).eq('id', previous.id).select().single(),
+          (writePayload) => paymentTable().update(writePayload).eq('id', previous.id).select().single(),
           payload,
         )
         if (error) throw new Error(error.message || `Errore aggiornamento pagamento ${itemMonth}`)
@@ -868,7 +864,7 @@ export async function setAllievoPackagePayment({
       } else {
         const payloadWithCreatedAt = { ...payload, created_at: now }
         const { data, error } = await paymentWriteWithLegacyFallback(
-          (writePayload) => orchideaSupabase.from('pagamenti').insert([writePayload]).select().single(),
+          (writePayload) => paymentTable().insert([writePayload]).select().single(),
           payloadWithCreatedAt,
         )
         if (error) throw new Error(error.message || `Errore creazione pagamento ${itemMonth}`)
