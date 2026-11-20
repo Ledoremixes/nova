@@ -59,12 +59,104 @@ function orchideaAdminClient() {
   return client(orchideaUrl, orchideaKey)
 }
 
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const PAYMENT_COLUMNS = new Set([
+  'id','tesseramento_id','descrizione','importo','periodo','scadenza','stato','metodo','pagato_il',
+  'sumup_checkout_id','sumup_payment_url','created_at','corso_id','iscrizione_id','tipo_quota',
+  'billing_cycle','periodo_inizio','periodo_fine','copertura_mesi','note','updated_at',
+  'pacchetto_id','pacchetto_nome','pacchetto_totale_mensile','quota_pacchetto_percentuale',
+  'tipo','mese','data_pagamento','nova_package_id','nova_package_name','nova_package_type',
+  'nova_package_total','nova_package_duration_months','nova_payment_group_id',
+  'nova_coverage_from','nova_coverage_to','nova_coverage_complete','nova_cash_amount'
+])
+const FILTER_COLUMNS = new Set(['id','tesseramento_id','periodo','tipo','mese','scadenza','created_at','updated_at','stato'])
+const allowedOr = /^periodo\.eq\.\d{4}-\d{2},and\(mese\.gte\.\d{4}-\d{2}-\d{2},mese\.lte\.\d{4}-\d{2}-\d{2}\),and\(scadenza\.gte\.\d{4}-\d{2}-\d{2},scadenza\.lte\.\d{4}-\d{2}-\d{2}\)$/
+function badPaymentRequest(message) {
+  throw Object.assign(new Error(message), { status: 400 })
+}
+async function handlePaymentGateway(req, res, orchidea) {
+  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {}
+  const operation = String(body.operation || '').trim()
+  if (!['select', 'insert', 'update', 'delete'].includes(operation)) badPaymentRequest('Operazione non valida.')
+  const payload = body.payload
+  const filters = Array.isArray(body.filters) ? body.filters : []
+  if (filters.length > 8) badPaymentRequest('Troppi filtri.')
+  const select = String(body.columns || '*').trim()
+  if (select !== '*' && (!/^[a-z_]+(?:,\s*[a-z_]+)*$/.test(select) || select.split(',').some(col => !PAYMENT_COLUMNS.has(col.trim())))) {
+    badPaymentRequest('Selezione campi non valida.')
+  }
+  if (JSON.stringify(body).length > 70000) badPaymentRequest('Richiesta troppo grande.')
+  const cleanPayload = value => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) badPaymentRequest('Dati pagamento non validi.')
+    if (Object.keys(value).some(col => !PAYMENT_COLUMNS.has(col))) badPaymentRequest('Campi pagamento non consentiti.')
+    return value
+  }
+  let query
+  if (operation === 'select') {
+    query = orchidea.from('pagamenti').select(select)
+  } else if (operation === 'insert') {
+    const rows = Array.isArray(payload) ? payload : [payload]
+    if (!rows.length || rows.length > 20) badPaymentRequest('Numero pagamenti non valido.')
+    for (const row of rows) {
+      cleanPayload(row)
+      if (!UUID_RE.test(row.tesseramento_id || '')) badPaymentRequest('Tesserato non valido.')
+    }
+    query = orchidea.from('pagamenti').insert(rows)
+    if (body.returning) query = query.select(select)
+  } else {
+    const ids = filters.filter(f => f?.op === 'eq' && f?.column === 'id')
+    if (ids.length !== 1 || !UUID_RE.test(String(ids[0]?.value || ''))) {
+      badPaymentRequest('Per modificare o eliminare un pagamento è richiesto il suo ID.')
+    }
+    if (operation === 'update') {
+      query = orchidea.from('pagamenti').update(cleanPayload(payload))
+    } else {
+      query = orchidea.from('pagamenti').delete()
+    }
+    if (body.returning) query = query.select(select)
+  }
+  for (const f of filters) {
+    if (!f || typeof f !== 'object') badPaymentRequest('Filtro mancante.')
+    if (f.op === 'or') {
+      if (operation !== 'select' || !allowedOr.test(String(f.value || ''))) badPaymentRequest('Filtro temporale non valido.')
+      query = query.or(f.value)
+    } else if (f.op === 'in') {
+      if (!FILTER_COLUMNS.has(f.column) || !Array.isArray(f.value) || f.value.length > 24 || f.value.some(v => typeof v !== 'string' || v.length > 80)) badPaymentRequest('Filtro elenco non valido.')
+      query = query.in(f.column, f.value)
+    } else if (f.op === 'eq' || f.op === 'gte' || f.op === 'lte') {
+      if (!FILTER_COLUMNS.has(f.column) || !['string','number','boolean'].includes(typeof f.value) || String(f.value).length > 100) badPaymentRequest('Filtro non valido.')
+      query = query[f.op](f.column, f.value)
+    } else {
+      badPaymentRequest('Operatore filtro non consentito.')
+    }
+  }
+  if (body.order) {
+    if (operation !== 'select' || !FILTER_COLUMNS.has(body.order.column)) badPaymentRequest('Ordinamento non valido.')
+    query = query.order(body.order.column, { ascending: body.order.ascending !== false, nullsFirst: body.order.nullsFirst === true })
+  }
+  if (body.limit) {
+    if (operation !== 'select' || !Number.isInteger(body.limit) || body.limit > 20000 || body.limit < 1) badPaymentRequest('Limite non valido.')
+    query = query.limit(body.limit)
+  }
+  if (body.single === 'single') query = query.single()
+  else if (body.single === 'maybeSingle') query = query.maybeSingle()
+  const { data, error } = await query
+  if (error) {
+    console.error('nova payments gateway DB error', error.code)
+    return json(res, 409, { ok:false, code:error.code || '', error:error.message || 'Errore database.' })
+  }
+  res.setHeader('Cache-Control', 'no-store')
+  return json(res, 200, { ok:true, data: data ?? null })
+}
+
 export default async function handler(req, res) {
-  if (req.method !== 'GET') return json(res, 405, { error: 'Metodo non consentito' })
+  if (req.method !== 'GET' && req.method !== 'POST') return json(res, 405, { error: 'Metodo non consentito' })
 
   try {
     await requireNovaOperator(req)
     const orchidea = orchideaAdminClient()
+    if (req.method === 'POST') return await handlePaymentGateway(req, res, orchidea)
 
     // Lo storico e' consultabile solo da operatori Nova autenticati. I log
     // completi rimangono nel database e non sono esposti alle sessioni allievi.
@@ -156,11 +248,11 @@ export default async function handler(req, res) {
       pricingHistory: pricingHistoryRes.error ? [] : (pricingHistoryRes.data || []),
     })
   } catch (error) {
-    console.error('orchidea-payments-read:', error)
+    console.error('orchidea-payments-read:', error?.message)
     return json(res, error?.status || 500, {
       error: error?.status && error.status < 500
         ? error.message
-        : 'Non riesco a leggere l’archivio pagamenti Orchidea. Riprova tra pochi secondi.',
+        : 'Servizio pagamenti temporaneamente non disponibile. Nessuna modifica confermata.',
     })
   }
 }
