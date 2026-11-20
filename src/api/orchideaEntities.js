@@ -1,3 +1,4 @@
+import { paymentTable } from './secureOrchideaPayments'
 import { supabase } from './supabase'
 import { orchideaSupabase } from './orchideaSupabase'
 import { fetchTesserati, updateTesserato } from './tesserati'
@@ -1027,7 +1028,7 @@ export async function fetchTeacherMonthlyPayouts({ month = '' } = {}) {
         tesseramenti (id, nome, cognome)
       `)
       .limit(10000),
-    orchideaSupabase.from('pagamenti').select('*').limit(10000),
+    paymentTable().select('*').limit(10000),
     orchideaSupabase.from('nova_package_pricing_history').select('*').limit(20000),
     fetchOrchideaTeachers({ search: '' }).catch(() => []),
     fetchOrchideaCourses().catch(() => []),

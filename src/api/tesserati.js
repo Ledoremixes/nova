@@ -1,3 +1,4 @@
+import { paymentTable } from './secureOrchideaPayments'
 import { supabase } from './supabase'
 import { orchideaSupabase, getOrchideaConfigStatus, hasDedicatedOrchideaConfig, getOrchideaAuthStatus } from './orchideaSupabase'
 
@@ -443,8 +444,7 @@ export async function fetchTesseratoDetails(id) {
         `)
         .eq('tesseramento_id', id)
         .order('created_at', { ascending: false }),
-      orchideaSupabase
-        .from('pagamenti')
+      paymentTable()
         .select('id, tesseramento_id, descrizione, importo, periodo, scadenza, stato, metodo, pagato_il, created_at')
         .eq('tesseramento_id', id)
         .order('created_at', { ascending: false })
