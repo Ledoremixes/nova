@@ -13,7 +13,7 @@ export const hasDedicatedOrchideaConfig = Boolean(orchideaUrl && orchideaAnonKey
 
 // Safety switch: disabled by default in production. Enable only after
 // controlled staff testing; switching the transport does not change auth/RLS.
-export const shouldUseOrchideaServerBridge = import.meta.env.VITE_NOVA_ORCHIDEA_SECURE_BRIDGE === 'true'
+export const shouldUseOrchideaServerBridge = hasDedicatedOrchideaConfig && import.meta.env.VITE_NOVA_ORCHIDEA_SECURE_BRIDGE === 'true'
 
 // Only the Nova server performs privileged queries against the Orchidea DB.
 // The Nova browser never receives the service-role key. This custom transport
