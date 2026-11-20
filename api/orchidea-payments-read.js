@@ -176,7 +176,13 @@ export function validateOrchideaBridgeRoute(path, method) {
   if (name.startsWith('rpc/')) {
     return (method === 'GET' || method === 'POST') && ORCHIDEA_REST_RPCS.has(name.slice(4))
   }
-  return ORCHIDEA_REST_TABLES.has(name)
+  if (!ORCHIDEA_REST_TABLES.has(name)) return false
+  // Payments must use the dedicated ID-validated gateway for mutations.
+  if (name === 'pagamenti') return method === 'GET' || method === 'HEAD'
+  // Tesseramenti must never be deleted or batch-created through the generic
+  // transport; new registrations go through the dedicated server API.
+  if (name === 'tesseramenti') return ['GET', 'HEAD', 'PATCH'].includes(method)
+  return true
 }
 const REST_HEADERS = ['accept', 'content-type', 'prefer', 'range', 'accept-profile', 'content-profile', 'if-match', 'if-none-match']
 async function handleOrchideaPostgrestBridge(req, res) {
