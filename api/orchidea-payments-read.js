@@ -150,11 +150,87 @@ async function handlePaymentGateway(req, res, orchidea) {
   return json(res, 200, { ok:true, data: data ?? null })
 }
 
+
+// Rest API bridge: the browser authenticates against Nova, then only the
+// trusted server connects to the dedicated Orchidea database.
+// No arbitrary destination URL or service-role key is accepted from clients.
+const ORCHIDEA_REST_TABLES = new Set([
+  'tesseramenti', 'pagamenti', 'iscrizioni_corsi', 'corsi',
+  'insegnanti_corsi', 'nova_package_pricing_history'
+])
+const ORCHIDEA_REST_RPCS = new Set([
+  'nova_create_corso', 'nova_update_corso', 'nova_delete_corso',
+  'nova_corsi_list', 'nova_corso_partecipanti', 'nova_iscrivi_allievo_corso',
+  'nova_rimuovi_iscrizione_corso', 'nova_aggiorna_quota_iscrizione',
+  'nova_assegna_corso_insegnante', 'nova_rimuovi_corso_insegnante',
+  'nova_pagamenti_allievi_mese', 'nova_set_pagamento_allievo_mese',
+  'nova_tesseramenti_list', 'nova_tesseramento_details',
+  'nova_update_tesseramento'
+])
+const REST_ALLOWED_METHODS = new Set(['GET','HEAD','POST','PATCH','DELETE'])
+const REST_HEADERS = ['accept', 'content-type', 'prefer', 'range', 'accept-profile', 'content-profile', 'if-match', 'if-none-match']
+async function handleOrchideaPostgrestBridge(req, res) {
+  const details = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {}
+  const path = String(details.path || '')
+  const method = String(details.httpMethod || '').toUpperCase()
+  if (!REST_ALLOWED_METHODS.has(method) || !/^\/rest\/v1\/(?:[a-z][a-z0-9_]*|rpc\/[a-z][a-z0-9_]*)(?:\?[^#]*)?$/.test(path)) {
+    return json(res, 400, { message: 'Percorso REST Orchidea non autorizzato.' })
+  }
+  const endpointName = path.split('?')[0].slice('/rest/v1/'.length)
+  const isRpc = endpointName.startsWith('rpc/')
+  if (isRpc ? !ORCHIDEA_REST_RPCS.has(endpointName.slice(4)) : !ORCHIDEA_REST_TABLES.has(endpointName)) {
+    return json(res, 403, { message: 'Risorsa Orchidea non autorizzata per Nova.' })
+  }
+  const outgoingBody = details.rawBody
+  if (outgoingBody != null && (typeof outgoingBody !== 'string' || outgoingBody.length > 900000 || !['POST','PATCH','DELETE'].includes(method))) {
+    return json(res, 413, { message: 'Richiesta non valida o troppo grande.' })
+  }
+  if (typeof details.headers !== 'object' || details.headers === null || Array.isArray(details.headers)) {
+    return json(res, 400, { message: 'Intestazioni non valide.' })
+  }
+  const configUrl = String(process.env.ORCHIDEA_SUPABASE_URL || process.env.VITE_ORCHIDEA_SUPABASE_URL || process.env.SUPABASE_URL || '').trim().replace(/\/$/, '')
+  const key = String(process.env.ORCHIDEA_SUPABASE_SERVICE_ROLE_KEY ||
+      (configUrl === String(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '') ? process.env.SUPABASE_SERVICE_ROLE_KEY : '') || '').trim()
+  if (!/^https:\/\//.test(configUrl) || !key) {
+    throw Object.assign(new Error('Servizio Orchidea non configurato.'), { status: 503 })
+  }
+  const headers = { apikey: key, Authorization: 'Bearer ' + key }
+  for (const name of REST_HEADERS) {
+    const value = details.headers[name]
+    if (value != null && typeof value === 'string' && value.length <= 250) headers[name] = value
+  }
+  // Do not allow the caller to set auth/admin roles, request host, profile
+  // schemas, JWTs, or service-role privileges. Only public PostgREST.
+  if (headers['accept-profile'] && headers['accept-profile'] !== 'public' ||
+      headers['content-profile'] && headers['content-profile'] !== 'public') {
+    return json(res, 403, { message: 'Schema non autorizzato.' })
+  }
+  const upstream = await fetch(configUrl + path, {
+    method, headers,
+    body: outgoingBody === undefined ? undefined : outgoingBody,
+    redirect: 'error',
+    signal: AbortSignal.timeout(20000),
+  })
+  res.setHeader('Cache-Control','no-store')
+  for (const name of ['content-type','content-range','range-unit']) {
+    const value = upstream.headers.get(name)
+    if (value) res.setHeader(name, value)
+  }
+  const data = await upstream.text()
+  if (data.length > 4000000) {
+    return json(res, 502, { message: 'Risposta Orchidea troppo grande; ripetere con paginazione.' })
+  }
+  return res.status(upstream.status).send(data)
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') return json(res, 405, { error: 'Metodo non consentito' })
 
   try {
     await requireNovaOperator(req)
+    if (req.method === 'POST' && req.body?.operation === 'postgrest-bridge') {
+      return await handleOrchideaPostgrestBridge(req, res)
+    }
     const orchidea = orchideaAdminClient()
     if (req.method === 'POST') return await handlePaymentGateway(req, res, orchidea)
 
